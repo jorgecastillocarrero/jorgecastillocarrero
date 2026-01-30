@@ -6,6 +6,7 @@ Supports SQLite (default) and PostgreSQL.
 import logging
 from datetime import datetime
 from contextlib import contextmanager
+from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import (
@@ -679,11 +680,11 @@ class DatabaseManager:
             database_url: Database connection URL. Uses settings if not provided.
         """
         settings = get_settings()
-        self.database_url = database_url or settings.database_url
+        self.database_url = database_url or settings.effective_database_url
 
         # Ensure data directory exists for SQLite
         if self.database_url.startswith("sqlite"):
-            settings.data_dir.mkdir(parents=True, exist_ok=True)
+            (settings.data_dir if settings.data_dir.is_absolute() else Path(__file__).parent.parent / settings.data_dir).mkdir(parents=True, exist_ok=True)
 
         self.engine = create_engine(
             self.database_url,

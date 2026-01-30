@@ -13,6 +13,7 @@ from .database import (
     get_db_manager, Symbol, PriceHistory,
     DailyHolding, StockTrade, DailyCash, CashMovement
 )
+from .exchange_rate_service import get_exchange_rate_service, ExchangeRateError
 
 logger = logging.getLogger(__name__)
 
@@ -429,23 +430,15 @@ class DailyTrackingService:
             Dict with holdings values, cash, and total by account
         """
         with self.db.get_session() as session:
-            # Get exchange rates
-            def get_rate(pair):
-                sym = session.query(Symbol).filter(Symbol.code == pair).first()
-                if sym:
-                    for i in range(6):
-                        d = target_date - timedelta(days=i)
-                        p = session.query(PriceHistory).filter(
-                            PriceHistory.symbol_id == sym.id,
-                            PriceHistory.date == d
-                        ).first()
-                        if p:
-                            return p.close
-                return None
-
-            eur_usd = get_rate('EURUSD=X') or 1.04
-            cad_eur = get_rate('CADEUR=X') or 0.62
-            chf_eur = get_rate('CHFEUR=X') or 1.08
+            # Get exchange rates from centralized service
+            rate_service = get_exchange_rate_service(self.db)
+            try:
+                eur_usd = rate_service.get_eur_usd(target_date)
+                cad_eur = rate_service.get_cad_eur(target_date)
+                chf_eur = rate_service.get_chf_eur(target_date)
+            except ExchangeRateError as e:
+                logger.error(f"Could not get exchange rates for {target_date}: {e}")
+                raise
 
             # Get holdings
             holdings = self.get_holdings_for_date(target_date, account_code)

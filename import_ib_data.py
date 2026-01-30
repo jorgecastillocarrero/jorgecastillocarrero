@@ -130,7 +130,8 @@ def import_ib_data(filepath):
         for t in trades:
             try:
                 trade_dt = datetime.strptime(t['trade_datetime'], "%Y-%m-%d, %H:%M:%S")
-            except:
+            except (ValueError, KeyError) as e:
+                print(f"  Skipping trade with invalid datetime: {t.get('trade_datetime')} - {e}")
                 continue
 
             # Check if already exists
@@ -165,7 +166,8 @@ def import_ib_data(filepath):
         for ft in futures_trades:
             try:
                 trade_dt = datetime.strptime(ft['trade_datetime'], "%Y-%m-%d, %H:%M:%S")
-            except:
+            except (ValueError, KeyError) as e:
+                print(f"  Skipping futures trade with invalid datetime: {ft.get('trade_datetime')} - {e}")
                 continue
 
             # Check if already exists

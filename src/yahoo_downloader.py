@@ -162,7 +162,8 @@ class YahooDownloader:
             try:
                 info = ticker.info
                 name = info.get("longName") or info.get("shortName") or clean_symbol
-            except:
+            except Exception as e:
+                logger.warning(f"Could not fetch info for {clean_symbol}: {e}")
                 info = {}
                 name = clean_symbol
 

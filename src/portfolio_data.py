@@ -13,6 +13,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from .database import get_db_manager
+from .exchange_rate_service import get_exchange_rate_service, ExchangeRateError
 
 logger = logging.getLogger(__name__)
 
@@ -312,28 +313,18 @@ class PortfolioDataService:
 
     def get_eur_usd_rate(self, target_date: date) -> float:
         """Get EUR/USD rate for a specific date."""
-        rate = self.get_exchange_rate('EURUSD=X', target_date)
-        return rate if rate else 1.0400
+        rate_service = get_exchange_rate_service(self.db)
+        return rate_service.get_eur_usd(target_date)
 
     def get_cad_eur_rate(self, target_date: date) -> float:
         """Get CAD/EUR rate: how many EUR per 1 CAD."""
-        rate = self.get_exchange_rate('CADEUR=X', target_date)
-        if rate:
-            return rate
-        # Fallback
-        eur_usd = self.get_eur_usd_rate(target_date)
-        usd_cad = self.get_exchange_rate('USDCAD=X', target_date) or 1.44
-        return 1 / (usd_cad * eur_usd)
+        rate_service = get_exchange_rate_service(self.db)
+        return rate_service.get_cad_eur(target_date)
 
     def get_chf_eur_rate(self, target_date: date) -> float:
         """Get CHF/EUR rate: how many EUR per 1 CHF."""
-        rate = self.get_exchange_rate('CHFEUR=X', target_date)
-        if rate:
-            return rate
-        # Fallback
-        eur_usd = self.get_eur_usd_rate(target_date)
-        usd_chf = self.get_exchange_rate('USDCHF=X', target_date) or 0.90
-        return 1 / (usd_chf * eur_usd)
+        rate_service = get_exchange_rate_service(self.db)
+        return rate_service.get_chf_eur(target_date)
 
     # =========================================================================
     # PRICES - From price_history table

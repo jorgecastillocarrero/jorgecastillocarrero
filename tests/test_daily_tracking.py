@@ -320,8 +320,15 @@ class TestPortfolioValuation:
         service.set_holdings_for_date(target_date, sample_holdings_data)
         service.set_cash_for_date(target_date, sample_cash_data)
 
-        # Note: This will return empty holdings values because no prices exist
-        result = service.get_portfolio_value(target_date)
+        # Mock the exchange rate service
+        mock_rate_service = MagicMock()
+        mock_rate_service.get_eur_usd.return_value = 1.08
+        mock_rate_service.get_cad_eur.return_value = 0.68
+        mock_rate_service.get_chf_eur.return_value = 1.05
+
+        with patch('src.daily_tracking.get_exchange_rate_service', return_value=mock_rate_service):
+            # Note: This will return empty holdings values because no prices exist
+            result = service.get_portfolio_value(target_date)
 
         assert "date" in result
         assert "rates" in result

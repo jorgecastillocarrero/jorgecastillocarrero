@@ -7,6 +7,9 @@ from pathlib import Path
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Project root directory (parent of src/)
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -21,8 +24,8 @@ class Settings(BaseSettings):
     eodhd_api_key: str = ""
     eodhd_base_url: str = "https://eodhd.com/api"
 
-    # Database Configuration - absolute path to avoid issues with working directory
-    database_url: str = "sqlite:///C:/Users/usuario/financial-data-project/data/financial_data.db"
+    # Database Configuration - can be overridden via DATABASE_URL env var
+    database_url: str = ""
 
     # Scheduler Configuration
     scheduler_enabled: bool = True
@@ -42,6 +45,14 @@ class Settings(BaseSettings):
 
     # Data paths
     data_dir: Path = Path("data")
+
+    @property
+    def effective_database_url(self) -> str:
+        """Get database URL, defaulting to data/financial_data.db in project root."""
+        if self.database_url:
+            return self.database_url
+        db_path = PROJECT_ROOT / self.data_dir / "financial_data.db"
+        return f"sqlite:///{db_path}"
 
     @property
     def is_eodhd_configured(self) -> bool:

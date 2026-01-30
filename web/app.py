@@ -4,6 +4,7 @@ Run with: streamlit run web/app.py
 """
 
 import sys
+import logging
 from pathlib import Path
 import importlib
 
@@ -1321,11 +1322,13 @@ elif page == "Acciones/ETF":
                     if '$' in pos['Precio Compra']:
                         closed_inicial_eur += (precio_compra_num * shares) / eur_usd_current
                     elif '£' in pos['Precio Compra']:
-                        closed_inicial_eur += (precio_compra_num * shares) * 1.18
+                        gbp_eur = portfolio_service.get_exchange_rate('EURGBP=X', date.today())
+                        gbp_eur_rate = 1 / gbp_eur if gbp_eur else 1.18
+                        closed_inicial_eur += (precio_compra_num * shares) * gbp_eur_rate
                     else:
                         closed_inicial_eur += precio_compra_num * shares
-                except:
-                    pass
+                except (ValueError, TypeError, KeyError) as e:
+                    logging.warning(f"Error parsing closed position: {e}")
 
             combined_inicial_eur = total_inicial_eur + closed_inicial_eur
             combined_rent_pct = (combined_rent_eur / combined_inicial_eur * 100) if combined_inicial_eur > 0 else 0
@@ -1476,8 +1479,8 @@ elif page == "Futuros":
                 else:
                     ops_perdedoras += 1
                     total_losses += abs(pnl_val)
-            except:
-                pass
+            except (ValueError, TypeError) as e:
+                logging.debug(f"Could not parse P&L value '{pnl_clean}': {e}")
 
     pct_ganadoras = (ops_ganadoras / total_ops * 100) if total_ops > 0 else 0
     profit_factor = total_gains / total_losses if total_losses > 0 else float('inf')
@@ -2047,7 +2050,8 @@ CHF→EUR = CHFEUR=X
                 result = session.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 count = result.fetchone()[0]
                 table_info.append({'Tabla': table, 'Registros': f"{count:,}"})
-            except:
+            except Exception as e:
+                logging.warning(f"Error counting table {table}: {e}")
                 table_info.append({'Tabla': table, 'Registros': 'Error'})
 
         table_df = pd.DataFrame(table_info)
