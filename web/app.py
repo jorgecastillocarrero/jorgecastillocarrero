@@ -48,6 +48,46 @@ st.set_page_config(
 settings = get_settings()
 db = get_db_manager()
 analyzer = AIAnalyzer()
+
+
+def check_authentication():
+    """Check if user is authenticated when auth is enabled."""
+    if not settings.dashboard_auth_enabled:
+        return True
+
+    if not settings.dashboard_password:
+        st.warning("⚠️ Autenticación habilitada pero no hay contraseña configurada. Establece DASHBOARD_PASSWORD en .env")
+        return True
+
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    # Show login form
+    st.title("🔐 Acceso al Dashboard")
+    st.markdown("---")
+
+    with st.form("login_form"):
+        password = st.text_input("Contraseña", type="password")
+        submit = st.form_submit_button("Entrar")
+
+        if submit:
+            if password == settings.dashboard_password:
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("❌ Contraseña incorrecta")
+
+    st.markdown("---")
+    st.caption("Configura la contraseña en el archivo .env con DASHBOARD_PASSWORD")
+    return False
+
+
+# Check authentication before showing any content
+if not check_authentication():
+    st.stop()
 technical = TechnicalAnalyzer()
 yahoo_client = YahooFinanceClient()
 metrics_calc = MetricsCalculator()
@@ -319,6 +359,13 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 # =============================================================================
 
 st.sidebar.title("Financial Data Dashboard")
+
+# Logout button when auth is enabled
+if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+    if st.sidebar.button("🚪 Cerrar sesión"):
+        st.session_state.authenticated = False
+        st.rerun()
+
 st.sidebar.markdown("---")
 
 st.sidebar.markdown("**Data Source:** Yahoo Finance")

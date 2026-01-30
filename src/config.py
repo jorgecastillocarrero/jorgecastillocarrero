@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # Data paths
     data_dir: Path = Path("data")
 
+    # Dashboard Authentication
+    dashboard_password: str = ""
+    dashboard_auth_enabled: bool = False
+
     @property
     def effective_database_url(self) -> str:
         """Get database URL, defaulting to data/financial_data.db in project root."""
