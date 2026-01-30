@@ -1,0 +1,55 @@
+[project]
+name = "financial-data-project"
+version = "3.0.0"
+description = "Portfolio tracking and financial data management system"
+requires-python = ">=3.11"
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+    | data
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip_gitignore = true
+skip = [".git", "data", ".venv"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "data", ".venv"]
+skips = ["B101"]  # Skip assert_used check (ok in tests)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning:sqlalchemy.*:",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "scripts/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
