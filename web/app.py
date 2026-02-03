@@ -44,6 +44,134 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Custom CSS for soft blue sidebar + responsive mobile
+st.markdown("""
+<style>
+    /* Only sidebar with soft blue background */
+    [data-testid="stSidebar"] {
+        background-color: #4a6fa5;
+    }
+    /* All text in sidebar white */
+    [data-testid="stSidebar"] * {
+        color: #ffffff !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] .stRadio label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
+    }
+
+    /* ============================================= */
+    /* RESPONSIVE MOBILE STYLES                      */
+    /* ============================================= */
+
+    /* Mobile devices (up to 768px) */
+    @media (max-width: 768px) {
+        /* Main content padding */
+        .main .block-container {
+            padding: 1rem 0.5rem !important;
+            max-width: 100% !important;
+        }
+
+        /* Reduce font sizes */
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.25rem !important; }
+        h3 { font-size: 1.1rem !important; }
+
+        /* Tables responsive */
+        .stDataFrame {
+            font-size: 0.75rem !important;
+            overflow-x: auto !important;
+        }
+
+        /* Metrics cards smaller */
+        [data-testid="stMetric"] {
+            padding: 0.5rem !important;
+        }
+        [data-testid="stMetricValue"] {
+            font-size: 1.2rem !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 0.75rem !important;
+        }
+
+        /* Columns stack vertically */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 100% !important;
+            min-width: 100% !important;
+        }
+
+        /* Charts full width */
+        .js-plotly-plot {
+            width: 100% !important;
+        }
+
+        /* Sidebar width on mobile */
+        [data-testid="stSidebar"] {
+            min-width: 200px !important;
+            max-width: 250px !important;
+        }
+
+        /* Hide sidebar by default on mobile - user can expand */
+        [data-testid="stSidebar"][aria-expanded="false"] {
+            margin-left: -250px !important;
+        }
+
+        /* Expander styling */
+        .streamlit-expanderHeader {
+            font-size: 0.9rem !important;
+        }
+
+        /* Buttons full width */
+        .stButton > button {
+            width: 100% !important;
+            padding: 0.5rem !important;
+        }
+
+        /* Select boxes */
+        .stSelectbox {
+            font-size: 0.85rem !important;
+        }
+    }
+
+    /* Small phones (up to 480px) */
+    @media (max-width: 480px) {
+        .main .block-container {
+            padding: 0.5rem 0.25rem !important;
+        }
+
+        h1 { font-size: 1.25rem !important; }
+        h2 { font-size: 1.1rem !important; }
+        h3 { font-size: 1rem !important; }
+
+        [data-testid="stMetricValue"] {
+            font-size: 1rem !important;
+        }
+
+        .stDataFrame {
+            font-size: 0.65rem !important;
+        }
+    }
+
+    /* Tablet landscape */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .main .block-container {
+            padding: 1rem !important;
+        }
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Logo en el sidebar
+with st.sidebar:
+    st.image("web/static/logo_carihuela.png", use_container_width=True)
+
 # Initialize components
 settings = get_settings()
 db = get_db_manager()
@@ -65,23 +193,93 @@ def check_authentication():
     if st.session_state.authenticated:
         return True
 
-    # Show login form
-    st.title("🔐 Acceso al Dashboard")
-    st.markdown("---")
+    # Cargar imagen de fondo como base64
+    import base64
+    with open("web/static/financial_bg.jpg", "rb") as img_file:
+        bg_base64 = base64.b64encode(img_file.read()).decode()
 
-    with st.form("login_form"):
-        password = st.text_input("Contraseña", type="password")
-        submit = st.form_submit_button("Entrar")
+    # Página de login con imagen de fondo a pantalla completa
+    st.markdown(f"""
+    <style>
+        [data-testid="stSidebar"] {{display: none;}}
+        [data-testid="stHeader"] {{display: none;}}
+        .stApp {{
+            background-image: url("data:image/jpeg;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }}
+        /* Overlay oscuro para legibilidad */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 0;
+        }}
+        /* Ocultar elementos de Streamlit innecesarios */
+        footer {{display: none;}}
+        #MainMenu {{display: none;}}
+    </style>
+    """, unsafe_allow_html=True)
 
-        if submit:
-            if password == settings.dashboard_password:
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Contraseña incorrecta")
+    # Contenedor centrado para el login
+    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.caption("Configura la contraseña en el archivo .env con DASHBOARD_PASSWORD")
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        # Caja de login con fondo semitransparente
+        st.markdown("""
+        <div style="background: rgba(0, 20, 40, 0.85); border-radius: 20px; padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.1);">
+        """, unsafe_allow_html=True)
+
+        # Logo
+        st.image("web/static/logo_carihuela.png", use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Título
+        st.markdown("""
+        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
+            Acceso al Portal
+        </h2>
+        """, unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
+            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("Entrar", use_container_width=True)
+
+            if submit:
+                # Verificar credenciales
+                valid_user = username.lower() in ["admin", "carihuela", "inversiones"]
+                valid_pass = password == settings.dashboard_password
+
+                if valid_user and valid_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
+            <small>La Carihuela Inversiones © 2026</small>
+        </div>
+        """, unsafe_allow_html=True)
+
     return False
 
 
@@ -113,7 +311,7 @@ TRADING_DATES = [
     date(2026, 1, 26), date(2026, 1, 27),
 ]
 
-ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/Monetario/Bonos/Futuros']
+ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
 
 
 def _get_price_or_previous(session, sym_id, target_date, max_lookback=5):
@@ -370,20 +568,31 @@ st.sidebar.markdown("---")
 
 st.sidebar.markdown("**Data Source:** Yahoo Finance")
 
+# Navegación unificada
+all_pages = [
+    "Posición", "Composición", "Acciones", "Futuros y ETF",
+    "Asistente IA", "Backtesting", "Screener",
+    "Symbol Analysis", "Data Management", "Download Status",
+    "---",  # Separador visual
+    "BBDD", "Pantalla"
+]
+
+# Filtrar separador para el radio
+page_options = [p for p in all_pages if p != "---"]
+
 page = st.sidebar.radio(
     "Navigation",
-    ["Posición", "Composición", "Acciones/ETF", "Futuros", "Estrategia Mensual", "Screener", "Portfolios", "Symbol Analysis", "Data Management", "Download Status"],
-)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Programación**")
-page_prog = st.sidebar.radio(
-    "Técnico",
-    ["", "BBDD", "Pantalla"],
+    page_options,
     label_visibility="collapsed"
 )
-if page_prog:
-    page = page_prog
+
+# Submenú para Backtesting
+if page == "Backtesting":
+    backtesting_option = st.sidebar.radio(
+        "Tipo de Backtesting",
+        ["Estrategia Mensual", "Portfolio Backtest"],
+        label_visibility="visible"
+    )
 
 # =============================================================================
 # Main Content
@@ -549,9 +758,12 @@ if page == "Posición":
         prev_totals = calculate_portfolio_by_type(day_prev)
         last_totals = calculate_portfolio_by_type(day_last)
 
-        # Build comparison table (Futuros ya incluido en Cash/Monetario/Bonos/Futuros)
+        # Build comparison table - get all types dynamically from data
         comparison_data = []
-        tipos = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/Monetario/Bonos/Futuros']
+        all_tipos = set(prev_totals.keys()) | set(last_totals.keys())
+        # Order: known types first, then others
+        tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
+        tipos = [t for t in tipo_order if t in all_tipos] + [t for t in sorted(all_tipos) if t not in tipo_order]
         total_prev = 0
         total_last = 0
 
@@ -701,11 +913,14 @@ if page == "Posición":
         portfolio_returns_usd = pd.Series([0, return_pct_usd], index=[datetime(2025, 12, 31), datetime.now()])
 
     # Combined chart with 4 lines: EUR, USD, SPY, QQQ
+    # Use portfolio dates as the common x-axis (only trading days)
+    trading_dates_labels = [d.strftime('%d/%m') for d in portfolio_returns_eur.index]
+
     fig = go.Figure()
 
     # 1. Cartera EUR - daily data
     fig.add_trace(go.Scatter(
-        x=portfolio_returns_eur.index,
+        x=trading_dates_labels,
         y=portfolio_returns_eur.values,
         mode='lines+markers',
         name=f'Cartera EUR ({return_pct:+.2f}%)',
@@ -716,7 +931,7 @@ if page == "Posición":
     # 2. Cartera USD - daily data
     if isinstance(portfolio_returns_usd, pd.Series):
         fig.add_trace(go.Scatter(
-            x=portfolio_returns_usd.index,
+            x=trading_dates_labels,
             y=portfolio_returns_usd.values,
             mode='lines+markers',
             name=f'Cartera USD ({return_pct_usd:+.2f}%)',
@@ -724,25 +939,43 @@ if page == "Posición":
             marker=dict(size=6)
         ))
 
-    # 3. SPY benchmark
+    # 3. SPY benchmark - align to portfolio dates
     if not spy_prices.empty and len(spy_prices) >= 2:
         spy_base = spy_prices['close'].iloc[0]
-        spy_returns_series = ((spy_prices['close'] - spy_base) / spy_base) * 100
+        spy_aligned = []
+        for dt in portfolio_returns_eur.index:
+            dt_date = dt.date() if hasattr(dt, 'date') else dt
+            matching = spy_prices[spy_prices.index.date == dt_date]
+            if not matching.empty:
+                spy_aligned.append(((matching['close'].iloc[0] - spy_base) / spy_base) * 100)
+            elif spy_aligned:
+                spy_aligned.append(spy_aligned[-1])  # Carry forward
+            else:
+                spy_aligned.append(0)
         fig.add_trace(go.Scatter(
-            x=spy_prices.index,
-            y=spy_returns_series,
+            x=trading_dates_labels,
+            y=spy_aligned,
             mode='lines',
             name=f'SPY ({spy_return:+.2f}%)',
             line=dict(color='#636EFA', width=2)
         ))
 
-    # 4. QQQ benchmark
+    # 4. QQQ benchmark - align to portfolio dates
     if not qqq_prices.empty and len(qqq_prices) >= 2:
         qqq_base = qqq_prices['close'].iloc[0]
-        qqq_returns_series = ((qqq_prices['close'] - qqq_base) / qqq_base) * 100
+        qqq_aligned = []
+        for dt in portfolio_returns_eur.index:
+            dt_date = dt.date() if hasattr(dt, 'date') else dt
+            matching = qqq_prices[qqq_prices.index.date == dt_date]
+            if not matching.empty:
+                qqq_aligned.append(((matching['close'].iloc[0] - qqq_base) / qqq_base) * 100)
+            elif qqq_aligned:
+                qqq_aligned.append(qqq_aligned[-1])  # Carry forward
+            else:
+                qqq_aligned.append(0)
         fig.add_trace(go.Scatter(
-            x=qqq_prices.index,
-            y=qqq_returns_series,
+            x=trading_dates_labels,
+            y=qqq_aligned,
             mode='lines',
             name=f'QQQ ({qqq_return:+.2f}%)',
             line=dict(color='#EF553B', width=2)
@@ -755,7 +988,11 @@ if page == "Posición":
         template='plotly_dark',
         yaxis_title='Rentabilidad %',
         xaxis_title='',
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        xaxis=dict(
+            type='category',  # Eje categórico - sin huecos entre días
+            tickangle=-45
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -872,7 +1109,7 @@ elif page == "Composición":
              strategy_values.get('Alpha Picks', 0) +
              strategy_values.get('Mensual', 0))
     oro = strategy_values.get('Oro/Mineras', 0)
-    liquidez = strategy_values.get('Cash/Monetario/Bonos/Futuros', 0)
+    liquidez = strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0)
 
     diversificacion_data = {
         'Bolsa': bolsa,
@@ -1125,8 +1362,8 @@ elif page == "Composición":
         st.dataframe(pd.DataFrame(futures_data), use_container_width=True, hide_index=True)
 
 
-elif page == "Acciones/ETF":
-    st.title("ACCIONES / ETF")
+elif page == "Acciones":
+    st.title("ACCIONES")
 
     # Using centralized ASSET_TYPE_MAP and CURRENCY_SYMBOL_MAP from portfolio_data
 
@@ -1157,62 +1394,41 @@ elif page == "Acciones/ETF":
     EXCHANGE_TO_CURRENCY = {'US': '$', 'TO': 'C$', 'MC': '€', 'SW': 'CHF', 'L': '£', 'DE': '€', 'F': '€', 'MI': '€'}
 
     with db.get_session() as session:
-        # Collect all holdings from all accounts (from database)
+        # Get holdings with fecha_compra and precio_compra from compras table (datos reales)
+        holdings_result = session.execute(text("""
+            SELECT h.account_code, h.symbol, h.shares, h.currency, h.asset_type,
+                   c.fecha as fecha_compra, c.precio as precio_compra
+            FROM holding_diario h
+            LEFT JOIN (
+                SELECT account_code, symbol, MIN(fecha) as fecha,
+                       (SELECT precio FROM compras c2
+                        WHERE c2.account_code = c1.account_code
+                        AND c2.symbol = c1.symbol
+                        ORDER BY fecha LIMIT 1) as precio
+                FROM compras c1
+                GROUP BY account_code, symbol
+            ) c ON h.account_code = c.account_code AND h.symbol = c.symbol
+            WHERE h.fecha = :fecha
+            ORDER BY h.account_code, h.symbol
+        """), {'fecha': latest_date})
+
         holdings_data = []
-
-        # Get all holdings from database for the latest date
-        all_holdings = portfolio_service.get_all_holdings_for_date(latest_date)
-
-        # CO3365 (all USD)
-        co3365_holdings = all_holdings.get('CO3365', {})
-        for ticker, data in co3365_holdings.items():
-            shares = data.get('shares', 0)
-            holdings_data.append({
-                'ticker': ticker,
-                'ticker_full': ticker,
-                'cuenta': 'CO3365',
-                'shares': shares,
-                'valor_actual': 0,  # Will be calculated from prices
-                'currency': '$',
-                'tipo': ASSET_TYPE_MAP.get(ticker, 'Otro')
-            })
-
-        # La Caixa (mixed currencies)
-        lacaixa_holdings = all_holdings.get('LACAIXA', {})
-        for ticker, data in lacaixa_holdings.items():
-            shares = data.get('shares', 0)
+        for account, ticker, shares, currency_code, asset_type, fecha_compra, precio_compra_db in holdings_result.fetchall():
             parts = ticker.split('.')
-            base_ticker = parts[0]
             exchange = parts[1] if len(parts) > 1 else 'US'
             currency = EXCHANGE_TO_CURRENCY.get(exchange, '$')
+            cuenta_display = 'La Caixa' if account == 'LACAIXA' else account
 
             holdings_data.append({
-                'ticker': base_ticker,
+                'ticker': parts[0],
                 'ticker_full': ticker,
-                'cuenta': 'La Caixa',
+                'cuenta': cuenta_display,
+                'account_code': account,
                 'shares': shares,
-                'valor_actual': 0,  # Will be calculated from prices
                 'currency': currency,
-                'tipo': ASSET_TYPE_MAP.get(ticker, ASSET_TYPE_MAP.get(base_ticker, 'Otro'))
-            })
-
-        # RCO951 (mostly USD, some EUR)
-        rco951_holdings = all_holdings.get('RCO951', {})
-        for ticker, data in rco951_holdings.items():
-            shares = data.get('shares', 0)
-            parts = ticker.split('.')
-            base_ticker = parts[0]
-            exchange = parts[1] if len(parts) > 1 else 'US'
-            currency = EXCHANGE_TO_CURRENCY.get(exchange, '$')
-
-            holdings_data.append({
-                'ticker': base_ticker,
-                'ticker_full': ticker,
-                'cuenta': 'RCO951',
-                'shares': shares,
-                'valor_actual': 0,
-                'currency': currency,
-                'tipo': ASSET_TYPE_MAP.get(ticker, ASSET_TYPE_MAP.get(base_ticker, 'Otro'))
+                'tipo': asset_type or 'Otro',
+                'fecha_compra': fecha_compra,  # None si no hay registro en compras
+                'precio_compra_db': precio_compra_db  # Precio de compra de la tabla compras
             })
 
         # Calculate returns for each holding
@@ -1220,7 +1436,13 @@ elif page == "Acciones/ETF":
         for holding in holdings_data:
             ticker = holding['ticker']
             ticker_full = holding['ticker_full']
-            # For non-US stocks (like IAG.MC), look for the full ticker first
+            fecha_compra = holding['fecha_compra']
+            precio_compra_db = holding['precio_compra_db']  # Precio real de compra
+
+            if isinstance(fecha_compra, str):
+                fecha_compra = datetime.strptime(fecha_compra, '%Y-%m-%d').date()
+
+            # Get symbol for price lookup
             if '.' in ticker_full:
                 symbol = session.query(Symbol).filter(Symbol.code == ticker_full).first()
                 if not symbol:
@@ -1229,132 +1451,286 @@ elif page == "Acciones/ETF":
                 symbol = session.query(Symbol).filter(Symbol.code == ticker).first()
 
             if symbol:
-                prices = db.get_price_history(session, symbol.id, start_date=start_date)
-                if not prices.empty and len(prices) >= 2:
-                    prices = prices[prices.index.date < today]
-                    if len(prices) >= 2:
-                        precio_inicial = prices['close'].iloc[0]
-                        precio_actual = prices['close'].iloc[-1]
-                        rentabilidad_local = ((precio_actual - precio_inicial) / precio_inicial) * 100
-                        currency = holding['currency']
-                        shares = holding['shares']
+                # Usar precio de compra de la BD si existe, sino buscar por fecha
+                precio_compra = precio_compra_db
+                if not precio_compra and fecha_compra:
+                    precio_compra = portfolio_service.get_symbol_price(ticker_full, fecha_compra)
+                    if not precio_compra:
+                        precio_compra = portfolio_service.get_symbol_price(ticker, fecha_compra)
 
-                        # Calculate EUR values and return
-                        if currency == '$':  # USD
-                            valor_inicial_eur = (shares * precio_inicial) / eur_usd_31dic
-                            valor_actual_eur = (shares * precio_actual) / eur_usd_current
-                        elif currency == 'C$':  # CAD - use database rate
-                            valor_inicial_eur = (shares * precio_inicial) * cad_eur_31dic
-                            valor_actual_eur = (shares * precio_actual) * cad_eur_current
-                        elif currency == 'CHF':  # Swiss Franc - use database rate
-                            valor_inicial_eur = (shares * precio_inicial) * chf_eur_31dic
-                            valor_actual_eur = (shares * precio_actual) * chf_eur_current
-                        else:  # EUR or other
-                            valor_inicial_eur = shares * precio_inicial
-                            valor_actual_eur = shares * precio_actual
+                # Get price at 31/12 (para Rent.Periodo cuando compra es anterior)
+                precio_31dic = portfolio_service.get_symbol_price(ticker_full, date(2025, 12, 31))
+                if not precio_31dic:
+                    precio_31dic = portfolio_service.get_symbol_price(ticker, date(2025, 12, 31))
 
-                        rentabilidad_eur_pct = ((valor_actual_eur - valor_inicial_eur) / valor_inicial_eur) * 100
-                        rentabilidad_eur_abs = valor_actual_eur - valor_inicial_eur  # Absolute EUR gain
+                # Get current price
+                precio_actual = portfolio_service.get_symbol_price(ticker_full, latest_date)
+                if not precio_actual:
+                    precio_actual = portfolio_service.get_symbol_price(ticker, latest_date)
 
-                        asset_returns.append({
-                            'Ticker': holding['ticker_full'],
-                            'Tipo': holding['tipo'],
-                            'Cuenta': holding['cuenta'],
-                            'Titulos': holding['shares'],
-                            'Precio 31/12': f"{currency}{precio_inicial:.2f}",
-                            'Precio Actual': f"{currency}{precio_actual:.2f}",
-                            'Rent. %': rentabilidad_local,
-                            'Rent. EUR': rentabilidad_eur_abs,
-                            'Rent. EUR %': rentabilidad_eur_pct,
-                            'Valor EUR': valor_actual_eur
-                        })
+                if precio_actual:
+                    currency = holding['currency']
+                    shares = holding['shares']
+                    currency_symbol = {'$': '$', 'C$': 'C$', 'CHF': 'CHF', '€': '€'}.get(currency, currency)
 
-        # Sort by return descending (only stocks/ETFs, excluding Cash/TLT)
-        asset_returns_df = pd.DataFrame(asset_returns)
+                    # Get exchange rates
+                    if currency == '$':  # USD
+                        if fecha_compra and precio_compra:
+                            eur_rate_compra = portfolio_service.get_exchange_rate('EURUSD=X', fecha_compra) or eur_usd_current
+                            valor_compra_eur = (shares * precio_compra) / eur_rate_compra
+                        else:
+                            valor_compra_eur = None
+                        valor_31dic_eur = (shares * precio_31dic) / eur_usd_31dic if precio_31dic else None
+                        valor_actual_eur = (shares * precio_actual) / eur_usd_current
+                    elif currency == 'C$':  # CAD
+                        if fecha_compra and precio_compra:
+                            cad_rate_compra = portfolio_service.get_exchange_rate('CADEUR=X', fecha_compra) or cad_eur_current
+                            valor_compra_eur = (shares * precio_compra) * cad_rate_compra
+                        else:
+                            valor_compra_eur = None
+                        valor_31dic_eur = (shares * precio_31dic) * cad_eur_31dic if precio_31dic else None
+                        valor_actual_eur = (shares * precio_actual) * cad_eur_current
+                    elif currency == 'CHF':  # Swiss Franc
+                        if fecha_compra and precio_compra:
+                            chf_rate_compra = portfolio_service.get_exchange_rate('CHFEUR=X', fecha_compra) or chf_eur_current
+                            valor_compra_eur = (shares * precio_compra) * chf_rate_compra
+                        else:
+                            valor_compra_eur = None
+                        valor_31dic_eur = (shares * precio_31dic) * chf_eur_31dic if precio_31dic else None
+                        valor_actual_eur = (shares * precio_actual) * chf_eur_current
+                    else:  # EUR
+                        valor_compra_eur = shares * precio_compra if precio_compra else None
+                        valor_31dic_eur = shares * precio_31dic if precio_31dic else None
+                        valor_actual_eur = shares * precio_actual
+
+                    # Calculate returns
+                    # Rent.Compra: último precio / precio compra - 1 (en moneda local, sin efecto divisa)
+                    rent_desde_compra = ((precio_actual / precio_compra) - 1) * 100 if precio_compra and precio_compra > 0 else None
+
+                    # Rent. Periodo:
+                    # - Si estaba en portfolio a 31/12/2025: rentabilidad EUR desde 31/12
+                    # - Si compra desde 02/01/2026: último precio / precio compra - 1 (moneda local)
+                    fecha_corte = date(2025, 12, 31)
+                    if fecha_compra and fecha_compra > fecha_corte:
+                        # Compra desde 02/01/2026: usar precio (moneda local)
+                        rent_periodo = ((precio_actual / precio_compra) - 1) * 100 if precio_compra and precio_compra > 0 else None
+                        rent_eur_abs = valor_actual_eur - valor_compra_eur if valor_compra_eur else None
+                    else:
+                        # Estaba en portfolio a 31/12/2025: usar valor EUR desde 31/12
+                        rent_periodo = ((valor_actual_eur / valor_31dic_eur) - 1) * 100 if valor_31dic_eur and valor_31dic_eur > 0 else None
+                        rent_eur_abs = valor_actual_eur - valor_31dic_eur if valor_31dic_eur else None
+
+                    # Formatear precios con símbolo de moneda
+                    precio_compra_display = f"{currency_symbol}{precio_compra:.2f}" if precio_compra else '-'
+                    precio_actual_display = f"{currency_symbol}{precio_actual:.2f}"
+
+                    asset_returns.append({
+                        'F.Compra': fecha_compra.strftime('%d/%m/%y') if fecha_compra else None,
+                        'Ticker': holding['ticker_full'],
+                        'Tipo': holding['tipo'],
+                        'Cuenta': holding['cuenta'],
+                        'Títulos': int(holding['shares']),
+                        'P.Compra': precio_compra_display,
+                        'Últ.Precio': precio_actual_display,
+                        'Valor EUR': valor_actual_eur,
+                        'Rent.Compra %': rent_desde_compra if rent_desde_compra is not None else 0,
+                        'Rent.Periodo %': rent_periodo if rent_periodo is not None else 0,
+                        'Rent.Periodo EUR': rent_eur_abs if rent_eur_abs is not None else 0,
+                        '_tiene_fecha': fecha_compra is not None
+                    })
+
+        # Separar posiciones CON y SIN fecha de compra
+        all_returns_df = pd.DataFrame(asset_returns)
+        if not all_returns_df.empty:
+            # Posiciones CON fecha de compra (para tabla principal)
+            asset_returns_df = all_returns_df[all_returns_df['_tiene_fecha'] == True].copy()
+            # Posiciones SIN fecha de compra (para mostrar como faltantes)
+            missing_data_df = all_returns_df[all_returns_df['_tiene_fecha'] == False].copy()
+            # Eliminar columna auxiliar
+            if not asset_returns_df.empty:
+                asset_returns_df = asset_returns_df.drop(columns=['_tiene_fecha'])
+            if not missing_data_df.empty:
+                missing_data_df = missing_data_df.drop(columns=['_tiene_fecha'])
+        else:
+            asset_returns_df = all_returns_df
+            missing_data_df = pd.DataFrame()
         if not asset_returns_df.empty:
-            asset_returns_df = asset_returns_df.sort_values('Rent. %', ascending=False)
+            asset_returns_df = asset_returns_df.sort_values('Rent.Periodo %', ascending=False)
 
             # Calcular valor inicial para estadísticas
-            asset_returns_df['Valor_Inicial_EUR'] = asset_returns_df['Valor EUR'] / (1 + asset_returns_df['Rent. EUR %'] / 100)
+            asset_returns_df['Valor_Inicial_EUR'] = asset_returns_df['Valor EUR'] / (1 + asset_returns_df['Rent.Periodo %'] / 100)
 
             # Calculate totals for open positions
             total_valor_eur = asset_returns_df['Valor EUR'].sum()
-            total_rent_eur = asset_returns_df['Rent. EUR'].sum()
+            total_rent_eur = asset_returns_df['Rent.Periodo EUR'].sum()
             total_inicial_eur = asset_returns_df['Valor_Inicial_EUR'].sum()
             total_rent_pct = ((total_valor_eur / total_inicial_eur) - 1) * 100 if total_inicial_eur > 0 else 0
+            avg_rent_compra = asset_returns_df['Rent.Compra %'].mean() if not asset_returns_df.empty else 0
 
             # =====================================================
             # CALCULAR POSICIONES CERRADAS PARA ESTADÍSTICAS
+            # (Consolidado por fecha/cuenta/símbolo)
             # =====================================================
             with db.get_session() as session:
                 ventas_result = session.execute(text("""
-                    SELECT fecha, account_code, symbol, shares, precio, importe_total, currency, pnl
+                    SELECT fecha, account_code, symbol,
+                           SUM(shares) as total_shares,
+                           SUM(importe_total) / SUM(shares) as precio_promedio,
+                           SUM(importe_total) as importe_total,
+                           currency,
+                           SUM(COALESCE(pnl, 0)) as pnl,
+                           AVG(precio_31_12) as precio_31_12,
+                           AVG(rent_periodo) as rent_periodo
                     FROM ventas
+                    GROUP BY fecha, account_code, symbol, currency
                     ORDER BY fecha DESC
                 """))
                 ventas_rows = ventas_result.fetchall()
 
+                # Obtener precios de compra
+                compras_result = session.execute(text("""
+                    SELECT symbol, AVG(precio) as precio_compra, MIN(fecha) as fecha_compra
+                    FROM compras
+                    GROUP BY symbol
+                """))
+                precios_compra = {row[0]: {'precio': row[1], 'fecha': row[2]} for row in compras_result.fetchall()}
+
             closed_positions = []
+            closed_periodo = []
+            closed_historica = []
             total_closed_pnl_eur = 0
             total_closed_valor_eur = 0
+            total_historica_eur = 0
 
             for venta in ventas_rows:
-                fecha_venta, cuenta, symbol, shares, precio_venta, importe_venta, currency, pnl_db = venta
-                precio_compra = portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
-                if precio_compra is None:
-                    precio_compra = precio_venta * 0.95
+                fecha_venta, cuenta, symbol, shares, precio_venta, importe_venta, currency, pnl_db, precio_31_12_db, rent_periodo_db = venta
 
-                pnl_local = (precio_venta - precio_compra) * shares
-                rent_pct = ((precio_venta - precio_compra) / precio_compra) * 100 if precio_compra > 0 else 0
+                # Precio base para periodo (31/12 o de la BD)
+                precio_periodo = precio_31_12_db if precio_31_12_db else portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
+                if precio_periodo is None:
+                    precio_periodo = precio_venta * 0.95
 
+                # Rentabilidad del periodo
+                rent_periodo = rent_periodo_db if rent_periodo_db else ((precio_venta / precio_periodo - 1) * 100 if precio_periodo > 0 else 0)
+                pnl_periodo = (precio_venta - precio_periodo) * shares
+
+                # Determinar símbolo de moneda y conversión
                 if currency == 'USD':
-                    pnl_eur = pnl_local / eur_usd_current
-                    valor_venta_eur = importe_venta / eur_usd_current
+                    fx_rate = eur_usd_current
                     currency_symbol = '$'
                 elif currency == 'GBP':
-                    pnl_eur = pnl_local * 1.18
-                    valor_venta_eur = importe_venta * 1.18
+                    fx_rate = 1/1.18
                     currency_symbol = '£'
                 elif currency == 'EUR':
-                    pnl_eur = pnl_local
-                    valor_venta_eur = importe_venta
+                    fx_rate = 1.0
                     currency_symbol = '€'
                 else:
-                    pnl_eur = pnl_local
-                    valor_venta_eur = importe_venta
+                    fx_rate = 1.0
                     currency_symbol = currency
+
+                pnl_eur = pnl_periodo / fx_rate if fx_rate != 1.0 else pnl_periodo
+                valor_venta_eur = importe_venta / fx_rate if fx_rate != 1.0 else importe_venta
 
                 total_closed_pnl_eur += pnl_eur
                 total_closed_valor_eur += valor_venta_eur
+
+                # Obtener precio de compra real
+                compra_info = precios_compra.get(symbol, {})
+                precio_compra_real = compra_info.get('precio')
+                fecha_compra = compra_info.get('fecha')
+
+                # Calcular rentabilidad histórica (desde compra)
+                if precio_compra_real and precio_compra_real > 0:
+                    rent_historica = (precio_venta / precio_compra_real - 1) * 100
+                    pnl_historico = (precio_venta - precio_compra_real) * shares
+                    pnl_historico_eur = pnl_historico / fx_rate if fx_rate != 1.0 else pnl_historico
+                else:
+                    rent_historica = 0
+                    pnl_historico_eur = 0
+
+                total_historica_eur += pnl_historico_eur
+
+                # Solo añadir a periodo si tenia precio a 31/12
+                if precio_31_12_db:
+                    # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
+                    if fecha_compra and fecha_compra > '2025-12-31':
+                        precio_31_12_display = '-'
+                    else:
+                        precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
+
+                    closed_periodo.append({
+                        'Fecha': fecha_venta,
+                        'Ticker': symbol,
+                        'Títulos': int(shares),
+                        'P.Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else '-',
+                        'P.31/12': precio_31_12_display,
+                        'P.Venta': f"{currency_symbol}{precio_venta:.2f}",
+                        'Rent.Periodo %': rent_periodo,
+                        'Rent.Histórica %': rent_historica,
+                        'Rent.Periodo EUR': pnl_eur,
+                        'Rent.Histórica EUR': pnl_historico_eur,
+                    })
+
+                # closed_positions mantiene compatibilidad (incluye datos históricos)
                 closed_positions.append({
                     'Fecha Venta': fecha_venta,
                     'Ticker': symbol,
                     'Cuenta': cuenta,
                     'Titulos': int(shares),
-                    'Precio Compra': f"{currency_symbol}{precio_compra:.2f}",
+                    'Precio Compra': f"{currency_symbol}{precio_periodo:.2f}",
                     'Precio Venta': f"{currency_symbol}{precio_venta:.2f}",
-                    'Rent. %': rent_pct,
+                    'Rent. %': rent_periodo,
                     'Rent. EUR': pnl_eur,
+                    'Rent.Histórica %': rent_historica,
+                    'Rent.Histórica EUR': pnl_historico_eur,
                 })
 
             # Combinar estadísticas: abiertas + cerradas
             import numpy as np
-            all_returns_pct = list(asset_returns_df['Rent. %'].values) + [c['Rent. %'] for c in closed_positions]
-            all_returns_eur = list(asset_returns_df['Rent. EUR'].values) + [c['Rent. EUR'] for c in closed_positions]
 
-            # Recalcular totales para asegurar consistencia
-            total_rent_eur_abiertas = asset_returns_df['Rent. EUR'].sum()
+            # === ESTADÍSTICAS PERIODO (desde 31/12) ===
+            all_periodo_pct = list(asset_returns_df['Rent.Periodo %'].values) + [c['Rent. %'] for c in closed_positions]
+            all_periodo_eur = list(asset_returns_df['Rent.Periodo EUR'].values) + [c['Rent. EUR'] for c in closed_positions]
+
+            # === ESTADÍSTICAS HISTÓRICAS (desde compra) ===
+            # Para abiertas: Rent.Compra %, para cerradas: Rent.Histórica %
+            all_historica_pct = list(asset_returns_df['Rent.Compra %'].values) + [c.get('Rent.Histórica %', 0) for c in closed_positions]
+            all_historica_eur = []
+            # Calcular rent histórica EUR para abiertas
+            for _, row in asset_returns_df.iterrows():
+                valor_compra_eur = row['Valor EUR'] / (1 + row['Rent.Compra %'] / 100) if row['Rent.Compra %'] != -100 else 0
+                rent_hist_eur = row['Valor EUR'] - valor_compra_eur
+                all_historica_eur.append(rent_hist_eur)
+            # Añadir cerradas (usando closed_positions que tiene todas)
+            all_historica_eur += [c.get('Rent.Histórica EUR', 0) for c in closed_positions]
+
+            # Recalcular totales PERIODO
+            total_rent_eur_abiertas = asset_returns_df['Rent.Periodo EUR'].sum()
             total_rent_eur_cerradas = total_closed_pnl_eur
             combined_rent_eur = total_rent_eur_abiertas + total_rent_eur_cerradas
-            total_count = len(all_returns_pct)
-            positive_count = sum(1 for r in all_returns_pct if r > 0)
-            negative_count = sum(1 for r in all_returns_pct if r < 0)
-            positive_pct = (positive_count / total_count * 100) if total_count > 0 else 0
-            max_return = max(all_returns_pct) if all_returns_pct else 0
-            min_return = min(all_returns_pct) if all_returns_pct else 0
-            total_gains = sum(r for r in all_returns_eur if r > 0)
-            total_losses = abs(sum(r for r in all_returns_eur if r < 0))
-            profit_factor = total_gains / total_losses if total_losses > 0 else float('inf')
+
+            # Estadísticas PERIODO
+            periodo_count = len(all_periodo_pct)
+            periodo_positive = sum(1 for r in all_periodo_pct if r > 0)
+            periodo_negative = sum(1 for r in all_periodo_pct if r < 0)
+            periodo_positive_pct = (periodo_positive / periodo_count * 100) if periodo_count > 0 else 0
+            periodo_max = max(all_periodo_pct) if all_periodo_pct else 0
+            periodo_min = min(all_periodo_pct) if all_periodo_pct else 0
+            periodo_gains = sum(r for r in all_periodo_eur if r > 0)
+            periodo_losses = abs(sum(r for r in all_periodo_eur if r < 0))
+            periodo_profit_factor = periodo_gains / periodo_losses if periodo_losses > 0 else float('inf')
+
+            # Estadísticas HISTÓRICAS
+            historica_count = len(all_historica_pct)
+            historica_positive = sum(1 for r in all_historica_pct if r > 0)
+            historica_negative = sum(1 for r in all_historica_pct if r < 0)
+            historica_positive_pct = (historica_positive / historica_count * 100) if historica_count > 0 else 0
+            historica_max = max(all_historica_pct) if all_historica_pct else 0
+            historica_min = min(all_historica_pct) if all_historica_pct else 0
+            historica_total_eur = sum(all_historica_eur)
+            historica_gains = sum(r for r in all_historica_eur if r > 0)
+            historica_losses = abs(sum(r for r in all_historica_eur if r < 0))
+            historica_profit_factor = historica_gains / historica_losses if historica_losses > 0 else float('inf')
 
             # Calcular rentabilidad % combinada (abiertas + cerradas)
             # Valor inicial cerradas = suma de (precio_compra * shares) para cada venta
@@ -1379,21 +1755,39 @@ elif page == "Acciones/ETF":
 
             combined_inicial_eur = total_inicial_eur + closed_inicial_eur
             combined_rent_pct = (combined_rent_eur / combined_inicial_eur * 100) if combined_inicial_eur > 0 else 0
+            historica_rent_pct = (historica_total_eur / combined_inicial_eur * 100) if combined_inicial_eur > 0 else 0
 
             # =====================================================
-            # ESTADÍSTICAS (abiertas + cerradas)
+            # CABECERA 1: RENTABILIDAD ACUMULADA AÑO (periodo)
             # =====================================================
+            st.subheader(f"📊 Rentabilidad Acumulada Año {date.today().year}")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Rentabilidad Acumulada Año", f"{combined_rent_eur:+,.0f} €".replace(",", "."))
-            col2.metric("Mejor", f"{max_return:+.2f}%")
-            col3.metric("Peor", f"{min_return:+.2f}%")
-            col4.metric("Profit Factor", f"{profit_factor:.2f}")
+            col1.metric("Total EUR", f"{combined_rent_eur:+,.0f} €".replace(",", "."))
+            col2.metric("Mejor", f"{periodo_max:+.2f}%")
+            col3.metric("Peor", f"{periodo_min:+.2f}%")
+            col4.metric("Profit Factor", f"{periodo_profit_factor:.2f}" if periodo_profit_factor != float('inf') else "∞")
 
             col5, col6, col7, col8 = st.columns(4)
-            col5.metric("Positivos", f"{positive_count}")
-            col6.metric("Negativos", f"{negative_count}")
-            col7.metric("% Positivos", f"{positive_pct:.2f}%")
+            col5.metric("Positivos", f"{periodo_positive}")
+            col6.metric("Negativos", f"{periodo_negative}")
+            col7.metric("% Positivos", f"{periodo_positive_pct:.1f}%")
             col8.metric("Rentabilidad %", f"{combined_rent_pct:+.2f}%")
+
+            # =====================================================
+            # CABECERA 2: RENTABILIDAD HISTÓRICA (desde compra)
+            # =====================================================
+            st.subheader("📈 Rentabilidad Histórica")
+            col1h, col2h, col3h, col4h = st.columns(4)
+            col1h.metric("Total EUR", f"{historica_total_eur:+,.0f} €".replace(",", "."))
+            col2h.metric("Mejor", f"{historica_max:+.2f}%")
+            col3h.metric("Peor", f"{historica_min:+.2f}%")
+            col4h.metric("Profit Factor", f"{historica_profit_factor:.2f}" if historica_profit_factor != float('inf') else "∞")
+
+            col5h, col6h, col7h, col8h = st.columns(4)
+            col5h.metric("Positivos", f"{historica_positive}")
+            col6h.metric("Negativos", f"{historica_negative}")
+            col7h.metric("% Positivos", f"{historica_positive_pct:.1f}%")
+            col8h.metric("Rentabilidad %", f"{historica_rent_pct:+.2f}%")
 
             st.markdown("---")
 
@@ -1404,23 +1798,28 @@ elif page == "Acciones/ETF":
 
             # Calculate totals for the detailed table
             total_valor_eur = asset_returns_df['Valor EUR'].sum()
-            total_rent_eur = asset_returns_df['Rent. EUR'].sum()
+            total_rent_eur = asset_returns_df['Rent.Periodo EUR'].sum()
             total_inicial_eur = asset_returns_df['Valor_Inicial_EUR'].sum()
             total_rent_pct = ((total_valor_eur / total_inicial_eur) - 1) * 100 if total_inicial_eur > 0 else 0
 
-            # Format for display
+            # Format for display - mantener valores numéricos para ordenamiento correcto
             display_df = asset_returns_df.copy()
-            display_df['Titulos'] = display_df['Titulos'].astype(str)  # Convert to string to handle '-'
-            display_df['Rent. %'] = display_df['Rent. %'].apply(lambda x: f"{x:+.2f}%")
-            display_df['Rent. EUR'] = display_df['Rent. EUR'].apply(lambda x: f"{x:+,.0f} €".replace(",", "."))
-            display_df['Rent. EUR %'] = display_df['Rent. EUR %'].apply(lambda x: f"{x:+.2f}%")
-            display_df['Valor EUR'] = display_df['Valor EUR'].apply(lambda x: f"{x:,.0f} €".replace(",", "."))
-
-            # Drop the helper column
             display_df = display_df.drop(columns=['Valor_Inicial_EUR'])
 
-            # Reorder columns
-            display_df = display_df[['Ticker', 'Tipo', 'Cuenta', 'Titulos', 'Precio 31/12', 'Precio Actual', 'Rent. %', 'Rent. EUR', 'Rent. EUR %', 'Valor EUR']]
+            # Convertir fecha a formato español (dd/mm/yyyy)
+            def to_spanish_date(date_str):
+                if not date_str or date_str == '-':
+                    return '-'
+                try:
+                    from datetime import datetime as dt
+                    d = dt.strptime(str(date_str)[:10], '%Y-%m-%d')
+                    return d.strftime('%d/%m/%Y')
+                except:
+                    return date_str
+            display_df['F.Compra'] = display_df['F.Compra'].apply(to_spanish_date)
+
+            # Reorder columns: F.Compra, precios, rentabilidades en EUR
+            display_df = display_df[['F.Compra', 'Ticker', 'Tipo', 'Cuenta', 'Títulos', 'P.Compra', 'Últ.Precio', 'Valor EUR', 'Rent.Compra %', 'Rent.Periodo %', 'Rent.Periodo EUR']]
 
             st.dataframe(
                 display_df,
@@ -1428,16 +1827,17 @@ elif page == "Acciones/ETF":
                 hide_index=True,
                 height=600,
                 column_config={
+                    'F.Compra': st.column_config.TextColumn('F.Compra', width='small'),
                     'Ticker': st.column_config.TextColumn('Ticker', width='small'),
                     'Tipo': st.column_config.TextColumn('Tipo', width='small'),
                     'Cuenta': st.column_config.TextColumn('Cuenta', width='small'),
-                    'Titulos': st.column_config.TextColumn('Títulos', width='small'),
-                    'Precio 31/12': st.column_config.TextColumn('Precio 31/12', width='small'),
-                    'Precio Actual': st.column_config.TextColumn('Precio Actual', width='small'),
-                    'Rent. %': st.column_config.TextColumn('Rent. %', width='small'),
-                    'Rent. EUR': st.column_config.TextColumn('Rent. EUR', width='small'),
-                    'Rent. EUR %': st.column_config.TextColumn('Rent. EUR %', width='small'),
-                    'Valor EUR': st.column_config.TextColumn('Valor EUR', width='medium'),
+                    'Títulos': st.column_config.NumberColumn('Títulos', width='small', format='%d'),
+                    'P.Compra': st.column_config.TextColumn('P.Compra', width='small'),
+                    'Últ.Precio': st.column_config.TextColumn('Últ.Precio', width='small'),
+                    'Valor EUR': st.column_config.NumberColumn('Valor EUR', width='medium', format='%.0f €'),
+                    'Rent.Compra %': st.column_config.NumberColumn('Rent.Compra %', width='small', format='%.2f %%'),
+                    'Rent.Periodo %': st.column_config.NumberColumn('Rent.Periodo %', width='small', format='%.2f %%'),
+                    'Rent.Periodo EUR': st.column_config.NumberColumn('Rent.Periodo EUR', width='small', format='%.0f €'),
                 }
             )
 
@@ -1447,40 +1847,82 @@ elif page == "Acciones/ETF":
                 <div style="background-color: #1a1a1a; color: white; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; font-weight: bold;">
                     <span>TOTAL ABIERTAS</span>
                     <span>Valor EUR: {total_valor_eur:,.0f} €</span>
-                    <span>Rent. EUR: {total_rent_eur:+,.0f} €</span>
+                    <span>Rent.Periodo EUR: {total_rent_eur:+,.0f} €</span>
                 </div>
                 """.replace(",", "."),
                 unsafe_allow_html=True
             )
 
             # =====================================================
-            # POSICIONES CERRADAS (ventas)
+            # POSICIONES SIN FECHA DE COMPRA (datos faltantes)
+            # =====================================================
+            if not missing_data_df.empty:
+                st.markdown("---")
+                st.subheader(f"⚠️ Posiciones Sin Datos de Compra ({len(missing_data_df)})")
+                st.warning("Estas posiciones no tienen fecha ni precio de compra registrados en la tabla 'compras'.")
+
+                # Mostrar solo Ticker, Tipo, Cuenta, Títulos, Valor EUR
+                missing_display = missing_data_df[['Ticker', 'Tipo', 'Cuenta', 'Títulos', 'Valor EUR']].copy()
+                missing_display['Valor EUR'] = missing_display['Valor EUR'].apply(lambda x: f"{x:,.0f} €".replace(",", "."))
+
+                st.dataframe(
+                    missing_display,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(400, len(missing_data_df) * 35 + 50)
+                )
+
+            # =====================================================
+            # POSICIONES CERRADAS (con rentabilidad periodo e histórica)
             # =====================================================
             st.markdown("---")
             st.subheader("Posiciones Cerradas")
 
-            if closed_positions:
-                closed_df = pd.DataFrame(closed_positions)
+            if closed_periodo:
+                periodo_df = pd.DataFrame(closed_periodo)
+
+                # Asegurar que las columnas numéricas sean tipo numérico
+                periodo_df['Títulos'] = pd.to_numeric(periodo_df['Títulos'], errors='coerce').fillna(0)
+                periodo_df['Rent.Periodo %'] = pd.to_numeric(periodo_df['Rent.Periodo %'], errors='coerce').fillna(0)
+                periodo_df['Rent.Histórica %'] = pd.to_numeric(periodo_df['Rent.Histórica %'], errors='coerce').fillna(0)
+                periodo_df['Rent.Periodo EUR'] = pd.to_numeric(periodo_df['Rent.Periodo EUR'], errors='coerce').fillna(0)
+                periodo_df['Rent.Histórica EUR'] = pd.to_numeric(periodo_df['Rent.Histórica EUR'], errors='coerce').fillna(0)
+
+                # Convertir fecha a formato español
+                periodo_df['Fecha'] = periodo_df['Fecha'].apply(to_spanish_date)
+
+                total_periodo_eur = periodo_df['Rent.Periodo EUR'].sum()
+                total_historica_eur_display = periodo_df['Rent.Histórica EUR'].sum()
 
                 # Format for display
-                display_closed = closed_df.copy()
-                display_closed['Rent. %'] = display_closed['Rent. %'].apply(lambda x: f"{x:+.2f}%")
-                display_closed['Rent. EUR'] = display_closed['Rent. EUR'].apply(lambda x: f"{x:+,.0f} €".replace(",", "."))
+                display_periodo = periodo_df.copy()
+                display_periodo['Rent.Periodo %'] = display_periodo['Rent.Periodo %'].apply(lambda x: f"{x:+.2f}%")
+                display_periodo['Rent.Histórica %'] = display_periodo['Rent.Histórica %'].apply(lambda x: f"{x:+.2f}%")
+                display_periodo['Rent.Periodo EUR'] = display_periodo['Rent.Periodo EUR'].apply(lambda x: f"{x:+,.0f} €".replace(",", "."))
+                display_periodo['Rent.Histórica EUR'] = display_periodo['Rent.Histórica EUR'].apply(lambda x: f"{x:+,.0f} €".replace(",", "."))
 
                 st.dataframe(
-                    display_closed,
+                    display_periodo,
                     use_container_width=True,
                     hide_index=True,
-                    height=400
+                    height=400,
+                    column_config={
+                        'Fecha': st.column_config.TextColumn('Fecha', width='small'),
+                        'Títulos': st.column_config.NumberColumn('Títulos', width='small', format='%d'),
+                        'Rent.Periodo %': st.column_config.TextColumn('Rent.Periodo %', width='small'),
+                        'Rent.Histórica %': st.column_config.TextColumn('Rent.Histórica %', width='small'),
+                        'Rent.Periodo EUR': st.column_config.TextColumn('Rent.Periodo EUR', width='small'),
+                        'Rent.Histórica EUR': st.column_config.TextColumn('Rent.Histórica EUR', width='small'),
+                    }
                 )
 
                 # Total row for closed positions
                 st.markdown(
                     f"""
                     <div style="background-color: #1a1a1a; color: white; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; font-weight: bold;">
-                        <span>TOTAL CERRADAS</span>
-                        <span>Valor EUR: {total_closed_valor_eur:,.0f} €</span>
-                        <span>Rent. EUR: {total_closed_pnl_eur:+,.0f} €</span>
+                        <span>TOTAL CERRADAS ({len(periodo_df)})</span>
+                        <span>Rent.Periodo: {total_periodo_eur:+,.0f} €</span>
+                        <span>Rent.Histórica: {total_historica_eur_display:+,.0f} €</span>
                     </div>
                     """.replace(",", "."),
                     unsafe_allow_html=True
@@ -1489,8 +1931,8 @@ elif page == "Acciones/ETF":
                 st.info("No hay posiciones cerradas")
 
 
-elif page == "Futuros":
-    st.title("FUTUROS")
+elif page == "Futuros y ETF":
+    st.title("FUTUROS Y ETF")
 
     # Obtener datos de futuros desde la base de datos
     futures_summary = portfolio_service.get_futures_summary()
@@ -1591,8 +2033,221 @@ elif page == "Futuros":
         unsafe_allow_html=True
     )
 
+    st.markdown("---")
 
-elif page == "Estrategia Mensual":
+    # ==========================================================================
+    # POSICIONES ETFs ABIERTAS
+    # ==========================================================================
+    st.subheader("Posiciones ETFs Abiertas")
+
+    # Obtener fecha más reciente
+    with db.get_session() as session:
+        from sqlalchemy import text
+        result = session.execute(text("""
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+        """))
+        latest_date_str = result.fetchone()[0]
+        ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
+
+        # Obtener precios de compra desde ib_trades (promedio ponderado)
+        precios_compra = {}
+        result = session.execute(text("""
+            SELECT symbol,
+                   SUM(quantity * price) / SUM(quantity) as avg_price
+            FROM ib_trades
+            WHERE trade_type = 'BUY'
+            GROUP BY symbol
+        """))
+        for row in result:
+            precios_compra[row[0]] = row[1]
+
+        # Para posiciones sin trades en ib_trades, usar precio de primera fecha en holding_diario
+        result = session.execute(text("""
+            SELECT symbol, precio_entrada, MIN(fecha) as first_date
+            FROM holding_diario
+            WHERE account_code = 'IB'
+            GROUP BY symbol
+        """))
+        for row in result:
+            if row[0] not in precios_compra and row[1]:
+                precios_compra[row[0]] = row[1]
+
+    # Obtener holdings de IB
+    ib_holdings = portfolio_service.get_holdings_for_date('IB', ib_date)
+    ib_cash = portfolio_service.get_cash_for_date('IB', ib_date)
+    eur_usd = portfolio_service.get_eur_usd_rate(ib_date)
+
+    # Construir tabla de posiciones con P&L
+    positions_data = []
+    total_holdings_usd = 0
+    total_holdings_eur = 0
+    total_pnl_eur = 0
+
+    for ticker, data in ib_holdings.items():
+        shares = data.get('shares', 0)
+        price_actual = portfolio_service.get_symbol_price(ticker, ib_date) or 0
+        price_compra = precios_compra.get(ticker, price_actual)
+
+        value_usd = shares * price_actual
+        value_eur = value_usd / eur_usd if eur_usd else 0
+
+        total_holdings_usd += value_usd
+        total_holdings_eur += value_eur
+
+        # Calcular P&L
+        if shares > 0:  # LARGO
+            tipo = "LARGO"
+            pnl_usd = shares * (price_actual - price_compra)
+            rent_pct = ((price_actual - price_compra) / price_compra) * 100 if price_compra else 0
+        else:  # CORTO
+            tipo = "CORTO"
+            # Para cortos: ganamos cuando el precio baja
+            pnl_usd = abs(shares) * (price_compra - price_actual)
+            rent_pct = ((price_compra - price_actual) / price_compra) * 100 if price_compra else 0
+
+        pnl_eur = pnl_usd / eur_usd if eur_usd else 0
+        total_pnl_eur += pnl_eur
+
+        pnl_sign = "+" if pnl_eur >= 0 else ""
+        rent_sign = "+" if rent_pct >= 0 else ""
+
+        positions_data.append({
+            'Ticker': ticker,
+            'Tipo': tipo,
+            'Shares': f"{shares:,.0f}",
+            'Precio Compra': f"${price_compra:.2f}",
+            'Precio Actual': f"${price_actual:.2f}",
+            'Rent. %': f"{rent_sign}{rent_pct:.2f}%",
+            'P&L EUR': f"{pnl_sign}{pnl_eur:,.0f} €",
+            'Valor EUR': f"{value_eur:,.0f} €"
+        })
+
+    # Ordenar: largos primero, luego cortos
+    positions_data.sort(key=lambda x: (0 if x['Tipo'] == 'LARGO' else 1, x['Ticker']))
+
+    # Añadir fila de total holdings
+    total_pnl_sign = "+" if total_pnl_eur >= 0 else ""
+    positions_data.append({
+        'Ticker': 'TOTAL',
+        'Tipo': '-',
+        'Shares': '-',
+        'Precio Compra': '-',
+        'Precio Actual': '-',
+        'Rent. %': '-',
+        'P&L EUR': f"{total_pnl_sign}{total_pnl_eur:,.0f} €",
+        'Valor EUR': f"{total_holdings_eur:,.0f} €"
+    })
+
+    # Mostrar tabla de posiciones abiertas
+    def color_position_row(row):
+        styles = [''] * len(row)
+        if row['Ticker'] == 'TOTAL':
+            return ['background-color: #333333; font-weight: bold; color: white'] * len(row)
+
+        # Color para Tipo
+        tipo_idx = row.index.get_loc('Tipo')
+        if row['Tipo'] == 'LARGO':
+            styles[tipo_idx] = 'color: #00cc00; font-weight: bold'
+        elif row['Tipo'] == 'CORTO':
+            styles[tipo_idx] = 'color: #ff4444; font-weight: bold'
+
+        # Color para Rent. % y P&L EUR
+        rent_idx = row.index.get_loc('Rent. %')
+        pnl_idx = row.index.get_loc('P&L EUR')
+        if row['Rent. %'].startswith('+'):
+            styles[rent_idx] = 'color: #00cc00; font-weight: bold'
+            styles[pnl_idx] = 'color: #00cc00; font-weight: bold'
+        elif row['Rent. %'].startswith('-'):
+            styles[rent_idx] = 'color: #ff4444; font-weight: bold'
+            styles[pnl_idx] = 'color: #ff4444; font-weight: bold'
+
+        return styles
+
+    positions_df = pd.DataFrame(positions_data)
+    styled_positions = positions_df.style.apply(color_position_row, axis=1)
+    st.dataframe(styled_positions, use_container_width=True, hide_index=True)
+
+    # ==========================================================================
+    # POSICIONES ETFs CERRADAS
+    # ==========================================================================
+    st.subheader("Posiciones ETFs Cerradas")
+
+    with db.get_session() as session:
+        # Buscar ventas en ib_trades (posiciones cerradas)
+        result = session.execute(text("""
+            SELECT t.symbol, t.trade_date, t.quantity, t.price as sell_price, t.realized_pnl,
+                   (SELECT AVG(t2.price) FROM ib_trades t2
+                    WHERE t2.symbol = t.symbol AND t2.trade_type = 'BUY'
+                    AND t2.trade_date < t.trade_date) as buy_price
+            FROM ib_trades t
+            WHERE t.trade_type = 'SELL'
+            ORDER BY t.trade_date DESC
+        """))
+        closed_positions = list(result)
+
+    if closed_positions:
+        closed_data = []
+        for row in closed_positions:
+            symbol, trade_date, qty, sell_price, realized_pnl, buy_price = row
+            buy_price = buy_price or sell_price
+            pnl_usd = realized_pnl or (qty * (sell_price - buy_price))
+            pnl_eur = pnl_usd / eur_usd if eur_usd else 0
+            pnl_sign = "+" if pnl_eur >= 0 else ""
+
+            closed_data.append({
+                'Ticker': symbol,
+                'Fecha Cierre': trade_date.strftime('%d/%m/%Y') if hasattr(trade_date, 'strftime') else str(trade_date)[:10],
+                'Shares': f"{qty:,.0f}",
+                'Precio Compra': f"${buy_price:.2f}",
+                'Precio Venta': f"${sell_price:.2f}",
+                'P&L EUR': f"{pnl_sign}{pnl_eur:,.0f} €"
+            })
+
+        def color_closed_row(row):
+            styles = [''] * len(row)
+            pnl_idx = row.index.get_loc('P&L EUR')
+            if row['P&L EUR'].startswith('+'):
+                styles[pnl_idx] = 'color: #00cc00; font-weight: bold'
+            elif row['P&L EUR'].startswith('-'):
+                styles[pnl_idx] = 'color: #ff4444; font-weight: bold'
+            return styles
+
+        closed_df = pd.DataFrame(closed_data)
+        styled_closed = closed_df.style.apply(color_closed_row, axis=1)
+        st.dataframe(styled_closed, use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay posiciones cerradas")
+
+    # Cash
+    cash_eur = ib_cash.get('EUR', 0)
+    cash_usd = ib_cash.get('USD', 0)
+    cash_usd_en_eur = cash_usd / eur_usd if eur_usd else 0
+    total_cash_eur = cash_eur + cash_usd_en_eur
+
+    # Total cuenta IB
+    total_cuenta_eur = total_holdings_eur + total_cash_eur
+
+    st.markdown(
+        f"""
+        <div style="background-color: #1a1a1a; color: white; padding: 15px; border-radius: 5px; margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                <span><strong>Cash EUR:</strong> EUR {cash_eur:,.2f}</span>
+                <span><strong>Cash USD:</strong> ${cash_usd:,.2f} (EUR {cash_usd_en_eur:,.2f})</span>
+                <span><strong>Total Cash:</strong> EUR {total_cash_eur:,.2f}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 1.3em; border-top: 1px solid #444; padding-top: 10px;">
+                <span><strong>TOTAL CUENTA IB:</strong></span>
+                <span><strong>EUR {total_cuenta_eur:,.2f}</strong></span>
+            </div>
+        </div>
+        """.replace(",", "."),
+        unsafe_allow_html=True
+    )
+
+    st.caption(f"Fecha: {ib_date.strftime('%d/%m/%Y')} | EUR/USD: {eur_usd:.4f}")
+
+
+elif page == "Backtesting" and backtesting_option == "Estrategia Mensual":
     st.title("Seleccion Mensual")
     st.markdown("Day 0 = Ultimo dia de negociacion del mes anterior (End-of-Day prices)")
 
@@ -1608,27 +2263,29 @@ elif page == "Estrategia Mensual":
         "Octubre 2025": "EVRG, D, LDOS, BTG, STLD, JPM, BAC, WFC, E, NFLX",
         "Septiembre 2025": "CEG, INTC, RIO, PWR, AIZ, FTI, ORLY",
         "Agosto 2025": "XEL, MSI, SYY, IRM, PAYC, CTAS, PODD, CBOE, BRK-B, TJX",
+        "Julio 2025": "AMD, GOOGL, EPAM, PLD, CTAS, ODFL, DHR, WAT, MSCI, DHI",
+        "Junio 2025": "TSLA, NVDA, AMZN, KMB, RTO, GILD, RMD, SAN, LLY, DB1",
+        "Mayo 2025": "AVGO, EA, LRCX, SNPS, NVDA, AMAT, TDG, CTAS, MCK, LYV",
+        "Abril 2025": "TYL, UL, STZ, TT, BSX, MA, EQT, BKNG, HAS, AMZN",
+        "Marzo 2025": "ANET, CHD, STZ, EQIX, AEM, GSK, EW, WST, CTRA, BKNG",
     }
 
     col1, col2 = st.columns(2)
     with col1:
         current_month = datetime.now().month
         current_year = datetime.now().year
-        # Generar opciones: mes siguiente + mes actual + 12 meses anteriores
+        # Generar opciones: mes actual + 12 meses anteriores
+        # NO incluir mes siguiente porque la estrategia no ha empezado
+        # (empieza con la compra el último día del mes anterior)
         month_options = []
-        # Incluir mes siguiente (para preparar seleccion)
-        next_month = current_month + 1 if current_month < 12 else 1
-        next_year = current_year if current_month < 12 else current_year + 1
-        month_options.append(f"{month_names[next_month]} {next_year}")
-        # Mes actual hacia atras
         m, y = current_month, current_year
-        for _ in range(13):  # 13 meses hacia atras
+        for _ in range(13):  # Mes actual + 12 meses hacia atrás
             month_options.append(f"{month_names[m]} {y}")
             m -= 1
             if m == 0:
                 m = 12
                 y -= 1
-        selected_month = st.selectbox("Seleccion", month_options, index=0)
+        selected_month = st.selectbox("Selección del Mes", month_options, index=0)
     with col2:
         show_returns = st.checkbox("Show returns %", value=True)
 
@@ -1650,16 +2307,25 @@ elif page == "Estrategia Mensual":
     if symbols and st.button("Load Prices", type="primary"):
         st.markdown("---")
 
+        # Calcular mes anterior dinámicamente
         if month == 1:
             prev_month, prev_year = 12, year - 1
         else:
             prev_month, prev_year = month - 1, year
 
+        # Calcular mes siguiente (para determinar fin del mes actual)
+        if month == 12:
+            next_month, next_year = 1, year + 1
+        else:
+            next_month, next_year = month + 1, year
+
         first_day_current = datetime(year, month, 1)
-        today = datetime.now().date()
+        first_day_next = datetime(next_year, next_month, 1)
+        today = datetime.now()
 
         with db.get_session() as session:
             all_data = {}
+            summary_data = []
             start_date = datetime(prev_year, prev_month, 1)
 
             for symbol_code in symbols:
@@ -1667,22 +2333,91 @@ elif page == "Estrategia Mensual":
                 if db_symbol:
                     prices = db.get_price_history(session, db_symbol.id, start_date=start_date)
                     if not prices.empty:
-                        prices = prices[prices.index.date < today]
-                        prev_month_prices = prices[prices.index < first_day_current]
-                        current_month_prices = prices[prices.index >= first_day_current]
+                        # Filtrar precios hasta hoy
+                        prices = prices[prices.index <= today]
+
+                        # Precios del mes anterior (para obtener precio de apertura)
+                        prev_month_prices = prices[(prices.index >= datetime(prev_year, prev_month, 1)) &
+                                                   (prices.index < first_day_current)]
+
+                        # Precios del mes actual (para obtener precio de cierre)
+                        current_month_prices = prices[(prices.index >= first_day_current) &
+                                                      (prices.index < first_day_next)]
 
                         if not prev_month_prices.empty:
-                            day_0_price = prev_month_prices['close'].iloc[-1]
-                            day_0_date = prev_month_prices.index[-1]
+                            # Precio apertura = último día de mercado del mes anterior
+                            open_price = prev_month_prices['close'].iloc[-1]
+                            open_date = prev_month_prices.index[-1]
+
+                            # Precio cierre = último día disponible del mes actual
+                            if not current_month_prices.empty:
+                                close_price = current_month_prices['close'].iloc[-1]
+                                close_date = current_month_prices.index[-1]
+                            else:
+                                # Mes aún no ha empezado
+                                close_price = open_price
+                                close_date = open_date
+
+                            # Crear serie con todos los días para la tabla de evolución
                             combined = pd.concat([
-                                pd.Series([day_0_price], index=[day_0_date], name='close'),
+                                pd.Series([open_price], index=[open_date], name='close'),
                                 current_month_prices['close']
                             ])
                             all_data[symbol_code] = combined
-                        elif not current_month_prices.empty:
-                            all_data[symbol_code] = current_month_prices['close']
+
+                            # Calcular retorno
+                            mtd_return = ((close_price - open_price) / open_price) * 100
+
+                            summary_data.append({
+                                "Symbol": symbol_code,
+                                "Fecha Apertura": open_date.strftime("%d/%m/%Y"),
+                                "Precio Apertura": open_price,
+                                "Fecha Cierre": close_date.strftime("%d/%m/%Y"),
+                                "Precio Cierre": close_price,
+                                "Variación €": close_price - open_price,
+                                "Retorno %": mtd_return,
+                            })
 
         if all_data:
+            # Tabla de resumen con precios de apertura y cierre
+            st.subheader("Resumen Estrategia Mensual")
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+
+                def style_summary(row):
+                    styles = [''] * len(row)
+                    ret_idx = summary_df.columns.get_loc("Retorno %")
+                    var_idx = summary_df.columns.get_loc("Variación €")
+                    if row["Retorno %"] > 0:
+                        styles[ret_idx] = 'color: green'
+                        styles[var_idx] = 'color: green'
+                    elif row["Retorno %"] < 0:
+                        styles[ret_idx] = 'color: red'
+                        styles[var_idx] = 'color: red'
+                    return styles
+
+                styled_summary = summary_df.style.apply(style_summary, axis=1).format({
+                    "Precio Apertura": "${:.2f}",
+                    "Precio Cierre": "${:.2f}",
+                    "Variación €": "${:+.2f}",
+                    "Retorno %": "{:+.2f}%"
+                })
+                st.dataframe(styled_summary, use_container_width=True, hide_index=True)
+
+                # Métricas totales
+                total_return = sum(d["Retorno %"] for d in summary_data) / len(summary_data)
+                positive = sum(1 for d in summary_data if d["Retorno %"] > 0)
+                negative = len(summary_data) - positive
+
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Retorno Medio", f"{total_return:+.2f}%")
+                col2.metric("Positivos", positive, delta=f"{positive/len(summary_data)*100:.0f}%")
+                col3.metric("Negativos", negative)
+
+            st.markdown("---")
+
+            # Tabla de evolución diaria
+            st.subheader("Evolución Diaria de Precios")
             price_df = pd.DataFrame(all_data)
             day_labels = ["0"] + [str(i) for i in range(1, len(price_df))]
             date_labels = price_df.index.strftime("%d/%m").tolist()
@@ -1713,26 +2448,6 @@ elif page == "Estrategia Mensual":
                     returns_table.style.format("{:+.2f}%").map(style_returns),
                     use_container_width=True
                 )
-
-            st.subheader("Month-to-Date Summary")
-            summary_data = []
-            for symbol_code in symbols:
-                if symbol_code in all_data:
-                    prices = all_data[symbol_code]
-                    if len(prices) >= 2:
-                        day0_price = prices.iloc[0]
-                        current_price = prices.iloc[-1]
-                        mtd_return = ((current_price - day0_price) / day0_price) * 100
-                        summary_data.append({
-                            "Symbol": symbol_code,
-                            "Day 0 Price": f"${day0_price:.2f}",
-                            "Current Price": f"${current_price:.2f}",
-                            "MTD Change": f"${current_price - day0_price:+.2f}",
-                            "MTD Return %": f"{mtd_return:+.2f}%",
-                        })
-
-            if summary_data:
-                st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
 
             st.markdown("---")
             csv = price_table.to_csv()
@@ -1889,9 +2604,9 @@ elif page == "Screener":
         st.info(f"Metrics available for {metrics_count} records. Use filters below.")
 
 
-elif page == "Portfolios":
-    st.title("Portfolio Management")
-    st.info("Ver Dashboard para el resumen completo de la cartera.")
+elif page == "Backtesting" and backtesting_option == "Portfolio Backtest":
+    st.title("Portfolio Backtest")
+    st.info("Herramienta de backtesting para estrategias de portfolio.")
 
 
 elif page == "Download Status":
@@ -2630,6 +3345,137 @@ elif page == "Pantalla":
     | `sqlalchemy` | ORM para base de datos |
     | `yfinance` | Datos de Yahoo Finance |
     """)
+
+
+# =============================================================================
+# AI ASSISTANT PAGE
+# =============================================================================
+elif page == "Asistente IA":
+    st.title("🤖 Asistente IA")
+    st.markdown("Pregunta sobre tu cartera, posiciones, operaciones y análisis financiero.")
+
+    # Initialize assistant in session state
+    if "ai_assistant" not in st.session_state:
+        try:
+            from src.ai_assistant import FinancialAssistant
+            st.session_state.ai_assistant = FinancialAssistant()
+            st.session_state.chat_history = []
+        except Exception as e:
+            st.error(f"Error inicializando asistente: {e}")
+            st.session_state.ai_assistant = None
+
+    assistant = st.session_state.get("ai_assistant")
+
+    if assistant:
+        # Show backend status
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            backends = assistant.list_backends()
+            available = [k for k, v in backends.items() if v]
+            if available:
+                st.success(f"✓ Backends disponibles: {', '.join(available)}")
+                if assistant.active_backend:
+                    st.info(f"→ Usando: **{assistant.active_backend.name}**")
+            else:
+                st.warning("⚠️ No hay backends de IA disponibles. Configura una API key en .env")
+
+        with col2:
+            if available and len(available) > 1:
+                new_backend = st.selectbox(
+                    "Cambiar backend",
+                    available,
+                    index=available.index(assistant.active_backend.name) if assistant.active_backend else 0
+                )
+                if new_backend != (assistant.active_backend.name if assistant.active_backend else None):
+                    assistant.switch_backend(new_backend)
+                    st.rerun()
+
+        st.markdown("---")
+
+        # Quick summary
+        with st.expander("📊 Resumen rápido del Portfolio", expanded=False):
+            try:
+                summary = assistant.get_quick_summary()
+                st.text(summary)
+            except Exception as e:
+                st.error(f"Error obteniendo resumen: {e}")
+
+        st.markdown("---")
+
+        # Chat interface
+        st.subheader("💬 Chat con el Asistente")
+
+        # Display chat history
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        for msg in st.session_state.chat_history:
+            if msg["role"] == "user":
+                st.chat_message("user").markdown(msg["content"])
+            else:
+                st.chat_message("assistant").markdown(msg["content"])
+
+        # Chat input
+        if prompt := st.chat_input("Escribe tu pregunta aquí..."):
+            # Add user message
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            st.chat_message("user").markdown(prompt)
+
+            # Generate response
+            with st.chat_message("assistant"):
+                with st.spinner("Pensando..."):
+                    try:
+                        response = assistant.ask(prompt)
+                        st.markdown(response)
+                        st.session_state.chat_history.append({"role": "assistant", "content": response})
+                    except Exception as e:
+                        error_msg = f"Error: {str(e)}"
+                        st.error(error_msg)
+                        st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
+
+        # Clear chat button
+        if st.session_state.chat_history:
+            if st.button("🗑️ Limpiar chat"):
+                st.session_state.chat_history = []
+                st.rerun()
+
+        st.markdown("---")
+
+        # Example questions
+        st.subheader("💡 Ejemplos de preguntas")
+        examples = [
+            "¿Cuál es el valor total de mi cartera?",
+            "¿Qué posiciones tengo en efectivo?",
+            "¿Cuáles son mis posiciones cortas?",
+            "Muéstrame las últimas operaciones",
+            "¿Cuánto tengo invertido en ETFs?",
+            "¿Cuál es mi exposición en futuros?",
+        ]
+
+        cols = st.columns(2)
+        for i, example in enumerate(examples):
+            col = cols[i % 2]
+            if col.button(example, key=f"example_{i}"):
+                st.session_state.chat_history.append({"role": "user", "content": example})
+                st.rerun()
+
+    else:
+        st.error("No se pudo inicializar el asistente de IA")
+        st.markdown("""
+        **Para configurar el asistente:**
+
+        1. Edita el archivo `.env` y añade al menos una API key:
+           - `GOOGLE_API_KEY` - Para usar Gemini (gratis)
+           - `GROQ_API_KEY` - Para usar Groq/Llama (gratis)
+           - `ANTHROPIC_API_KEY` - Para usar Claude
+
+        2. Recarga la página
+
+        **Obtener API keys:**
+        - Gemini: https://aistudio.google.com/
+        - Groq: https://console.groq.com/
+        - Claude: https://console.anthropic.com/
+        """)
 
 
 # Footer

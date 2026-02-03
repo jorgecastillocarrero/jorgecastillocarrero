@@ -11,11 +11,11 @@
 3. **Dashboard Composición** (web/app.py)
    - Código de la página Composición
 
-4. **Dashboard Acciones/ETF** (web/app.py)
-   - Código de la página Acciones/ETF
+4. **Dashboard Acciones** (web/app.py)
+   - Código de la página Acciones
 
-5. **Dashboard Futuros** (web/app.py)
-   - Código de la página Futuros
+5. **Dashboard Futuros y ETF** (web/app.py)
+   - Código de la página Futuros y ETF
 
 ---
 

@@ -291,9 +291,11 @@ class MetricsCalculator:
                 )
             else:
                 symbol_list = session.query(Symbol).all()
+            # Extract symbol codes as strings before session closes
+            symbol_codes = [s.code for s in symbol_list]
 
         results = {
-            "total": len(symbol_list),
+            "total": len(symbol_codes),
             "success": 0,
             "failed": 0,
             "skipped": 0,
@@ -302,10 +304,10 @@ class MetricsCalculator:
 
         logger.info(f"Calculating metrics for {results['total']} symbols")
 
-        for i, symbol in enumerate(symbol_list, 1):
+        for i, symbol_code in enumerate(symbol_codes, 1):
             try:
                 metrics_df = self.calculate_for_symbol(
-                    symbol.code, start_date, end_date, save_to_db=True
+                    symbol_code, start_date, end_date, save_to_db=True
                 )
 
                 if metrics_df.empty:
@@ -322,8 +324,8 @@ class MetricsCalculator:
 
             except Exception as e:
                 results["failed"] += 1
-                results["errors"].append({"symbol": symbol.code, "error": str(e)[:100]})
-                logger.warning(f"{symbol.code}: Error - {str(e)[:50]}")
+                results["errors"].append({"symbol": symbol_code, "error": str(e)[:100]})
+                logger.warning(f"{symbol_code}: Error - {str(e)[:50]}")
 
         logger.info(
             f"Metrics calculation completed: "

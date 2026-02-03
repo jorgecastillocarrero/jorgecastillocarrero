@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
 
+    # Anthropic (Claude) Configuration
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-sonnet-4-20250514"
+
+    # Google (Gemini) Configuration
+    google_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+
+    # Groq Configuration
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
     # Logging
     log_level: str = "INFO"
 

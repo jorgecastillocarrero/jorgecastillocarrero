@@ -1,0 +1,38 @@
+[server]
+# Enable headless mode for production
+headless = true
+
+# Allow connections from any IP
+address = "0.0.0.0"
+
+# Enable CORS for custom domains
+enableCORS = false
+enableXsrfProtection = true
+
+# Increase max upload size (MB)
+maxUploadSize = 50
+
+# Run on specified port (Railway sets PORT env var)
+# port = 8501
+
+[browser]
+# Don't open browser automatically
+serverAddress = "0.0.0.0"
+gatherUsageStats = false
+
+[theme]
+# Professional theme matching sidebar
+primaryColor = "#4a6fa5"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f7fa"
+textColor = "#1e1e1e"
+font = "sans serif"
+
+[client]
+# Enable caching for better performance
+showErrorDetails = false
+toolbarMode = "minimal"
+
+[runner]
+# Magic commands disabled for security
+magicEnabled = false

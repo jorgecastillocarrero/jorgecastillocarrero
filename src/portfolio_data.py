@@ -19,60 +19,63 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# ASSET TYPE MAPPING - Single Source of Truth (Configuration)
+# ASSET TYPE MAPPING - Loaded from database table 'asset_types'
 # =============================================================================
 
-ASSET_TYPE_MAP = {
-    # CO3365 - Mensual
-    'AKAM': 'Mensual', 'VRTX': 'Mensual', 'PCAR': 'Mensual', 'BDX': 'Mensual',
-    'AMZN': 'Mensual', 'MCO': 'Mensual', 'HCA': 'Mensual', 'MA': 'Mensual',
-    'WST': 'Mensual', 'CRM': 'Mensual',
+def _load_asset_types_from_db():
+    """
+    Load asset types from database table.
+    Supports both regular symbols and account-specific mappings (format: 'ACCOUNT:SYMBOL').
+    """
+    db_types = {}
+    try:
+        db = get_db_manager()
+        with db.get_session() as session:
+            result = session.execute(text("SELECT symbol, asset_type FROM asset_types"))
+            for symbol, asset_type in result.fetchall():
+                if symbol and asset_type:
+                    db_types[symbol] = asset_type
+        logger.info(f"Loaded {len(db_types)} asset types from database")
+    except Exception as e:
+        logger.error(f"Could not load asset_types from DB: {e}")
+    return db_types
 
-    # La Caixa - Value
-    'JD': 'Value', 'BABA': 'Value', 'IAG': 'Value', 'NESN': 'Value',
-    'IAG.MC': 'Value', 'NESN.SW': 'Value',
+# Load from database at module initialization
+ASSET_TYPE_MAP = _load_asset_types_from_db()
 
-    # La Caixa - Quant
-    'ATZ': 'Quant', 'ATZ.TO': 'Quant',
+def reload_asset_types():
+    """Reload asset types from database (call after updates)."""
+    global ASSET_TYPE_MAP
+    ASSET_TYPE_MAP = _load_asset_types_from_db()
+    return len(ASSET_TYPE_MAP)
 
-    # La Caixa - Oro/Mineras
-    'AEM': 'Oro/Mineras', 'AEM.TO': 'Oro/Mineras',
+def get_asset_type(symbol: str, account: str = None) -> str:
+    """
+    Get asset type for a symbol, optionally checking account-specific mapping first.
 
-    # RCO951 - Oro/Mineras
-    'B': 'Oro/Mineras', 'TFPM': 'Oro/Mineras', 'SSRM': 'Oro/Mineras',
-    'RGLD': 'Oro/Mineras', 'KGC': 'Oro/Mineras', 'CDE': 'Oro/Mineras',
-    'BVN': 'Oro/Mineras', 'WPM': 'Oro/Mineras', 'NEM': 'Oro/Mineras',
-    'AGI': 'Oro/Mineras', 'SGLE.MI': 'Oro/Mineras', 'SGLE': 'Oro/Mineras',
+    Args:
+        symbol: Stock symbol (e.g., 'AVGO', 'AAPL')
+        account: Optional account code (e.g., 'CO3365', 'RCO951')
 
-    # RCO951 - Alpha Picks
-    'EAT': 'Alpha Picks', 'EZPW': 'Alpha Picks', 'INCY': 'Alpha Picks',
-    'MFC': 'Alpha Picks', 'MU': 'Alpha Picks', 'PARR': 'Alpha Picks',
-    'STRL': 'Alpha Picks', 'TIGO': 'Alpha Picks', 'TTMI': 'Alpha Picks',
-    'UNFI': 'Alpha Picks', 'VISN': 'Alpha Picks', 'W': 'Alpha Picks',
+    Returns:
+        Asset type string or 'Otros' if not found
+    """
+    # First check account-specific mapping if account provided
+    if account:
+        account_key = f'{account}:{symbol}'
+        if account_key in ASSET_TYPE_MAP:
+            return ASSET_TYPE_MAP[account_key]
 
-    # RCO951 - Quant
-    'KRYS': 'Quant', 'LRCX': 'Quant', 'STX': 'Quant', 'EXEL': 'Quant',
-    'ENVA': 'Quant', 'ESLT': 'Quant', 'WLDN': 'Quant', 'FIX': 'Quant',
-    'GOOG': 'Quant', 'CECO': 'Quant', 'AGX': 'Quant', 'PEN': 'Quant',
-    'SN': 'Quant', 'LLY': 'Quant', 'NMR': 'Quant', 'APH': 'Quant',
-    'PFSI': 'Quant', 'NIC': 'Quant', 'KLAC': 'Quant', 'CLS': 'Quant',
-    'PRIM': 'Quant', 'VRT': 'Quant', 'TSM': 'Quant', 'MPWR': 'Quant',
-    'HRMY': 'Quant', 'CPRX': 'Quant', 'WING': 'Quant', 'YOU': 'Quant',
-    'VIRT': 'Quant', 'PLMR': 'Quant', 'LTH': 'Quant', 'GMED': 'Quant',
-    'ONON': 'Quant', 'GIL': 'Quant', 'SBCF': 'Quant', 'PIPR': 'Quant',
-    'DLO': 'Quant', 'SEI': 'Quant', 'UI': 'Quant', 'PAHC': 'Quant',
-    'HALO': 'Quant', 'EME': 'Quant', 'TGS': 'Quant', 'EVR': 'Quant',
-    'SKYW': 'Quant', 'NVDA': 'Quant', 'GLDD': 'Quant', 'STC': 'Quant',
-    'USAC': 'Quant', 'PJT': 'Quant', 'NMRK': 'Quant', 'AVGO': 'Quant',
-    'SHAK': 'Quant', 'RCL': 'Quant', 'FUTU': 'Quant', 'SFM': 'Quant',
-    'HQY': 'Quant', 'UBER': 'Quant', 'HLI': 'Quant', 'BIRK': 'Quant',
-    'APP': 'Quant', 'HCI': 'Quant', 'MNDY': 'Quant', 'GWRE': 'Quant',
-    'BZ': 'Quant', 'VITL': 'Quant', 'PSIX': 'Quant', 'COIN': 'Quant',
-    'DOCS': 'Quant', 'DUOL': 'Quant',
+    # Then check general symbol mapping
+    if symbol in ASSET_TYPE_MAP:
+        return ASSET_TYPE_MAP[symbol]
 
-    # IB - Cash/Monetario/Bonos/Futuros
-    'TLT': 'Cash/Monetario/Bonos/Futuros',
-}
+    # Check base symbol (without exchange suffix)
+    base_symbol = symbol.split('.')[0] if '.' in symbol else symbol
+    if base_symbol in ASSET_TYPE_MAP:
+        return ASSET_TYPE_MAP[base_symbol]
+
+    return 'Otros'
 
 
 # =============================================================================
@@ -166,7 +169,7 @@ class PortfolioDataService:
         Get all holdings for all accounts on a specific date.
 
         Returns:
-            Dictionary of {account_code: {symbol: {'shares': int, 'currency': str}}}
+            Dictionary of {account_code: {symbol: {'shares': int, 'currency': str, 'asset_type': str}}}
         """
         cache_key = f"all_holdings_{fecha}"
         if cache_key in self._cache:
@@ -175,7 +178,7 @@ class PortfolioDataService:
         from sqlalchemy import text
         with self.db.get_session() as session:
             result = session.execute(text("""
-                SELECT account_code, symbol, shares, currency
+                SELECT account_code, symbol, shares, currency, asset_type
                 FROM holding_diario
                 WHERE fecha = :fecha
             """), {'fecha': fecha})
@@ -187,7 +190,8 @@ class PortfolioDataService:
                     all_holdings[account] = {}
                 all_holdings[account][row[1]] = {
                     'shares': row[2],
-                    'currency': row[3] or 'USD'
+                    'currency': row[3] or 'USD',
+                    'asset_type': row[4] or 'Otros'
                 }
 
             self._cache[cache_key] = all_holdings
@@ -450,10 +454,7 @@ class PortfolioDataService:
         for account, holdings in all_holdings.items():
             for symbol, data in holdings.items():
                 shares = data['shares']
-
-                # Get asset type from ASSET_TYPE_MAP
-                base_symbol = symbol.split('.')[0] if '.' in symbol else symbol
-                asset_type = ASSET_TYPE_MAP.get(symbol, ASSET_TYPE_MAP.get(base_symbol, 'Otros'))
+                asset_type = data.get('asset_type', 'Otros')
 
                 value = self.calculate_position_value(symbol, shares, fecha)
                 if value:
@@ -462,18 +463,18 @@ class PortfolioDataService:
                     values[asset_type] += value
 
         # 2. Add cash from cash_diario for all accounts
-        if 'Cash/Monetario/Bonos/Futuros' not in values:
-            values['Cash/Monetario/Bonos/Futuros'] = 0
+        if 'Cash' not in values:
+            values['Cash'] = 0
 
         eur_usd = self.get_eur_usd_rate(fecha)
-        for account in ['CO3365', 'RCO951', 'IB']:
+        for account in ['CO3365', 'RCO951', 'IB', 'LACAIXA']:
             cash_data = self.get_cash_for_date(account, fecha)
             if cash_data:
                 for currency, amount in cash_data.items():
                     if currency == 'EUR':
-                        values['Cash/Monetario/Bonos/Futuros'] += amount
+                        values['Cash'] += amount
                     elif currency == 'USD':
-                        values['Cash/Monetario/Bonos/Futuros'] += amount / eur_usd
+                        values['Cash'] += amount / eur_usd
 
         return values
 
