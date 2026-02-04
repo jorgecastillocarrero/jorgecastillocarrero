@@ -4,24 +4,158 @@ Run with: streamlit run web/app.py
 """
 
 import sys
-import logging
 from pathlib import Path
-import importlib
 
-# Add project root to path
+# Add project root to path BEFORE any other imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Force reload of portfolio_data to pick up changes
-import src.portfolio_data
-importlib.reload(src.portfolio_data)
-
 import streamlit as st
+
+# Page configuration - MUST be first Streamlit command
+st.set_page_config(
+    page_title="PatrimonioSmart",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# =====================================================
+# AUTHENTICATION CHECK - Must be FIRST before any content
+# =====================================================
+from src.config import get_settings
+settings = get_settings()
+
+def check_authentication():
+    """Check if user is authenticated when auth is enabled."""
+    if not settings.dashboard_auth_enabled:
+        return True
+
+    if not settings.dashboard_password:
+        return True
+
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    # Cargar imagen de fondo como base64
+    import base64
+    import os
+
+    bg_paths = [
+        "web/static/login_bg.png",
+        os.path.join(os.path.dirname(__file__), "static/login_bg.png"),
+        "/app/web/static/login_bg.png",
+    ]
+
+    bg_base64 = ""
+    for bg_path in bg_paths:
+        if os.path.exists(bg_path):
+            try:
+                with open(bg_path, "rb") as img_file:
+                    bg_base64 = base64.b64encode(img_file.read()).decode()
+                break
+            except Exception:
+                continue
+
+    # Página de login con imagen de fondo a pantalla completa
+    st.markdown(f"""
+    <style>
+        [data-testid="stSidebar"] {{display: none;}}
+        [data-testid="stHeader"] {{display: none;}}
+        .stApp {{
+            background-image: url("data:image/png;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }}
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 0;
+        }}
+        .stApp > * {{
+            position: relative;
+            z-index: 1;
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
+                Patrimonio<span style="color: #4fc3f7;">Smart</span>
+            </div>
+            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
+                GESTIÓN PATRIMONIAL INTELIGENTE
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
+            Acceso Privado
+        </h2>
+        """, unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
+            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("Entrar", use_container_width=True)
+
+            if submit:
+                valid_user = username.lower() == "carihuela"
+                valid_pass = password == settings.dashboard_password
+
+                if valid_user and valid_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("Usuario o contraseña incorrectos")
+
+        st.markdown("""
+        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
+            <small>PatrimonioSmart 2026</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    return False
+
+# Check auth immediately
+if not check_authentication():
+    st.stop()
+
+# =====================================================
+# AUTHENTICATED - Load the rest of the app
+# =====================================================
+import logging
+import importlib
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
 
-from src.config import get_settings
+# Force reload of portfolio_data to pick up changes
+import src.portfolio_data
+importlib.reload(src.portfolio_data)
+
 from src.database import (
     get_db_manager, Symbol, Exchange, PriceHistory, DownloadLog,
     Fundamental, Portfolio, PortfolioHolding, DailyMetrics,
@@ -43,14 +177,6 @@ def parse_db_date(date_value, default=None):
     if isinstance(date_value, date):
         return date_value
     return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
-
-# Page configuration
-st.set_page_config(
-    page_title="Financial Data Dashboard",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
