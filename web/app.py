@@ -191,6 +191,14 @@ from src.portfolio_data import (
     ASSET_TYPE_MAP, CURRENCY_MAP, CURRENCY_SYMBOL_MAP,
 )
 
+def parse_db_date(date_value, default=None):
+    """Parse date from database - handles both PostgreSQL (date obj) and SQLite (string)."""
+    if date_value is None:
+        return default
+    if isinstance(date_value, date):
+        return date_value
+    return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
+
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
 <style>
@@ -669,15 +677,26 @@ if page == "Posición":
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date(2026, 1, 28)
+        latest_date_raw = result.fetchone()[0]
+        # PostgreSQL returns date objects, SQLite returns strings
+        if latest_date_raw is None:
+            latest_date = date(2026, 1, 28)
+        elif isinstance(latest_date_raw, date):
+            latest_date = latest_date_raw
+        else:
+            latest_date = datetime.strptime(str(latest_date_raw), '%Y-%m-%d').date()
 
         # Obtener fecha anterior para comparación diaria
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < :latest
-        """), {'latest': latest_date_str})
-        prev_date_str = result.fetchone()[0]
-        prev_date = datetime.strptime(prev_date_str, '%Y-%m-%d').date() if prev_date_str else latest_date
+        """), {'latest': latest_date})
+        prev_date_raw = result.fetchone()[0]
+        if prev_date_raw is None:
+            prev_date = latest_date
+        elif isinstance(prev_date_raw, date):
+            prev_date = prev_date_raw
+        else:
+            prev_date = datetime.strptime(str(prev_date_raw), '%Y-%m-%d').date()
 
         # Valor inicial 31/12/2025 desde tabla posicion
         result = session.execute(text("""
@@ -1120,8 +1139,7 @@ elif page == "Composición":
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
+        latest_date = parse_db_date(result.fetchone()[0], date.today())
 
     # Get account totals calculated dynamically from holding_diario + prices
     account_totals = get_account_totals_from_db(latest_date)
@@ -1418,8 +1436,7 @@ elif page == "Acciones":
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else today
+        latest_date = parse_db_date(result.fetchone()[0], today)
 
     # EUR/USD exchange rates from service
     eur_usd_31dic = portfolio_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
@@ -2198,8 +2215,7 @@ elif page == "Futuros y ETF":
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
+        ib_date = parse_db_date(result.fetchone()[0], date.today())
 
         # Obtener precios de compra desde ib_trades (promedio ponderado)
         precios_compra = {}
