@@ -238,7 +238,7 @@ def check_authentication():
         [data-testid="stSidebar"] {{display: none;}}
         [data-testid="stHeader"] {{display: none;}}
         .stApp {{
-            background-image: url("data:image/jpeg;base64,{bg_base64}");
+            background-image: url("data:image/png;base64,{bg_base64}");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
