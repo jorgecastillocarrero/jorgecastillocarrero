@@ -22,11 +22,11 @@ env/
 *.swp
 *.swo
 
-# Data (will be in PostgreSQL in production)
-data/
-*.db
-*.sqlite
-*.sqlite3
+# Data - include SQLite for now
+# data/
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # Logs
 *.log
