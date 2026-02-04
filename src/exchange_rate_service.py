@@ -60,7 +60,7 @@ class ExchangeRateService:
                 result = session.execute(text("""
                     SELECT p.close FROM symbols s
                     JOIN price_history p ON s.id = p.symbol_id
-                    WHERE s.code = :pair AND p.date = :fecha
+                    WHERE s.code = :pair AND DATE(p.date) = :fecha
                 """), {'pair': pair, 'fecha': check_date})
 
                 row = result.fetchone()

@@ -305,7 +305,7 @@ class PortfolioDataService:
                 result = session.execute(text("""
                     SELECT p.close FROM symbols s
                     JOIN price_history p ON s.id = p.symbol_id
-                    WHERE s.code = :pair AND p.date = :fecha
+                    WHERE s.code = :pair AND DATE(p.date) = :fecha
                 """), {'pair': pair, 'fecha': d})
 
                 row = result.fetchone()
@@ -357,7 +357,7 @@ class PortfolioDataService:
                 result = session.execute(text("""
                     SELECT p.close FROM symbols s
                     JOIN price_history p ON s.id = p.symbol_id
-                    WHERE s.code = :symbol AND p.date = :fecha
+                    WHERE s.code = :symbol AND DATE(p.date) = :fecha
                 """), {'symbol': symbol, 'fecha': d})
 
                 row = result.fetchone()
