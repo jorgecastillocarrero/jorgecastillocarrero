@@ -338,9 +338,6 @@ with st.sidebar:
         st.markdown("### PatrimonioSmart")
 
 # Initialize components
-import os
-db_url_env = os.environ.get('DATABASE_URL', 'NOT SET')
-st.sidebar.caption(f"DB: {db_url_env[:30]}..." if len(db_url_env) > 30 else f"DB: {db_url_env}")
 db = get_db_manager()
 analyzer = AIAnalyzer()
 technical = TechnicalAnalyzer()
