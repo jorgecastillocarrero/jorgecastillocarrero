@@ -94,6 +94,25 @@ class ExchangeRateService:
 
     def get_eur_usd(self, target_date: date) -> float:
         """Get EUR/USD rate for a specific date."""
+        # Debug: check what's in the database
+        with self.db.get_session() as session:
+            # Check if symbol exists
+            result = session.execute(text("""
+                SELECT id, code FROM symbols WHERE code LIKE '%EUR%' OR code LIKE '%USD%'
+            """))
+            symbols = result.fetchall()
+            logger.info(f"DEBUG: Found currency symbols: {symbols}")
+
+            # Check price_history for EURUSD
+            result = session.execute(text("""
+                SELECT s.code, p.date, p.close FROM symbols s
+                JOIN price_history p ON s.id = p.symbol_id
+                WHERE s.code = 'EURUSD=X'
+                ORDER BY p.date DESC LIMIT 5
+            """))
+            prices = result.fetchall()
+            logger.info(f"DEBUG: EURUSD=X prices: {prices}")
+
         return self.get_rate('EURUSD=X', target_date)
 
     def get_cad_eur(self, target_date: date) -> float:
