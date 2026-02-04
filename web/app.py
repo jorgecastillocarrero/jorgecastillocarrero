@@ -302,6 +302,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Logout button top right
+if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+    logout_col1, logout_col2 = st.columns([9, 1])
+    with logout_col2:
+        if st.button("Cerrar sesión", key="logout_top"):
+            st.session_state.authenticated = False
+            st.rerun()
+
 # Logo en el sidebar
 with st.sidebar:
     st.image("web/static/logo_carihuela.png", use_container_width=True)
@@ -692,12 +700,6 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 st.sidebar.title("Financial Data Dashboard")
 
-# Logout button when auth is enabled
-if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-    if st.sidebar.button("🚪 Cerrar sesión"):
-        st.session_state.authenticated = False
-        st.rerun()
-
 st.sidebar.markdown("---")
 
 st.sidebar.markdown("**Data Source:** Yahoo Finance")
@@ -747,17 +749,17 @@ if page == "Posición":
 
         # Obtener última fecha disponible en posicion (día anterior = último con datos)
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date(2026, 1, 28)
+        latest_date_val = result.fetchone()[0]
+        latest_date = parse_db_date(latest_date_val, date(2026, 1, 28))
 
         # Obtener fecha anterior para comparación diaria
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < :latest
-        """), {'latest': latest_date_str})
-        prev_date_str = result.fetchone()[0]
-        prev_date = datetime.strptime(prev_date_str, '%Y-%m-%d').date() if prev_date_str else latest_date
+        """), {'latest': latest_date})
+        prev_date_val = result.fetchone()[0]
+        prev_date = parse_db_date(prev_date_val, latest_date)
 
         # Valor inicial 31/12/2025 desde tabla posicion
         result = session.execute(text("""
@@ -1211,10 +1213,10 @@ elif page == "Composición":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
+        latest_date_val = result.fetchone()[0]
+        latest_date = parse_db_date(latest_date_val, date.today())
 
     # Get account totals calculated dynamically from holding_diario + prices
     account_totals = get_account_totals_from_db(latest_date)
@@ -1509,10 +1511,10 @@ elif page == "Acciones":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else today
+        latest_date_val = result.fetchone()[0]
+        latest_date = parse_db_date(latest_date_val, today)
 
     # EUR/USD exchange rates from service
     eur_usd_31dic = portfolio_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
@@ -2178,10 +2180,10 @@ elif page == "Futuros y ETF":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
-        latest_date_str = result.fetchone()[0]
-        ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
+        latest_date_val = result.fetchone()[0]
+        ib_date = parse_db_date(latest_date_val, date.today())
 
         # Obtener precios de compra desde ib_trades (promedio ponderado)
         precios_compra = {}
