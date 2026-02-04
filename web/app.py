@@ -168,9 +168,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Helper function to find static files
+def find_static_file(filename):
+    """Find static file in multiple possible locations."""
+    import os
+    paths = [
+        f"web/static/{filename}",
+        os.path.join(os.path.dirname(__file__), f"static/{filename}"),
+        f"/app/web/static/{filename}",
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    return paths[0]  # Return first path as fallback
+
 # Logo en el sidebar
 with st.sidebar:
-    st.image("web/static/logo_carihuela.png", use_container_width=True)
+    logo_path = find_static_file("logo_carihuela.png")
+    try:
+        st.image(logo_path, use_container_width=True)
+    except Exception:
+        st.markdown("### PatrimonioSmart")
 
 # Initialize components
 settings = get_settings()
@@ -195,8 +213,24 @@ def check_authentication():
 
     # Cargar imagen de fondo como base64
     import base64
-    with open("web/static/financial_bg.jpg", "rb") as img_file:
-        bg_base64 = base64.b64encode(img_file.read()).decode()
+    import os
+
+    # Buscar imagen de fondo en varias ubicaciones posibles
+    bg_paths = [
+        "web/static/financial_bg.jpg",
+        os.path.join(os.path.dirname(__file__), "static/financial_bg.jpg"),
+        "/app/web/static/financial_bg.jpg",
+    ]
+
+    bg_base64 = ""
+    for bg_path in bg_paths:
+        if os.path.exists(bg_path):
+            try:
+                with open(bg_path, "rb") as img_file:
+                    bg_base64 = base64.b64encode(img_file.read()).decode()
+                break
+            except Exception:
+                continue
 
     # Página de login con imagen de fondo a pantalla completa
     st.markdown(f"""
@@ -242,7 +276,10 @@ def check_authentication():
         """, unsafe_allow_html=True)
 
         # Logo
-        st.image("web/static/logo_carihuela.png", use_container_width=True)
+        try:
+            st.image(find_static_file("logo_carihuela.png"), use_container_width=True)
+        except Exception:
+            st.markdown("### PatrimonioSmart")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
