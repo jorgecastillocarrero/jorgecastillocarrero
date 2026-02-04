@@ -275,18 +275,24 @@ def check_authentication():
                     border: 1px solid rgba(255,255,255,0.1);">
         """, unsafe_allow_html=True)
 
-        # Logo
-        try:
-            st.image(find_static_file("logo_carihuela.png"), use_container_width=True)
-        except Exception:
-            st.markdown("### PatrimonioSmart")
+        # Logo PatrimonioSmart
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
+                Patrimonio<span style="color: #4fc3f7;">Smart</span>
+            </div>
+            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
+                GESTIÓN PATRIMONIAL INTELIGENTE
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Título
         st.markdown("""
         <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
-            Acceso al Portal
+            Acceso Privado
         </h2>
         """, unsafe_allow_html=True)
 
@@ -313,7 +319,7 @@ def check_authentication():
 
         st.markdown("""
         <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
-            <small>La Carihuela Inversiones © 2026</small>
+            <small>PatrimonioSmart © 2026</small>
         </div>
         """, unsafe_allow_html=True)
 
@@ -695,14 +701,22 @@ if page == "Posición":
         if spy_symbol:
             spy_data = db.get_price_history(session, spy_symbol.id, start_date=start_date)
             if not spy_data.empty:
-                spy_data = spy_data[spy_data.index.date < today]
+                # Filter: < today and weekdays only (consistent with Rentabilidad Diaria)
+                spy_data = spy_data[
+                    (spy_data.index.date < today) &
+                    (spy_data.index.dayofweek < 5)  # 0=Mon, 4=Fri
+                ]
                 if len(spy_data) >= 2:
                     spy_return = ((spy_data['close'].iloc[-1] - spy_data['close'].iloc[0]) / spy_data['close'].iloc[0]) * 100
 
         if qqq_symbol:
             qqq_data = db.get_price_history(session, qqq_symbol.id, start_date=start_date)
             if not qqq_data.empty:
-                qqq_data = qqq_data[qqq_data.index.date < today]
+                # Filter: < today and weekdays only (consistent with Rentabilidad Diaria)
+                qqq_data = qqq_data[
+                    (qqq_data.index.date < today) &
+                    (qqq_data.index.dayofweek < 5)  # 0=Mon, 4=Fri
+                ]
                 if len(qqq_data) >= 2:
                     qqq_return = ((qqq_data['close'].iloc[-1] - qqq_data['close'].iloc[0]) / qqq_data['close'].iloc[0]) * 100
 
@@ -1562,7 +1576,7 @@ elif page == "Acciones":
                     precio_actual_display = f"{currency_symbol}{precio_actual:.2f}"
 
                     asset_returns.append({
-                        'F.Compra': fecha_compra.strftime('%d/%m/%y') if fecha_compra else None,
+                        'F.Compra': fecha_compra,  # Store as date object for correct sorting
                         'Ticker': holding['ticker_full'],
                         'Tipo': holding['tipo'],
                         'Cuenta': holding['cuenta'],
@@ -1573,7 +1587,8 @@ elif page == "Acciones":
                         'Rent.Compra %': rent_desde_compra if rent_desde_compra is not None else 0,
                         'Rent.Periodo %': rent_periodo if rent_periodo is not None else 0,
                         'Rent.Periodo EUR': rent_eur_abs if rent_eur_abs is not None else 0,
-                        '_tiene_fecha': fecha_compra is not None
+                        '_tiene_fecha': fecha_compra is not None,
+                        '_fecha_compra_date': fecha_compra  # Raw date for filtering
                     })
 
         # Separar posiciones CON y SIN fecha de compra
@@ -1583,11 +1598,14 @@ elif page == "Acciones":
             asset_returns_df = all_returns_df[all_returns_df['_tiene_fecha'] == True].copy()
             # Posiciones SIN fecha de compra (para mostrar como faltantes)
             missing_data_df = all_returns_df[all_returns_df['_tiene_fecha'] == False].copy()
-            # Eliminar columna auxiliar
+            # Eliminar columna auxiliar _tiene_fecha (mantener _fecha_compra_date para filtrado)
             if not asset_returns_df.empty:
                 asset_returns_df = asset_returns_df.drop(columns=['_tiene_fecha'])
             if not missing_data_df.empty:
-                missing_data_df = missing_data_df.drop(columns=['_tiene_fecha'])
+                cols_to_drop = ['_tiene_fecha']
+                if '_fecha_compra_date' in missing_data_df.columns:
+                    cols_to_drop.append('_fecha_compra_date')
+                missing_data_df = missing_data_df.drop(columns=cols_to_drop)
         else:
             asset_returns_df = all_returns_df
             missing_data_df = pd.DataFrame()
@@ -1706,6 +1724,7 @@ elif page == "Acciones":
                         'Rent.Histórica %': rent_historica,
                         'Rent.Periodo EUR': pnl_eur,
                         'Rent.Histórica EUR': pnl_historico_eur,
+                        '_fecha_compra_date': fecha_compra if fecha_compra else None,  # Raw date for filtering
                     })
 
                 # closed_positions mantiene compatibilidad (incluye datos históricos)
@@ -1829,21 +1848,118 @@ elif page == "Acciones":
             st.markdown("---")
 
             # =====================================================
+            # FILTRO POR FECHA DE COMPRA
+            # =====================================================
+            st.subheader("🔍 Filtrar por Fecha de Compra")
+
+            # Obtener rango de fechas disponibles
+            all_dates_abiertas = []
+            if '_fecha_compra_date' in asset_returns_df.columns:
+                all_dates_abiertas = [d for d in asset_returns_df['_fecha_compra_date'].dropna().tolist() if d is not None]
+
+            all_dates_cerradas = []
+            if closed_periodo:
+                all_dates_cerradas = [p.get('_fecha_compra_date') for p in closed_periodo if p.get('_fecha_compra_date')]
+
+            all_purchase_dates = all_dates_abiertas + all_dates_cerradas
+
+            if all_purchase_dates:
+                # Convertir strings a date si es necesario
+                def to_date(d):
+                    if isinstance(d, str):
+                        try:
+                            return date.fromisoformat(d[:10])
+                        except:
+                            return None
+                    elif isinstance(d, date):
+                        return d
+                    return None
+
+                valid_dates = [to_date(d) for d in all_purchase_dates if to_date(d)]
+                if valid_dates:
+                    min_date = min(valid_dates)
+                    max_date = max(valid_dates)
+                else:
+                    min_date = date(2024, 1, 1)
+                    max_date = date.today()
+            else:
+                min_date = date(2024, 1, 1)
+                max_date = date.today()
+
+            col_filter1, col_filter2, col_filter3 = st.columns([1, 1, 1])
+            with col_filter1:
+                fecha_desde = st.date_input(
+                    "Desde",
+                    value=min_date,
+                    min_value=date(2020, 1, 1),
+                    max_value=max_date,
+                    key="fecha_compra_desde"
+                )
+            with col_filter2:
+                fecha_hasta = st.date_input(
+                    "Hasta",
+                    value=max_date,
+                    min_value=min_date,
+                    max_value=date.today(),
+                    key="fecha_compra_hasta"
+                )
+            with col_filter3:
+                st.write("")  # Spacing
+                filtrar_fechas = st.checkbox("Aplicar filtro", value=False, key="aplicar_filtro_fecha")
+
+            # Aplicar filtro a asset_returns_df
+            filtered_asset_returns_df = asset_returns_df.copy()
+            if filtrar_fechas and '_fecha_compra_date' in filtered_asset_returns_df.columns:
+                def filter_by_date(d):
+                    if d is None:
+                        return False
+                    if isinstance(d, str):
+                        try:
+                            d = date.fromisoformat(d[:10])
+                        except:
+                            return False
+                    return fecha_desde <= d <= fecha_hasta
+
+                mask = filtered_asset_returns_df['_fecha_compra_date'].apply(filter_by_date)
+                filtered_asset_returns_df = filtered_asset_returns_df[mask]
+
+            # Filtrar closed_periodo
+            filtered_closed_periodo = closed_periodo.copy() if closed_periodo else []
+            if filtrar_fechas and filtered_closed_periodo:
+                def filter_closed_by_date(p):
+                    d = p.get('_fecha_compra_date')
+                    if d is None:
+                        return False
+                    if isinstance(d, str):
+                        try:
+                            d = date.fromisoformat(d[:10])
+                        except:
+                            return False
+                    return fecha_desde <= d <= fecha_hasta
+
+                filtered_closed_periodo = [p for p in filtered_closed_periodo if filter_closed_by_date(p)]
+
+            st.markdown("---")
+
+            # =====================================================
             # DETAILED TABLE WITH ALL STOCKS
             # =====================================================
             st.subheader("Posiciones Abiertas")
 
-            # Calculate totals for the detailed table
-            total_valor_eur = asset_returns_df['Valor EUR'].sum()
-            total_rent_eur = asset_returns_df['Rent.Periodo EUR'].sum()
-            total_inicial_eur = asset_returns_df['Valor_Inicial_EUR'].sum()
+            # Calculate totals for the detailed table (usando DataFrame filtrado)
+            total_valor_eur = filtered_asset_returns_df['Valor EUR'].sum() if not filtered_asset_returns_df.empty else 0
+            total_rent_eur = filtered_asset_returns_df['Rent.Periodo EUR'].sum() if not filtered_asset_returns_df.empty else 0
+            total_inicial_eur = filtered_asset_returns_df['Valor_Inicial_EUR'].sum() if not filtered_asset_returns_df.empty else 0
             total_rent_pct = ((total_valor_eur / total_inicial_eur) - 1) * 100 if total_inicial_eur > 0 else 0
 
             # Format for display - mantener valores numéricos para ordenamiento correcto
-            display_df = asset_returns_df.copy()
-            display_df = display_df.drop(columns=['Valor_Inicial_EUR'])
+            display_df = filtered_asset_returns_df.copy()
+            cols_to_drop = ['Valor_Inicial_EUR']
+            if '_fecha_compra_date' in display_df.columns:
+                cols_to_drop.append('_fecha_compra_date')
+            display_df = display_df.drop(columns=cols_to_drop)
 
-            # Convertir fecha a formato español (dd/mm/yyyy)
+            # Convertir fecha a formato español (dd/mm/yyyy) - para Posiciones Cerradas
             def to_spanish_date(date_str):
                 if not date_str or date_str == '-':
                     return '-'
@@ -1853,7 +1969,9 @@ elif page == "Acciones":
                     return d.strftime('%d/%m/%Y')
                 except:
                     return date_str
-            display_df['F.Compra'] = display_df['F.Compra'].apply(to_spanish_date)
+
+            # F.Compra ya es date object, convertir a datetime para DateColumn
+            display_df['F.Compra'] = pd.to_datetime(display_df['F.Compra'])
 
             # Reorder columns: F.Compra, precios, rentabilidades en EUR
             display_df = display_df[['F.Compra', 'Ticker', 'Tipo', 'Cuenta', 'Títulos', 'P.Compra', 'Últ.Precio', 'Valor EUR', 'Rent.Compra %', 'Rent.Periodo %', 'Rent.Periodo EUR']]
@@ -1864,7 +1982,7 @@ elif page == "Acciones":
                 hide_index=True,
                 height=600,
                 column_config={
-                    'F.Compra': st.column_config.TextColumn('F.Compra', width='small'),
+                    'F.Compra': st.column_config.DateColumn('F.Compra', format='DD/MM/YYYY', width='small'),
                     'Ticker': st.column_config.TextColumn('Ticker', width='small'),
                     'Tipo': st.column_config.TextColumn('Tipo', width='small'),
                     'Cuenta': st.column_config.TextColumn('Cuenta', width='small'),
@@ -1915,8 +2033,12 @@ elif page == "Acciones":
             st.markdown("---")
             st.subheader("Posiciones Cerradas")
 
-            if closed_periodo:
-                periodo_df = pd.DataFrame(closed_periodo)
+            if filtered_closed_periodo:
+                periodo_df = pd.DataFrame(filtered_closed_periodo)
+
+                # Eliminar columna auxiliar de fecha para display
+                if '_fecha_compra_date' in periodo_df.columns:
+                    periodo_df = periodo_df.drop(columns=['_fecha_compra_date'])
 
                 # Asegurar que las columnas numéricas sean tipo numérico
                 periodo_df['Títulos'] = pd.to_numeric(periodo_df['Títulos'], errors='coerce').fillna(0)
@@ -1965,7 +2087,10 @@ elif page == "Acciones":
                     unsafe_allow_html=True
                 )
             else:
-                st.info("No hay posiciones cerradas")
+                if filtrar_fechas:
+                    st.info(f"No hay posiciones cerradas en el rango {fecha_desde.strftime('%d/%m/%Y')} - {fecha_hasta.strftime('%d/%m/%Y')}")
+                else:
+                    st.info("No hay posiciones cerradas")
 
 
 elif page == "Futuros y ETF":
