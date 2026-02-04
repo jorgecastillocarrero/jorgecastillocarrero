@@ -198,12 +198,6 @@ analyzer = AIAnalyzer()
 
 def check_authentication():
     """Check if user is authenticated when auth is enabled."""
-    # DEBUG: mostrar estado de autenticación
-    import os
-    auth_env = os.environ.get('DASHBOARD_AUTH_ENABLED', 'NOT SET')
-    pass_env = os.environ.get('DASHBOARD_PASSWORD', 'NOT SET')
-    st.sidebar.write(f"DEBUG AUTH: env={auth_env}, settings={settings.dashboard_auth_enabled}")
-
     if not settings.dashboard_auth_enabled:
         return True
 
