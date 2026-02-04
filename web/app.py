@@ -217,9 +217,9 @@ def check_authentication():
 
     # Buscar imagen de fondo en varias ubicaciones posibles
     bg_paths = [
-        "web/static/financial_bg.jpg",
-        os.path.join(os.path.dirname(__file__), "static/financial_bg.jpg"),
-        "/app/web/static/financial_bg.jpg",
+        "web/static/login_bg.png",
+        os.path.join(os.path.dirname(__file__), "static/login_bg.png"),
+        "/app/web/static/login_bg.png",
     ]
 
     bg_base64 = ""
@@ -305,7 +305,7 @@ def check_authentication():
 
             if submit:
                 # Verificar credenciales
-                valid_user = username.lower() in ["admin", "carihuela", "inversiones"]
+                valid_user = username.lower() == "carihuela"
                 valid_pass = password == settings.dashboard_password
 
                 if valid_user and valid_pass:
