@@ -101,7 +101,7 @@ class ExchangeRateService:
                 SELECT id, code FROM symbols WHERE code LIKE '%EUR%' OR code LIKE '%USD%'
             """))
             symbols = result.fetchall()
-            logger.info(f"DEBUG: Found currency symbols: {symbols}")
+            print(f"DEBUG CURRENCY SYMBOLS: {symbols}", flush=True)
 
             # Check price_history for EURUSD
             result = session.execute(text("""
@@ -111,7 +111,7 @@ class ExchangeRateService:
                 ORDER BY p.date DESC LIMIT 5
             """))
             prices = result.fetchall()
-            logger.info(f"DEBUG: EURUSD=X prices: {prices}")
+            print(f"DEBUG EURUSD PRICES: {prices}", flush=True)
 
         return self.get_rate('EURUSD=X', target_date)
 
