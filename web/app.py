@@ -16,8 +16,27 @@ st.set_page_config(
     page_title="PatrimonioSmart",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
+
+# IMMEDIATELY hide all Streamlit default elements and show branded loading
+st.markdown("""
+<style>
+    /* Hide ALL default Streamlit elements initially */
+    [data-testid="stSidebar"] {display: none !important;}
+    [data-testid="stHeader"] {display: none !important;}
+    [data-testid="stToolbar"] {display: none !important;}
+    [data-testid="stDecoration"] {display: none !important;}
+    .stDeployButton {display: none !important;}
+    #MainMenu {display: none !important;}
+    footer {display: none !important;}
+
+    /* Dark background while loading */
+    .stApp {
+        background-color: #1a1a2e !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # =====================================================
 # AUTHENTICATION CHECK - Must be FIRST before any content
