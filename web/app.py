@@ -667,7 +667,7 @@ if page == "Posición":
 
         # Obtener última fecha disponible en posicion (día anterior = último con datos)
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
         latest_date_str = result.fetchone()[0]
         latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date(2026, 1, 28)
@@ -1118,7 +1118,7 @@ elif page == "Composición":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
         latest_date_str = result.fetchone()[0]
         latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
@@ -1416,7 +1416,7 @@ elif page == "Acciones":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
         latest_date_str = result.fetchone()[0]
         latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else today
@@ -2196,7 +2196,7 @@ elif page == "Futuros y ETF":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
+            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
         """))
         latest_date_str = result.fetchone()[0]
         ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
@@ -3059,7 +3059,7 @@ elif page == "Pantalla":
     |-------|--------|-------|
     | **Valor Inicial (31/12)** | `posicion` | `SELECT SUM(total_eur) FROM posicion WHERE fecha = '2025-12-31'` |
     | **Valor Actual** | `posicion` | `SELECT SUM(total_eur) FROM posicion WHERE fecha = [última fecha]` |
-    | **Fecha Actual** | `posicion` | `SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')` |
+    | **Fecha Actual** | `posicion` | `SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE` |
 
     ### Lógica de Fechas
 
@@ -3170,7 +3170,7 @@ elif page == "Pantalla":
     ### Fechas Utilizadas
 
     - **Día Anterior (day_prev)**: `SELECT MAX(fecha) FROM posicion WHERE fecha < [día_actual]`
-    - **Día Actual (day_last)**: `SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')`
+    - **Día Actual (day_last)**: `SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE`
 
     ### Verificación
 
@@ -3198,7 +3198,7 @@ elif page == "Pantalla":
     ```sql
     SELECT fecha, SUM(total_eur) as total
     FROM posicion
-    WHERE fecha < date('now')
+    WHERE fecha < CURRENT_DATE
     GROUP BY fecha
     ORDER BY fecha
     ```
