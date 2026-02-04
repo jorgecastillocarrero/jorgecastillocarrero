@@ -268,13 +268,6 @@ def check_authentication():
     col1, col2, col3 = st.columns([1, 1.5, 1])
 
     with col2:
-        # Caja de login con fondo semitransparente
-        st.markdown("""
-        <div style="background: rgba(0, 20, 40, 0.85); border-radius: 20px; padding: 40px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255,255,255,0.1);">
-        """, unsafe_allow_html=True)
-
         # Logo PatrimonioSmart
         st.markdown("""
         <div style="text-align: center; margin-bottom: 20px;">
@@ -314,8 +307,6 @@ def check_authentication():
                     st.rerun()
                 else:
                     st.error("❌ Usuario o contraseña incorrectos")
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("""
         <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
