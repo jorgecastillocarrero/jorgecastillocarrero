@@ -39,4 +39,4 @@ USER appuser
 EXPOSE 8501
 
 # Run Streamlit (Railway provides $PORT)
-CMD streamlit run web/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true
+CMD ["sh", "-c", "streamlit run web/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true"]
