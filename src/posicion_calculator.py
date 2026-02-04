@@ -307,12 +307,25 @@ class PosicionCalculator:
             logger.info(f"Holdings for {target_date} already exist")
             return 0
 
-        # Copy holdings from source to target (including asset_type)
+        # Copy holdings from source to target, getting asset_type from asset_types table
+        # Priority: 1) account:symbol mapping, 2) symbol mapping, 3) existing value, 4) 'Otros'
         result = session.execute(text("""
             INSERT INTO holding_diario (fecha, account_code, symbol, shares, precio_entrada, currency, asset_type)
-            SELECT :target, account_code, symbol, shares, precio_entrada, currency, asset_type
-            FROM holding_diario
-            WHERE fecha = :source
+            SELECT
+                :target,
+                h.account_code,
+                h.symbol,
+                h.shares,
+                h.precio_entrada,
+                h.currency,
+                COALESCE(
+                    (SELECT at.asset_type FROM asset_types at WHERE at.symbol = h.account_code || ':' || h.symbol),
+                    (SELECT at.asset_type FROM asset_types at WHERE at.symbol = h.symbol),
+                    h.asset_type,
+                    'Otros'
+                )
+            FROM holding_diario h
+            WHERE h.fecha = :source
         """), {'target': target_date, 'source': source_date})
 
         count = result.rowcount

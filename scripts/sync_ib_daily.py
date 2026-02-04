@@ -95,8 +95,13 @@ def sync_ib_for_date(session, fecha_str):
 
     # Insertar/actualizar TLT en holding_diario (con asset_type desde tabla asset_types)
     if not tlt_exists:
-        # Obtener asset_type de la tabla asset_types
-        at_result = session.execute(text("SELECT asset_type FROM asset_types WHERE symbol = 'TLT'"))
+        # Obtener asset_type: primero busca IB:TLT, luego TLT generico
+        at_result = session.execute(text("""
+            SELECT asset_type FROM asset_types
+            WHERE symbol = 'IB:TLT' OR symbol = 'TLT'
+            ORDER BY CASE WHEN symbol = 'IB:TLT' THEN 0 ELSE 1 END
+            LIMIT 1
+        """))
         at_row = at_result.fetchone()
         tlt_asset_type = at_row[0] if at_row else 'ETFs'
 
