@@ -2047,8 +2047,8 @@ elif page == "Acciones":
                 periodo_df['Rent.Periodo EUR'] = pd.to_numeric(periodo_df['Rent.Periodo EUR'], errors='coerce').fillna(0)
                 periodo_df['Rent.Histórica EUR'] = pd.to_numeric(periodo_df['Rent.Histórica EUR'], errors='coerce').fillna(0)
 
-                # Convertir fecha a formato español
-                periodo_df['Fecha'] = periodo_df['Fecha'].apply(to_spanish_date)
+                # Convertir fecha a datetime para ordenación correcta (año/mes/día)
+                periodo_df['Fecha'] = pd.to_datetime(periodo_df['Fecha'])
 
                 total_periodo_eur = periodo_df['Rent.Periodo EUR'].sum()
                 total_historica_eur_display = periodo_df['Rent.Histórica EUR'].sum()
@@ -2066,7 +2066,7 @@ elif page == "Acciones":
                     hide_index=True,
                     height=400,
                     column_config={
-                        'Fecha': st.column_config.TextColumn('Fecha', width='small'),
+                        'Fecha': st.column_config.DateColumn('Fecha', format='DD/MM/YYYY', width='small'),
                         'Títulos': st.column_config.NumberColumn('Títulos', width='small', format='%d'),
                         'Rent.Periodo %': st.column_config.TextColumn('Rent.Periodo %', width='small'),
                         'Rent.Histórica %': st.column_config.TextColumn('Rent.Histórica %', width='small'),
