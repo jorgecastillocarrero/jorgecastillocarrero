@@ -93,13 +93,18 @@ def sync_ib_for_date(session, fecha_str):
         row = result.fetchone()
         tlt_price = row[0] if row else 87.60  # Default
 
-    # Insertar/actualizar TLT en holding_diario
+    # Insertar/actualizar TLT en holding_diario (con asset_type desde tabla asset_types)
     if not tlt_exists:
+        # Obtener asset_type de la tabla asset_types
+        at_result = session.execute(text("SELECT asset_type FROM asset_types WHERE symbol = 'TLT'"))
+        at_row = at_result.fetchone()
+        tlt_asset_type = at_row[0] if at_row else 'ETFs'
+
         session.execute(text("""
-            INSERT INTO holding_diario (fecha, account_code, symbol, shares, precio_entrada, currency, created_at)
-            VALUES (:fecha, 'IB', 'TLT', :shares, :price, 'USD', datetime('now'))
-        """), {'fecha': fecha, 'shares': IB_TLT_SHARES, 'price': tlt_price})
-        print(f"  [holding_diario] Insertado TLT: {IB_TLT_SHARES} @ ${tlt_price:.2f}")
+            INSERT INTO holding_diario (fecha, account_code, symbol, shares, precio_entrada, currency, asset_type, created_at)
+            VALUES (:fecha, 'IB', 'TLT', :shares, :price, 'USD', :asset_type, datetime('now'))
+        """), {'fecha': fecha, 'shares': IB_TLT_SHARES, 'price': tlt_price, 'asset_type': tlt_asset_type})
+        print(f"  [holding_diario] Insertado TLT: {IB_TLT_SHARES} @ ${tlt_price:.2f} ({tlt_asset_type})")
     else:
         session.execute(text("""
             UPDATE holding_diario SET shares = :shares, precio_entrada = :price

@@ -307,10 +307,10 @@ class PosicionCalculator:
             logger.info(f"Holdings for {target_date} already exist")
             return 0
 
-        # Copy holdings from source to target
+        # Copy holdings from source to target (including asset_type)
         result = session.execute(text("""
-            INSERT INTO holding_diario (fecha, account_code, symbol, shares, precio_entrada, currency)
-            SELECT :target, account_code, symbol, shares, precio_entrada, currency
+            INSERT INTO holding_diario (fecha, account_code, symbol, shares, precio_entrada, currency, asset_type)
+            SELECT :target, account_code, symbol, shares, precio_entrada, currency, asset_type
             FROM holding_diario
             WHERE fecha = :source
         """), {'target': target_date, 'source': source_date})
