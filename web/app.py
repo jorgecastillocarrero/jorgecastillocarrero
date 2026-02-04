@@ -4,39 +4,14 @@ Run with: streamlit run web/app.py
 """
 
 import sys
-import logging
 from pathlib import Path
-import importlib
 
-# Add project root to path
+# Add project root to path BEFORE any other imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Force reload of portfolio_data to pick up changes
-import src.portfolio_data
-importlib.reload(src.portfolio_data)
-
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from datetime import datetime, timedelta, date
 
-from src.config import get_settings
-from src.database import (
-    get_db_manager, Symbol, Exchange, PriceHistory, DownloadLog,
-    Fundamental, Portfolio, PortfolioHolding, DailyMetrics,
-    IBAccount, IBTrade, IBFuturesTrade, AccountHolding, AccountCash
-)
-from src.yahoo_client import YahooFinanceClient, format_number, format_percent
-from src.yahoo_downloader import YahooDownloader, DEFAULT_SYMBOLS
-from src.analysis.ai_analyzer import AIAnalyzer, TechnicalAnalyzer
-from src.technical import MetricsCalculator
-from src.portfolio_data import (
-    get_portfolio_service,
-    ASSET_TYPE_MAP, CURRENCY_MAP, CURRENCY_SYMBOL_MAP,
-)
-
-# Page configuration
+# Page configuration - MUST be first Streamlit command
 st.set_page_config(
     page_title="PatrimonioSmart",
     page_icon="📈",
@@ -46,7 +21,9 @@ st.set_page_config(
 
 # =====================================================
 # AUTHENTICATION CHECK - Must be FIRST before any content
+# Only import config for auth check (lightweight)
 # =====================================================
+from src.config import get_settings
 settings = get_settings()
 
 def check_authentication():
@@ -168,7 +145,32 @@ if not check_authentication():
 
 # =====================================================
 # AUTHENTICATED - Load the rest of the app
+# Now load all heavy imports
 # =====================================================
+import logging
+import importlib
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime, timedelta, date
+
+# Force reload of portfolio_data to pick up changes
+import src.portfolio_data
+importlib.reload(src.portfolio_data)
+
+from src.database import (
+    get_db_manager, Symbol, Exchange, PriceHistory, DownloadLog,
+    Fundamental, Portfolio, PortfolioHolding, DailyMetrics,
+    IBAccount, IBTrade, IBFuturesTrade, AccountHolding, AccountCash
+)
+from src.yahoo_client import YahooFinanceClient, format_number, format_percent
+from src.yahoo_downloader import YahooDownloader, DEFAULT_SYMBOLS
+from src.analysis.ai_analyzer import AIAnalyzer, TechnicalAnalyzer
+from src.technical import MetricsCalculator
+from src.portfolio_data import (
+    get_portfolio_service,
+    ASSET_TYPE_MAP, CURRENCY_MAP, CURRENCY_SYMBOL_MAP,
+)
 
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
