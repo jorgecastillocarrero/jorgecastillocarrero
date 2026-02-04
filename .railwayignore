@@ -1,0 +1,42 @@
+# Railway ignore file
+# Exclude files that shouldn't be deployed
+
+# Local database (using PostgreSQL in production)
+data/financial_data.db
+data/portfolio.db
+data/*.db
+
+# ChromaDB local cache (will be recreated)
+data/chroma_db/
+
+# Local environment
+.env
+.env.local
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+scheduler.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Git
+.git/
+
+# Tests (not needed in production)
+tests/
+
+# Documentation
+*.md
+!README.md

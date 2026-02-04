@@ -252,6 +252,19 @@ IMPORTANTE:
         except ImportError:
             pass
 
+        # Portfolio RAG (Retrieval Augmented Generation)
+        self.rag = None
+        try:
+            from src.portfolio_rag import get_portfolio_rag
+            self.rag = get_portfolio_rag()
+            if self.rag.is_available():
+                # Auto-index on first load if empty
+                stats = self.rag.get_stats()
+                if stats.get('total_documents', 0) == 0:
+                    self.rag.index_all()
+        except ImportError:
+            pass
+
         # Initialize AI backends (Claude > Gemini > Groq)
         self.backends = {}
         self.active_backend = None
@@ -677,8 +690,8 @@ IMPORTANTE:
 
         return "\n".join(context_parts)
 
-    def ask(self, query: str) -> str:
-        """Process a user query"""
+    def ask(self, query: str, use_rag: bool = True) -> str:
+        """Process a user query with optional RAG context"""
         if not self.active_backend:
             return "Error: No hay backends de IA disponibles. Configura una API key en .env"
 
@@ -686,9 +699,21 @@ IMPORTANTE:
             # Run database analysis
             analysis = self._run_analysis(query)
 
+            # Get RAG context for portfolio-related queries
+            rag_context = ""
+            if use_rag and self.rag and self.rag.is_available():
+                rag_context = self.rag.get_context_for_query(query)
+
             # Build prompt
-            full_prompt = f"""DATOS DE ANALISIS:
-{analysis if analysis else "No se requirio analisis especifico."}
+            context_parts = []
+            if rag_context:
+                context_parts.append(rag_context)
+            if analysis:
+                context_parts.append(f"\n=== DATOS DE ANALISIS ===\n{analysis}")
+
+            full_context = "\n".join(context_parts) if context_parts else "No se requirio analisis especifico."
+
+            full_prompt = f"""{full_context}
 
 PREGUNTA DEL USUARIO:
 {query}
@@ -824,8 +849,21 @@ Responde de forma clara y concisa basandote en los datos proporcionados."""
             'data_validator': self.validator is not None,
             'external_data': self.external is not None,
             'news_manager': self.news is not None,
+            'portfolio_rag': self.rag is not None and self.rag.is_available(),
             'ai_backend': self.active_backend is not None
         }
+
+    def refresh_rag_index(self) -> Dict[str, int]:
+        """Refresh RAG index with current portfolio data"""
+        if not self.rag or not self.rag.is_available():
+            return {"error": "RAG not available"}
+        return self.rag.index_all()
+
+    def search_portfolio(self, query: str, n_results: int = 10) -> List[Dict]:
+        """Search portfolio data using RAG"""
+        if not self.rag or not self.rag.is_available():
+            return []
+        return self.rag.search(query, n_results)
 
     def get_news(self, symbol: str = None, category: str = None, days: int = 30) -> str:
         """Get news from database"""
