@@ -685,9 +685,9 @@ if page == "Posición":
     eur_usd_31dic = portfolio_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
     eur_usd_current = portfolio_service.get_eur_usd_rate(latest_date)
 
-    # Get benchmark returns from database
-    start_date = datetime(2025, 12, 31)
+    # Get benchmark data (SPY/QQQ) - used by both Resumen and Rentabilidad Diaria
     today = datetime.now().date()
+    query_start = datetime(2025, 12, 30)  # Start from 30/12 to ensure 31/12 is included
 
     latest_data_date = latest_date.strftime('%d/%m') if latest_date else "28/01"
 
@@ -695,30 +695,36 @@ if page == "Posición":
         spy_symbol = session.query(Symbol).filter(Symbol.code == 'SPY').first()
         qqq_symbol = session.query(Symbol).filter(Symbol.code == 'QQQ').first()
 
-        spy_return = 0
-        qqq_return = 0
+        spy_prices = pd.DataFrame()
+        qqq_prices = pd.DataFrame()
 
         if spy_symbol:
-            spy_data = db.get_price_history(session, spy_symbol.id, start_date=start_date)
-            if not spy_data.empty:
-                # Filter: < today and weekdays only (consistent with Rentabilidad Diaria)
-                spy_data = spy_data[
-                    (spy_data.index.date < today) &
-                    (spy_data.index.dayofweek < 5)  # 0=Mon, 4=Fri
+            spy_prices = db.get_price_history(session, spy_symbol.id, start_date=query_start)
+            if not spy_prices.empty:
+                # Filter: from 31/12/2025 to before today, weekdays only
+                spy_prices = spy_prices[
+                    (spy_prices.index.date >= date(2025, 12, 31)) &
+                    (spy_prices.index.date < today) &
+                    (spy_prices.index.dayofweek < 5)
                 ]
-                if len(spy_data) >= 2:
-                    spy_return = ((spy_data['close'].iloc[-1] - spy_data['close'].iloc[0]) / spy_data['close'].iloc[0]) * 100
 
         if qqq_symbol:
-            qqq_data = db.get_price_history(session, qqq_symbol.id, start_date=start_date)
-            if not qqq_data.empty:
-                # Filter: < today and weekdays only (consistent with Rentabilidad Diaria)
-                qqq_data = qqq_data[
-                    (qqq_data.index.date < today) &
-                    (qqq_data.index.dayofweek < 5)  # 0=Mon, 4=Fri
+            qqq_prices = db.get_price_history(session, qqq_symbol.id, start_date=query_start)
+            if not qqq_prices.empty:
+                # Filter: from 31/12/2025 to before today, weekdays only
+                qqq_prices = qqq_prices[
+                    (qqq_prices.index.date >= date(2025, 12, 31)) &
+                    (qqq_prices.index.date < today) &
+                    (qqq_prices.index.dayofweek < 5)
                 ]
-                if len(qqq_data) >= 2:
-                    qqq_return = ((qqq_data['close'].iloc[-1] - qqq_data['close'].iloc[0]) / qqq_data['close'].iloc[0]) * 100
+
+    # Calculate benchmark returns from the same data used by Rentabilidad Diaria
+    spy_return = 0
+    qqq_return = 0
+    if not spy_prices.empty and len(spy_prices) >= 2:
+        spy_return = ((spy_prices['close'].iloc[-1] - spy_prices['close'].iloc[0]) / spy_prices['close'].iloc[0]) * 100
+    if not qqq_prices.empty and len(qqq_prices) >= 2:
+        qqq_return = ((qqq_prices['close'].iloc[-1] - qqq_prices['close'].iloc[0]) / qqq_prices['close'].iloc[0]) * 100
 
     # Helper function for Spanish number format
     def format_eur(value, show_sign=False):
@@ -891,37 +897,10 @@ if page == "Posición":
     # Performance Chart vs Benchmark
     st.subheader(f"Rentabilidad Acumulada {date.today().year} vs Benchmark (desde 31/12/{date.today().year - 1})")
 
-    # Get benchmark daily data (start from 30/12 to ensure 31/12 is included)
-    query_start = datetime(2025, 12, 30)
-
+    # Get EUR/USD daily data for charts
     with db.get_session() as session:
-        spy_symbol = session.query(Symbol).filter(Symbol.code == 'SPY').first()
-        qqq_symbol = session.query(Symbol).filter(Symbol.code == 'QQQ').first()
         eurusd_symbol = session.query(Symbol).filter(Symbol.code == 'EURUSD=X').first()
-
-        spy_prices = pd.DataFrame()
-        qqq_prices = pd.DataFrame()
         eurusd_prices = pd.DataFrame()
-
-        if spy_symbol:
-            spy_prices = db.get_price_history(session, spy_symbol.id, start_date=query_start)
-            if not spy_prices.empty:
-                # Filter: from 31/12/2025 to before today, weekdays only (no weekends)
-                spy_prices = spy_prices[
-                    (spy_prices.index.date >= date(2025, 12, 31)) &
-                    (spy_prices.index.date < today) &
-                    (spy_prices.index.dayofweek < 5)  # 0=Mon, 4=Fri
-                ]
-
-        if qqq_symbol:
-            qqq_prices = db.get_price_history(session, qqq_symbol.id, start_date=query_start)
-            if not qqq_prices.empty:
-                # Filter: weekdays only
-                qqq_prices = qqq_prices[
-                    (qqq_prices.index.date >= date(2025, 12, 31)) &
-                    (qqq_prices.index.date < today) &
-                    (qqq_prices.index.dayofweek < 5)
-                ]
 
         if eurusd_symbol:
             eurusd_prices = db.get_price_history(session, eurusd_symbol.id, start_date=query_start)
