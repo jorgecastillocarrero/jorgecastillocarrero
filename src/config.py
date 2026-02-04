@@ -65,8 +65,15 @@ class Settings(BaseSettings):
     @property
     def effective_database_url(self) -> str:
         """Get database URL, defaulting to data/financial_data.db in project root."""
+        import os
+        # Try direct environment variable first (most reliable for Railway)
+        env_url = os.environ.get('DATABASE_URL', '')
+        if env_url:
+            return env_url
+        # Then try pydantic-settings value
         if self.database_url:
             return self.database_url
+        # Default to SQLite
         db_path = PROJECT_ROOT / self.data_dir / "financial_data.db"
         return f"sqlite:///{db_path}"
 
