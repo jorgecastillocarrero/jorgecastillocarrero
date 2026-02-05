@@ -38,5 +38,8 @@ USER appuser
 # Expose Streamlit port
 EXPOSE 8501
 
-# Run Streamlit (Railway provides $PORT)
-CMD ["sh", "-c", "streamlit run web/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true"]
+# SERVICE_MODE: "web" (default) or "scheduler"
+ENV SERVICE_MODE=web
+
+# Start: web (Streamlit) or scheduler depending on SERVICE_MODE
+CMD ["sh", "-c", "if [ \"$SERVICE_MODE\" = \"scheduler\" ]; then python -m src.scheduler --daemon; else streamlit run web/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true; fi"]

@@ -9,7 +9,6 @@ Sources:
 - Newspaper3k (article scraping)
 """
 
-import sqlite3
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
@@ -18,6 +17,7 @@ from dataclasses import dataclass
 import os
 import logging
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -65,13 +65,11 @@ class NewsManager:
         'general'
     ]
 
-    def __init__(self, db_path: str = "data/financial_data.db"):
-        self.db_path = db_path
+    def __init__(self):
+        from .database import get_db_manager
+        self.db = get_db_manager()
         self.news_api_key = os.getenv("NEWS_API_KEY")
         self.finnhub_api_key = os.getenv("FINNHUB_API_KEY")
-
-    def _get_connection(self):
-        return sqlite3.connect(self.db_path)
 
     # =========================================================================
     # STORAGE
@@ -79,73 +77,77 @@ class NewsManager:
 
     def save_article(self, article: NewsArticle) -> bool:
         """Save a single article to database"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
         try:
-            cursor.execute('''
-                INSERT OR IGNORE INTO news_history
-                (symbol, title, summary, content, source, url, published_at,
-                 category, sentiment, relevance)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                article.symbol,
-                article.title,
-                article.summary,
-                article.content,
-                article.source,
-                article.url,
-                article.published_at.isoformat() if article.published_at else None,
-                article.category,
-                article.sentiment,
-                article.relevance
-            ))
-            conn.commit()
-            return cursor.rowcount > 0
+            with self.db.get_session() as session:
+                result = session.execute(text('''
+                    INSERT INTO news_history
+                    (symbol, title, summary, content, source, url, published_at,
+                     category, sentiment, relevance)
+                    SELECT :symbol, :title, :summary, :content, :source, :url,
+                           :published_at, :category, :sentiment, :relevance
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM news_history WHERE url = :url
+                    )
+                '''), {
+                    'symbol': article.symbol,
+                    'title': article.title,
+                    'summary': article.summary,
+                    'content': article.content,
+                    'source': article.source,
+                    'url': article.url,
+                    'published_at': article.published_at,
+                    'category': article.category,
+                    'sentiment': article.sentiment,
+                    'relevance': article.relevance
+                })
+                session.commit()
+                return result.rowcount > 0
         except Exception as e:
             logger.error(f"Error saving article: {e}")
             return False
-        finally:
-            conn.close()
 
     def save_articles(self, articles: List[NewsArticle]) -> Dict[str, int]:
         """Save multiple articles to database"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
         saved = 0
         duplicates = 0
         errors = 0
 
-        for article in articles:
-            try:
-                cursor.execute('''
-                    INSERT OR IGNORE INTO news_history
-                    (symbol, title, summary, content, source, url, published_at,
-                     category, sentiment, relevance)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    article.symbol,
-                    article.title,
-                    article.summary,
-                    article.content,
-                    article.source,
-                    article.url,
-                    article.published_at.isoformat() if article.published_at else None,
-                    article.category,
-                    article.sentiment,
-                    article.relevance
-                ))
-                if cursor.rowcount > 0:
-                    saved += 1
-                else:
-                    duplicates += 1
-            except Exception as e:
-                errors += 1
-                logger.error(f"Error saving article: {e}")
-
-        conn.commit()
-        conn.close()
+        try:
+            with self.db.get_session() as session:
+                for article in articles:
+                    try:
+                        result = session.execute(text('''
+                            INSERT INTO news_history
+                            (symbol, title, summary, content, source, url, published_at,
+                             category, sentiment, relevance)
+                            SELECT :symbol, :title, :summary, :content, :source, :url,
+                                   :published_at, :category, :sentiment, :relevance
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM news_history WHERE url = :url
+                            )
+                        '''), {
+                            'symbol': article.symbol,
+                            'title': article.title,
+                            'summary': article.summary,
+                            'content': article.content,
+                            'source': article.source,
+                            'url': article.url,
+                            'published_at': article.published_at,
+                            'category': article.category,
+                            'sentiment': article.sentiment,
+                            'relevance': article.relevance
+                        })
+                        if result.rowcount > 0:
+                            saved += 1
+                        else:
+                            duplicates += 1
+                    except Exception as e:
+                        errors += 1
+                        logger.error(f"Error saving article: {e}")
+                session.commit()
+        except Exception as e:
+            logger.error(f"Error in save_articles: {e}")
+            errors += 1
 
         return {'saved': saved, 'duplicates': duplicates, 'errors': errors}
 
@@ -169,49 +171,45 @@ class NewsManager:
         Returns:
             DataFrame with news articles
         """
-        conn = self._get_connection()
-
         query = "SELECT * FROM news_history WHERE 1=1"
-        params = []
+        params = {}
 
         if symbol:
-            query += " AND symbol = ?"
-            params.append(symbol.upper())
+            query += " AND symbol = :symbol"
+            params['symbol'] = symbol.upper()
 
         if category:
-            query += " AND category = ?"
-            params.append(category)
+            query += " AND category = :category"
+            params['category'] = category
 
         if start_date:
-            query += " AND published_at >= ?"
-            params.append(start_date)
+            query += " AND published_at >= :start_date"
+            params['start_date'] = start_date
 
         if end_date:
-            query += " AND published_at <= ?"
-            params.append(end_date)
+            query += " AND published_at <= :end_date"
+            params['end_date'] = end_date
 
-        query += " ORDER BY published_at DESC LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY published_at DESC LIMIT :limit"
+        params['limit'] = limit
 
-        df = pd.read_sql_query(query, conn, params=params)
-        conn.close()
+        with self.db.get_session() as session:
+            df = pd.read_sql_query(text(query), session.bind, params=params)
 
         return df
 
     def search_news(self, query: str, limit: int = 50) -> pd.DataFrame:
         """Search news by keyword in title/summary"""
-        conn = self._get_connection()
-
         sql = """
             SELECT * FROM news_history
-            WHERE title LIKE ? OR summary LIKE ?
+            WHERE title LIKE :search OR summary LIKE :search
             ORDER BY published_at DESC
-            LIMIT ?
+            LIMIT :limit
         """
         search_term = f"%{query}%"
-        df = pd.read_sql_query(sql, conn, params=[search_term, search_term, limit])
-        conn.close()
-
+        with self.db.get_session() as session:
+            df = pd.read_sql_query(text(sql), session.bind,
+                                   params={'search': search_term, 'limit': limit})
         return df
 
     def get_market_events(self, event_type: str = 'crash',
@@ -243,47 +241,43 @@ class NewsManager:
 
     def get_stats(self) -> Dict:
         """Get news database statistics"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
         stats = {}
 
-        cursor.execute("SELECT COUNT(*) FROM news_history")
-        stats['total_articles'] = cursor.fetchone()[0]
+        with self.db.get_session() as session:
+            r = session.execute(text("SELECT COUNT(*) FROM news_history")).fetchone()
+            stats['total_articles'] = r[0]
 
-        cursor.execute("SELECT MIN(published_at), MAX(published_at) FROM news_history")
-        row = cursor.fetchone()
-        stats['date_range'] = {'from': row[0], 'to': row[1]}
+            r = session.execute(text("SELECT MIN(published_at), MAX(published_at) FROM news_history")).fetchone()
+            stats['date_range'] = {'from': str(r[0]) if r[0] else None, 'to': str(r[1]) if r[1] else None}
 
-        cursor.execute("""
-            SELECT source, COUNT(*) as count
-            FROM news_history
-            GROUP BY source
-            ORDER BY count DESC
-            LIMIT 10
-        """)
-        stats['top_sources'] = cursor.fetchall()
+            rows = session.execute(text("""
+                SELECT source, COUNT(*) as count
+                FROM news_history
+                GROUP BY source
+                ORDER BY count DESC
+                LIMIT 10
+            """)).fetchall()
+            stats['top_sources'] = [(r[0], r[1]) for r in rows]
 
-        cursor.execute("""
-            SELECT category, COUNT(*) as count
-            FROM news_history
-            WHERE category IS NOT NULL
-            GROUP BY category
-            ORDER BY count DESC
-        """)
-        stats['by_category'] = cursor.fetchall()
+            rows = session.execute(text("""
+                SELECT category, COUNT(*) as count
+                FROM news_history
+                WHERE category IS NOT NULL
+                GROUP BY category
+                ORDER BY count DESC
+            """)).fetchall()
+            stats['by_category'] = [(r[0], r[1]) for r in rows]
 
-        cursor.execute("""
-            SELECT symbol, COUNT(*) as count
-            FROM news_history
-            WHERE symbol IS NOT NULL
-            GROUP BY symbol
-            ORDER BY count DESC
-            LIMIT 20
-        """)
-        stats['top_symbols'] = cursor.fetchall()
+            rows = session.execute(text("""
+                SELECT symbol, COUNT(*) as count
+                FROM news_history
+                WHERE symbol IS NOT NULL
+                GROUP BY symbol
+                ORDER BY count DESC
+                LIMIT 20
+            """)).fetchall()
+            stats['top_symbols'] = [(r[0], r[1]) for r in rows]
 
-        conn.close()
         return stats
 
     def stats_summary(self) -> str:
@@ -529,7 +523,7 @@ class NewsManager:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    manager = NewsManager()
+    manager = NewsManager()  # Uses PostgreSQL via DATABASE_URL
 
     print("=== News Manager Test ===\n")
 
