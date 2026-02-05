@@ -1583,6 +1583,8 @@ elif page == "Acciones":
 
             if isinstance(fecha_compra, str):
                 fecha_compra = datetime.strptime(fecha_compra, '%Y-%m-%d').date()
+            elif isinstance(fecha_compra, datetime):
+                fecha_compra = fecha_compra.date()
 
             # Get symbol for price lookup
             if '.' in ticker_full:
@@ -1780,6 +1782,8 @@ elif page == "Acciones":
                 compra_info = precios_compra.get(symbol, {})
                 precio_compra_real = compra_info.get('precio')
                 fecha_compra = compra_info.get('fecha')
+                if isinstance(fecha_compra, datetime):
+                    fecha_compra = fecha_compra.date()
 
                 # Calcular rentabilidad histórica (desde compra)
                 if precio_compra_real and precio_compra_real > 0:
@@ -1795,7 +1799,7 @@ elif page == "Acciones":
                 # Solo añadir a periodo si tenia precio a 31/12
                 if precio_31_12_db:
                     # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
-                    if fecha_compra and fecha_compra > '2025-12-31':
+                    if fecha_compra and fecha_compra > date(2025, 12, 31):
                         precio_31_12_display = '-'
                     else:
                         precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
