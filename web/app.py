@@ -2186,14 +2186,14 @@ elif page == "Futuros y ETF":
     # ==========================================================================
     st.subheader("Posiciones ETFs Abiertas")
 
-    # Obtener fecha más reciente
+    # Obtener fecha más reciente de IB en holding_diario
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM holding_diario WHERE account_code = 'IB'
         """))
-        latest_date_val = result.fetchone()[0]
-        ib_date = parse_db_date(latest_date_val, date.today())
+        ib_date_val = result.fetchone()[0]
+        ib_date = parse_db_date(ib_date_val, date.today())
 
         # Obtener precios de compra desde ib_trades (promedio ponderado)
         precios_compra = {}
@@ -2209,10 +2209,10 @@ elif page == "Futuros y ETF":
 
         # Para posiciones sin trades en ib_trades, usar precio de primera fecha en holding_diario
         result = session.execute(text("""
-            SELECT symbol, precio_entrada, MIN(fecha) as first_date
+            SELECT DISTINCT ON (symbol) symbol, precio_entrada, fecha as first_date
             FROM holding_diario
-            WHERE account_code = 'IB'
-            GROUP BY symbol
+            WHERE account_code = 'IB' AND precio_entrada IS NOT NULL
+            ORDER BY symbol, fecha
         """))
         for row in result:
             if row[0] not in precios_compra and row[1]:
