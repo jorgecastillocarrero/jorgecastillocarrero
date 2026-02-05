@@ -105,8 +105,19 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 - Secuencia download_logs_id_seq corregida (estaba desincronizada tras migracion)
 - Datos actualizados hasta 04/02/2026 (5877 registros, posicion: 4,111,180 EUR)
 
+### Bugs PostgreSQL corregidos (05/02/2026)
+- exchange_rate_service.py: eliminadas queries DEBUG que hacian spam en logs
+- parse_db_date(): PostgreSQL devuelve datetime en vez de date, ahora convierte correctamente
+- calculate_all_trading_days(): misma correccion datetime->date (1 enero aparecia, SPY/QQQ faltaban)
+- Resumen cartera: colores dinamicos rojo/verde segun valor positivo/negativo (antes hardcoded verde)
+- Pagina Acciones: fecha_compra datetime vs date causaba TypeError (crash silencioso)
+- Pagina Acciones: comparacion fecha_compra > '2025-12-31' (string) cambiado a date()
+- Pagina Futuros y ETF: GROUP BY sin agregar precio_entrada (PostgreSQL estricto, SQLite lo permitia)
+- Pagina Futuros y ETF: fecha IB ahora usa MAX de holding_diario IB (no posicion global)
+
 ### Pendiente / En progreso
-- Dashboard local muestra tablas en blanco en Posicion (produccion funciona OK)
+- Dashboard local lento por latencia a Railway PostgreSQL (cada query ~200ms vs <1ms en produccion)
+- Holding_diario de IB solo hasta 30/01/2026 (falta actualizar)
 - Metricas tecnicas no se calculan (requieren 200+ registros, PostgreSQL tiene ~191 por simbolo)
 - Verificar que el scheduler de Railway ejecuta correctamente a las 00:01 ET diario
 
