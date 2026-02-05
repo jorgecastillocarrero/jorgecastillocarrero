@@ -419,16 +419,16 @@ class SchedulerManager:
         """Get list of scheduled jobs."""
         jobs = []
         for job in self.scheduler.get_jobs():
-            next_run = job.next_run_time
+            next_run = getattr(job, 'next_run_time', None)
             if next_run:
                 next_run_et = next_run.astimezone(ET)
                 next_run_str = next_run_et.strftime('%Y-%m-%d %H:%M:%S %Z')
             else:
-                next_run_str = "Not scheduled"
+                next_run_str = "Pending (starts after scheduler.start())"
 
             jobs.append({
                 "id": job.id,
-                "name": job.name,
+                "name": getattr(job, 'name', job.id),
                 "next_run": next_run_str,
                 "trigger": str(job.trigger),
             })
