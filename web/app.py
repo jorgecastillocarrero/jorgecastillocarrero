@@ -174,6 +174,8 @@ def parse_db_date(date_value, default=None):
     """Parse date from database - handles both PostgreSQL (date obj) and SQLite (string)."""
     if date_value is None:
         return default
+    if isinstance(date_value, datetime):
+        return date_value.date()
     if isinstance(date_value, date):
         return date_value
     return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
@@ -502,10 +504,12 @@ def calculate_all_trading_days():
             ORDER BY fecha
         """), {'today': today.isoformat()})
         for row in rows.fetchall():
-            # Convert string date to date object if needed
+            # Convert to date object (PostgreSQL may return datetime)
             fecha = row[0]
             if isinstance(fecha, str):
                 fecha = datetime.strptime(fecha, '%Y-%m-%d').date()
+            elif isinstance(fecha, datetime):
+                fecha = fecha.date()
             result[fecha] = row[1]
     return result
 
@@ -844,7 +848,9 @@ if page == "Posición":
         .usd-value {{ font-size: 20px; display: block; }}
         .fx-rate {{ font-size: 11px; color: #808080; }}
         .green {{ color: #00cc00; }}
-        .benchmark {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
+        .red {{ color: #ff4444; }}
+        .benchmark-green {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
+        .benchmark-red {{ font-size: 22px; font-weight: bold; color: #ff4444; }}
     </style>
     <table class="portfolio-table">
         <tr>
@@ -867,15 +873,15 @@ if page == "Posición":
                 <span class="fx-rate">(EUR/USD {eur_usd_current})</span>
             </td>
             <td>
-                <span class="eur-value green">{format_eur(return_eur, show_sign=True)}</span>
-                <span class="usd-value green">{format_usd(return_usd, show_sign=True)}</span>
+                <span class="eur-value {'green' if return_eur >= 0 else 'red'}">{format_eur(return_eur, show_sign=True)}</span>
+                <span class="usd-value {'green' if return_usd >= 0 else 'red'}">{format_usd(return_usd, show_sign=True)}</span>
             </td>
             <td>
-                <span class="eur-value green">{format_pct(return_pct)}</span>
-                <span class="usd-value green">{format_pct(return_pct_usd)}</span>
+                <span class="eur-value {'green' if return_pct >= 0 else 'red'}">{format_pct(return_pct)}</span>
+                <span class="usd-value {'green' if return_pct_usd >= 0 else 'red'}">{format_pct(return_pct_usd)}</span>
             </td>
-            <td><span class="benchmark">{format_pct(spy_return)}</span></td>
-            <td><span class="benchmark">{format_pct(qqq_return)}</span></td>
+            <td><span class="{'benchmark-green' if spy_return >= 0 else 'benchmark-red'}">{format_pct(spy_return)}</span></td>
+            <td><span class="{'benchmark-green' if qqq_return >= 0 else 'benchmark-red'}">{format_pct(qqq_return)}</span></td>
         </tr>
     </table>
     """, unsafe_allow_html=True)

@@ -22,11 +22,11 @@ env/
 *.swp
 *.swo
 
-# Data - include SQLite for now
-# data/
-# *.db
-# *.sqlite
-# *.sqlite3
+# Data - SQLite local, not needed (using PostgreSQL)
+data/
+*.db
+*.sqlite
+*.sqlite3
 
 # Logs
 *.log

@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8502:8502"
+    environment:
+      - SERVICE_MODE=web
+      - PORT=8502
+      - STREAMLIT_SERVER_PORT=8502
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    environment:
+      - SERVICE_MODE=scheduler
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - scheduler
