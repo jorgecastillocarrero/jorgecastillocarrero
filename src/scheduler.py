@@ -1,6 +1,6 @@
 """
 Scheduler for automated daily data downloads from Yahoo Finance.
-Runs at 00:01 AM Eastern Time (New York) every day.
+Runs at 00:01 AM Spain Time (Europe/Madrid) every day.
 """
 
 import logging
@@ -23,8 +23,8 @@ from .news_manager import NewsManager
 
 logger = logging.getLogger(__name__)
 
-# Eastern Time zone
-ET = pytz.timezone('America/New_York')
+# Spain Time zone (Europe/Madrid)
+ET = pytz.timezone('Europe/Madrid')
 
 
 class DailyDataUpdater:
@@ -341,7 +341,7 @@ class SchedulerManager:
 
     def add_daily_update_job(self, hour: int = 0, minute: int = 1):
         """
-        Add daily update job at specified time in Eastern Time.
+        Add daily update job at specified time in Spain Time.
 
         Args:
             hour: Hour in ET (default: 0 = midnight)
@@ -360,7 +360,7 @@ class SchedulerManager:
         )
 
         logger.info(
-            f"Scheduled daily update at {hour:02d}:{minute:02d} Eastern Time"
+            f"Scheduled daily update at {hour:02d}:{minute:02d} Spain Time"
         )
 
     def add_weekly_fundamentals_job(self, day_of_week: str = 'sun', hour: int = 1):
