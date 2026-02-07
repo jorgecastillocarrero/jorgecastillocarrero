@@ -320,14 +320,14 @@ st.markdown("""
 
     /* Navigation wrapper - full width, no gaps */
     .nav-wrapper {
-        background: linear-gradient(135deg, #4a6fa5 0%, #3d5a80 100%);
+        background: #24527a;
         margin-left: calc(-50vw + 50%);
         margin-right: calc(-50vw + 50%);
-        margin-top: -100px;
-        padding: 120px calc(50vw - 50% + 1rem) 30px;
+        margin-top: -120px;
+        padding: 160px calc(50vw - 50% + 1rem) 30px;
         min-height: 150px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(74, 111, 165, 0.3);
+        box-shadow: 0 4px 15px rgba(36, 82, 122, 0.3);
     }
 
     /* Ensure app starts at very top */
@@ -346,54 +346,59 @@ st.markdown("""
         margin-top: 0 !important;
     }
 
-    /* Style selectboxes in nav area - make them look like buttons */
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div {
-        background-color: rgba(255,255,255,0.1) !important;
-        border: 1px solid rgba(255,255,255,0.25) !important;
-        border-radius: 8px !important;
-        min-height: 44px !important;
+    /* Style selectboxes - positioned with margin-top */
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox {
+        margin-top: -120px;
     }
 
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover {
-        background-color: rgba(255,255,255,0.2) !important;
-        border-color: rgba(255,255,255,0.4) !important;
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div {
+        background-color: transparent !important;
+        border: none !important;
+        border-radius: 0 !important;
+        min-height: 20px !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div:hover {
+        background-color: transparent !important;
     }
 
     /* Text color white in selectboxes */
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div > div {
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div > div {
         color: white !important;
         font-weight: 500 !important;
     }
 
     /* Arrow color white */
-    [data-testid="stHorizontalBlock"] .stSelectbox svg {
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox svg {
         fill: white !important;
     }
 
     /* Hide selectbox labels */
-    [data-testid="stHorizontalBlock"] .stSelectbox label {
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox label {
         display: none !important;
     }
 
     /* Logo in nav */
-    [data-testid="stHorizontalBlock"] .stImage img {
-        max-height: 120px !important;
-        margin-top: -20px;
+    [data-testid="stHorizontalBlock"]:first-of-type .stImage img {
+        margin-top: -140px;
     }
 
     /* Logout button style */
-    [data-testid="stHorizontalBlock"] .stButton > button {
-        background-color: rgba(255,255,255,0.15) !important;
+    [data-testid="stHorizontalBlock"]:first-of-type .stButton {
+        margin-top: -120px;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button {
+        background-color: transparent !important;
         color: white !important;
-        border: 1px solid rgba(255,255,255,0.3) !important;
-        border-radius: 8px !important;
-        padding: 8px 16px !important;
+        border: none !important;
+        border-radius: 0 !important;
+        min-height: 20px !important;
         font-weight: 500 !important;
     }
 
-    [data-testid="stHorizontalBlock"] .stButton > button:hover {
-        background-color: rgba(255,255,255,0.25) !important;
-        border-color: rgba(255,255,255,0.5) !important;
+    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button:hover {
+        background-color: transparent !important;
     }
 
     /* Hide sidebar */
@@ -404,119 +409,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Initialize components
-settings = get_settings()
 db = get_db_manager()
 analyzer = AIAnalyzer()
-
-
-def check_authentication():
-    """Check if user is authenticated when auth is enabled."""
-    if not settings.dashboard_auth_enabled:
-        return True
-
-    if not settings.dashboard_password:
-        st.warning("⚠️ Autenticación habilitada pero no hay contraseña configurada. Establece DASHBOARD_PASSWORD en .env")
-        return True
-
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    # Cargar imagen de fondo como base64
-    import base64
-    with open("web/static/financial_bg.jpg", "rb") as img_file:
-        bg_base64 = base64.b64encode(img_file.read()).decode()
-
-    # Página de login con imagen de fondo a pantalla completa
-    st.markdown(f"""
-    <style>
-        [data-testid="stSidebar"] {{display: none;}}
-        [data-testid="stHeader"] {{display: none;}}
-        .stApp {{
-            background-image: url("data:image/jpeg;base64,{bg_base64}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            background-repeat: no-repeat;
-        }}
-        /* Overlay oscuro para legibilidad */
-        .stApp::before {{
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-            z-index: 0;
-        }}
-        /* Ocultar elementos de Streamlit innecesarios */
-        footer {{display: none;}}
-        #MainMenu {{display: none;}}
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Contenedor centrado para el login
-    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-
-    with col2:
-        # Caja de login con fondo semitransparente
-        st.markdown("""
-        <div style="background: rgba(0, 20, 40, 0.85); border-radius: 20px; padding: 40px;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
-                    border: 1px solid rgba(255,255,255,0.1);">
-        """, unsafe_allow_html=True)
-
-        # Logo
-        st.image("web/static/logo_carihuela.png", use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Título
-        st.markdown("""
-        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
-            Acceso al Portal
-        </h2>
-        """, unsafe_allow_html=True)
-
-        with st.form("login_form"):
-            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
-            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            submit = st.form_submit_button("Entrar", use_container_width=True)
-
-            if submit:
-                # Verificar credenciales
-                valid_user = username.lower() in ["admin", "carihuela", "inversiones"]
-                valid_pass = password == settings.dashboard_password
-
-                if valid_user and valid_pass:
-                    st.session_state.authenticated = True
-                    st.session_state.username = username
-                    st.rerun()
-                else:
-                    st.error("❌ Usuario o contraseña incorrectos")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
-            <small>La Carihuela Inversiones © 2026</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    return False
-
-
-# Check authentication before showing any content
-if not check_authentication():
-    st.stop()
 technical = TechnicalAnalyzer()
 yahoo_client = YahooFinanceClient()
 metrics_calc = MetricsCalculator()
@@ -794,7 +688,7 @@ page_groups = {
     "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
     "Análisis": ["Backtesting", "Screener", "Symbol Analysis"],
     "Datos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
-    "IA": ["Asistente IA"],
+    "Inteligencia Artificial": ["Asistente IA"],
     "Mercado": ["VIX"]
 }
 
@@ -808,68 +702,68 @@ if "current_group" not in st.session_state:
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
 # Create columns: Logo + 5 menus + spacer
-logo_col, m1, m2, m3, m4, m5, spacer = st.columns([2, 1, 1, 1, 0.8, 1, 1.5])
+logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.3, 0.8, 0.8, 0.8, 0.8, 0.8, 2.7])
 
 # Logo
 with logo_col:
     import os
     logo_paths = [
-        "web/static/logo_carihuela.png",
-        os.path.join(os.path.dirname(__file__), "static/logo_carihuela.png"),
-        "/app/web/static/logo_carihuela.png",
+        "web/static/logo_carihuela_final.jpg",
+        os.path.join(os.path.dirname(__file__), "static/logo_carihuela_final.jpg"),
+        "/app/web/static/logo_carihuela_final.jpg",
     ]
     for logo_path in logo_paths:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=300)
+            st.image(logo_path, width=320)
             break
 
 # Menu dropdowns
 with m1:
-    sel = st.selectbox("Cartera", ["📊 Cartera"] + page_groups["Cartera"],
+    sel = st.selectbox("Cartera", ["Cartera"] + page_groups["Cartera"],
         index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
         key="nav_cartera", label_visibility="collapsed")
-    if sel and sel not in ["📊 Cartera"]:
+    if sel and sel not in ["Cartera"]:
         st.session_state.current_page = sel
         st.session_state.current_group = "Cartera"
 
 with m2:
-    sel = st.selectbox("Análisis", ["📈 Análisis"] + page_groups["Análisis"],
+    sel = st.selectbox("Análisis", ["Análisis"] + page_groups["Análisis"],
         index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
         key="nav_analisis", label_visibility="collapsed")
-    if sel and sel not in ["📈 Análisis"]:
+    if sel and sel not in ["Análisis"]:
         st.session_state.current_page = sel
         st.session_state.current_group = "Análisis"
 
 with m3:
-    sel = st.selectbox("Datos", ["💾 Datos"] + page_groups["Datos"],
+    sel = st.selectbox("Datos", ["Datos"] + page_groups["Datos"],
         index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
         key="nav_datos", label_visibility="collapsed")
-    if sel and sel not in ["💾 Datos"]:
+    if sel and sel not in ["Datos"]:
         st.session_state.current_page = sel
         st.session_state.current_group = "Datos"
 
 with m4:
-    sel = st.selectbox("IA", ["🤖 IA"] + page_groups["IA"],
-        index=0 if st.session_state.current_group != "IA" else page_groups["IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["IA"] else 0,
+    sel = st.selectbox("Inteligencia Artificial", ["Inteligencia Artificial"] + page_groups["Inteligencia Artificial"],
+        index=0 if st.session_state.current_group != "Inteligencia Artificial" else page_groups["Inteligencia Artificial"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Inteligencia Artificial"] else 0,
         key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["🤖 IA"]:
+    if sel and sel not in ["Inteligencia Artificial"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "IA"
+        st.session_state.current_group = "Inteligencia Artificial"
 
 with m5:
-    sel = st.selectbox("Mercado", ["🌍 Mercado"] + page_groups["Mercado"],
+    sel = st.selectbox("Mercado", ["Mercado"] + page_groups["Mercado"],
         index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
         key="nav_mercado", label_visibility="collapsed")
-    if sel and sel not in ["🌍 Mercado"]:
+    if sel and sel not in ["Mercado"]:
         st.session_state.current_page = sel
         st.session_state.current_group = "Mercado"
 
 # Logout button aligned with menus
 with spacer:
-    spacer_left, spacer_right = st.columns([3, 1])
+    spacer_left, spacer_right = st.columns([5, 1])
     with spacer_right:
         if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-            if st.button("🚪 Salir", key="logout_nav"):
+            if st.button("Cerrar Sesión", key="logout_nav"):
                 st.session_state.authenticated = False
                 st.rerun()
 
@@ -1490,7 +1384,7 @@ if page == "Posición":
     pct_columns = [col for col in monthly_df.columns if col != 'Activo']
     format_dict = {col: '{:+.2f}%' for col in pct_columns}
 
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='-')
+    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='')
 
     st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
