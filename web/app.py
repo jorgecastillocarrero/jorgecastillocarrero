@@ -96,7 +96,7 @@ def check_authentication():
         st.markdown("""
         <div style="text-align: center; margin-bottom: 20px;">
             <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
-                Patrimonio<span style="color: #4fc3f7;">Smart</span>
+                Patrimonio<span style="color: #2a5a80;">Smart</span>
             </div>
             <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
                 GESTIÓN PATRIMONIAL INTELIGENTE
@@ -686,10 +686,12 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 # Define page groups for dropdown menus
 page_groups = {
     "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
-    "Análisis": ["Backtesting", "Screener", "Symbol Analysis"],
-    "Datos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
+    "Estrategias": ["Backtesting", "Screener", "Symbol Analysis"],
+    "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
+    "Indicadores": ["Indicadores"],
+    "Mercado": ["VIX"],
     "Inteligencia Artificial": ["Asistente IA"],
-    "Mercado": ["VIX"]
+    "Noticias": ["Noticias"]
 }
 
 # Initialize session state for navigation
@@ -701,8 +703,8 @@ if "current_group" not in st.session_state:
 # Navigation bar HTML wrapper
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
-# Create columns: Logo + 5 menus + spacer
-logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.3, 0.8, 0.8, 0.8, 0.8, 0.8, 2.7])
+# Create columns: Logo + 7 menus + spacer
+logo_col, m1, m2, m3, m4, m5, m6, m7, spacer = st.columns([1.3, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2])
 
 # Logo
 with logo_col:
@@ -727,28 +729,28 @@ with m1:
         st.session_state.current_group = "Cartera"
 
 with m2:
-    sel = st.selectbox("Análisis", ["Análisis"] + page_groups["Análisis"],
-        index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
-        key="nav_analisis", label_visibility="collapsed")
-    if sel and sel not in ["Análisis"]:
+    sel = st.selectbox("Estrategias", ["Estrategias"] + page_groups["Estrategias"],
+        index=0 if st.session_state.current_group != "Estrategias" else page_groups["Estrategias"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Estrategias"] else 0,
+        key="nav_estrategias", label_visibility="collapsed")
+    if sel and sel not in ["Estrategias"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Análisis"
+        st.session_state.current_group = "Estrategias"
 
 with m3:
-    sel = st.selectbox("Datos", ["Datos"] + page_groups["Datos"],
-        index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
-        key="nav_datos", label_visibility="collapsed")
-    if sel and sel not in ["Datos"]:
+    sel = st.selectbox("Gráficos", ["Gráficos"] + page_groups["Gráficos"],
+        index=0 if st.session_state.current_group != "Gráficos" else page_groups["Gráficos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Gráficos"] else 0,
+        key="nav_graficos", label_visibility="collapsed")
+    if sel and sel not in ["Gráficos"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Datos"
+        st.session_state.current_group = "Gráficos"
 
 with m4:
-    sel = st.selectbox("Inteligencia Artificial", ["Inteligencia Artificial"] + page_groups["Inteligencia Artificial"],
-        index=0 if st.session_state.current_group != "Inteligencia Artificial" else page_groups["Inteligencia Artificial"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Inteligencia Artificial"] else 0,
-        key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["Inteligencia Artificial"]:
+    sel = st.selectbox("Indicadores", ["Indicadores"] + page_groups["Indicadores"],
+        index=0 if st.session_state.current_group != "Indicadores" else page_groups["Indicadores"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Indicadores"] else 0,
+        key="nav_indicadores", label_visibility="collapsed")
+    if sel and sel not in ["Indicadores"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Inteligencia Artificial"
+        st.session_state.current_group = "Indicadores"
 
 with m5:
     sel = st.selectbox("Mercado", ["Mercado"] + page_groups["Mercado"],
@@ -757,6 +759,22 @@ with m5:
     if sel and sel not in ["Mercado"]:
         st.session_state.current_page = sel
         st.session_state.current_group = "Mercado"
+
+with m6:
+    sel = st.selectbox("Inteligencia Artificial", ["Inteligencia Artificial"] + page_groups["Inteligencia Artificial"],
+        index=0 if st.session_state.current_group != "Inteligencia Artificial" else page_groups["Inteligencia Artificial"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Inteligencia Artificial"] else 0,
+        key="nav_ia", label_visibility="collapsed")
+    if sel and sel not in ["Inteligencia Artificial"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Inteligencia Artificial"
+
+with m7:
+    sel = st.selectbox("Noticias", ["Noticias"] + page_groups["Noticias"],
+        index=0 if st.session_state.current_group != "Noticias" else page_groups["Noticias"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Noticias"] else 0,
+        key="nav_noticias", label_visibility="collapsed")
+    if sel and sel not in ["Noticias"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Noticias"
 
 # Logout button aligned with menus
 with spacer:
