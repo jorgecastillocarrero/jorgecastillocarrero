@@ -5,7 +5,7 @@ Runs at 00:01 AM Spain Time (Europe/Madrid) every day.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -43,6 +43,69 @@ class DailyDataUpdater:
         with self.db.get_session() as session:
             symbols = session.query(Symbol.code).all()
             return [s[0] for s in symbols]
+
+    def update_missing_prices(self) -> dict:
+        """
+        Update prices only for symbols missing today's data.
+        This is a faster, targeted update for completing partial downloads.
+
+        Returns:
+            Dictionary with update results
+        """
+        from sqlalchemy import text
+        started_at = datetime.now(ET)
+        today = started_at.strftime('%Y-%m-%d')
+        yesterday = (started_at - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        # Get symbols that have yesterday's data but not today's
+        with self.db.get_session() as session:
+            result = session.execute(text('''
+                SELECT DISTINCT s.code
+                FROM symbols s
+                JOIN price_history p ON s.id = p.symbol_id
+                WHERE DATE(p.date) = :yesterday
+                AND NOT EXISTS (
+                    SELECT 1 FROM price_history p2
+                    WHERE p2.symbol_id = s.id AND DATE(p2.date) = :today
+                )
+                ORDER BY s.code
+            '''), {'yesterday': yesterday, 'today': today})
+            missing_symbols = [r[0] for r in result.fetchall()]
+
+        if not missing_symbols:
+            logger.info("No missing symbols to update")
+            return {"total": 0, "success": 0, "failed": 0, "new_records": 0}
+
+        logger.info(f"Updating {len(missing_symbols)} symbols missing data for {today}")
+
+        results = {
+            "date": today,
+            "total": len(missing_symbols),
+            "success": 0,
+            "failed": 0,
+            "new_records": 0,
+        }
+
+        for i, symbol in enumerate(missing_symbols, 1):
+            try:
+                count = self.downloader.download_historical_prices(
+                    symbol, period="5d", incremental=True
+                )
+                if count > 0:
+                    results["success"] += 1
+                    results["new_records"] += count
+
+                if i % 100 == 0:
+                    logger.info(f"Missing update progress: {i}/{len(missing_symbols)}")
+
+            except Exception as e:
+                results["failed"] += 1
+
+            if i % 50 == 0:
+                time.sleep(0.5)
+
+        logger.info(f"Missing prices update completed: {results['success']} updated, {results['new_records']} new records")
+        return results
 
     def update_prices(self) -> dict:
         """
@@ -363,6 +426,25 @@ class SchedulerManager:
             f"Scheduled daily update at {hour:02d}:{minute:02d} Spain Time"
         )
 
+    def add_hourly_missing_update_job(self):
+        """
+        Add hourly job to complete any missing price downloads.
+        Runs every hour from 01:00 to 23:00 Spain Time.
+        """
+        self.scheduler.add_job(
+            self.updater.update_missing_prices,
+            trigger=CronTrigger(
+                hour='1-23',
+                minute=30,
+                timezone=ET
+            ),
+            id="hourly_missing_update",
+            replace_existing=True,
+            name="Hourly Missing Update (every hour at :30)",
+        )
+
+        logger.info("Scheduled hourly missing update at :30 every hour")
+
     def add_weekly_fundamentals_job(self, day_of_week: str = 'sun', hour: int = 1):
         """
         Add weekly fundamentals update job.
@@ -457,6 +539,9 @@ def run_scheduler_daemon():
     # Schedule daily update at 00:01 ET
     scheduler.add_daily_update_job(hour=0, minute=1)
 
+    # Schedule hourly job to complete missing downloads
+    scheduler.add_hourly_missing_update_job()
+
     # Schedule weekly fundamentals on Sunday at 01:00 ET
     scheduler.add_weekly_fundamentals_job(day_of_week='sun', hour=1)
 
@@ -526,6 +611,16 @@ if __name__ == "__main__":
             print(f"  Skipped: {results['skipped']}")
             print(f"  Failed: {results['failed']}")
 
+        elif cmd == "--missing":
+            print("\n=== Running Missing Prices Update ===\n")
+            updater = DailyDataUpdater()
+            results = updater.update_missing_prices()
+            print(f"\nResults:")
+            print(f"  Total missing: {results['total']}")
+            print(f"  Updated: {results['success']}")
+            print(f"  Failed: {results['failed']}")
+            print(f"  New records: {results['new_records']}")
+
         elif cmd == "--status":
             print("\n=== Scheduler Status ===\n")
             print(f"Current time (ET): {datetime.now(ET).strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -547,6 +642,7 @@ if __name__ == "__main__":
             print("  python -m src.scheduler --daemon        # Run as daemon")
             print("  python -m src.scheduler --run-now       # Run full update now")
             print("  python -m src.scheduler --prices        # Update prices only")
+            print("  python -m src.scheduler --missing       # Update missing prices only")
             print("  python -m src.scheduler --fundamentals  # Update fundamentals only")
             print("  python -m src.scheduler --metrics       # Calculate technical metrics")
             print("  python -m src.scheduler --status        # Show status")
