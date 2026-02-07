@@ -346,9 +346,93 @@ st.markdown("""
         margin-top: 0 !important;
     }
 
+    /* Remove any borders/lines from navigation area */
+    [data-testid="stHorizontalBlock"]:first-of-type,
+    [data-testid="stHorizontalBlock"]:first-of-type *,
+    [data-testid="stHorizontalBlock"]:first-of-type div,
+    [data-testid="stHorizontalBlock"]:first-of-type span,
+    [data-testid="stHorizontalBlock"]:first-of-type input {
+        border: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        border-color: #24527a !important;
+        box-shadow: none !important;
+        outline: none !important;
+        text-decoration: none !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type::before,
+    [data-testid="stHorizontalBlock"]:first-of-type::after,
+    [data-testid="stHorizontalBlock"]:first-of-type *::before,
+    [data-testid="stHorizontalBlock"]:first-of-type *::after {
+        display: none !important;
+        border: none !important;
+    }
+
+    /* Hide any hr elements */
+    .nav-wrapper hr,
+    [data-testid="stHorizontalBlock"]:first-of-type hr {
+        display: none !important;
+    }
+
+    /* Remove bottom border from selectbox input */
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"],
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] * {
+        border: none !important;
+        border-color: #24527a !important;
+        box-shadow: none !important;
+    }
+
+    /* Force hide underline on selectbox - BaseWeb component */
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div,
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div {
+        border-bottom: none !important;
+        border-bottom-width: 0 !important;
+        background-color: transparent !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div::after,
+    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div::after {
+        display: none !important;
+        background: none !important;
+        border: none !important;
+        height: 0 !important;
+    }
+
+    /* Target the specific underline element */
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="indicatorContainer"],
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="borderBottom"],
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="underline"],
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="Underline"] {
+        display: none !important;
+        border: none !important;
+        background: none !important;
+    }
+
+    /* Override BaseWeb control border */
+    [data-testid="stHorizontalBlock"]:first-of-type [class*="control"] {
+        border: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+    }
+
+    /* Title (POSICIÓN GLOBAL) - subir hacia arriba */
+    .main h1 {
+        margin-top: -90px !important;
+    }
+
     /* Style selectboxes - positioned with margin-top */
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox {
-        margin-top: -120px;
+        margin-top: -135px;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox,
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox * {
+        border: none !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        box-shadow: none !important;
+        outline: none !important;
     }
 
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div {
@@ -356,14 +440,6 @@ st.markdown("""
         border: none !important;
         border-radius: 0 !important;
         min-height: 20px !important;
-        border-bottom: none !important;
-        border-top: none !important;
-        box-shadow: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div > div {
-        border: none !important;
-        box-shadow: none !important;
     }
 
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div:hover {
@@ -693,12 +769,12 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 # Define page groups for dropdown menus
 page_groups = {
-    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
+    "Posición": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
     "Estrategias": ["Backtesting", "Screener", "Symbol Analysis"],
     "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
     "Indicadores": ["Indicadores"],
     "Mercado": ["VIX"],
-    "Inteligencia Artificial": ["Asistente IA"],
+    "Asistente IA": ["Asistente IA"],
     "Noticias": ["Noticias"]
 }
 
@@ -706,7 +782,7 @@ page_groups = {
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Posición"
 if "current_group" not in st.session_state:
-    st.session_state.current_group = "Cartera"
+    st.session_state.current_group = "Posición"
 
 # Navigation bar HTML wrapper
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
@@ -729,12 +805,12 @@ with logo_col:
 
 # Menu dropdowns
 with m1:
-    sel = st.selectbox("Cartera", ["Cartera"] + page_groups["Cartera"],
-        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
-        key="nav_cartera", label_visibility="collapsed")
-    if sel and sel not in ["Cartera"]:
+    sel = st.selectbox("Posición", ["Posición"] + page_groups["Posición"],
+        index=0 if st.session_state.current_group != "Posición" else page_groups["Posición"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Posición"] else 0,
+        key="nav_posicion", label_visibility="collapsed")
+    if sel and sel not in ["Posición"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Cartera"
+        st.session_state.current_group = "Posición"
 
 with m2:
     sel = st.selectbox("Estrategias", ["Estrategias"] + page_groups["Estrategias"],
@@ -769,12 +845,12 @@ with m5:
         st.session_state.current_group = "Mercado"
 
 with m6:
-    sel = st.selectbox("Inteligencia Artificial", ["Inteligencia Artificial"] + page_groups["Inteligencia Artificial"],
-        index=0 if st.session_state.current_group != "Inteligencia Artificial" else page_groups["Inteligencia Artificial"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Inteligencia Artificial"] else 0,
+    sel = st.selectbox("Asistente IA", ["Asistente IA"] + page_groups["Asistente IA"],
+        index=0 if st.session_state.current_group != "Asistente IA" else page_groups["Asistente IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Asistente IA"] else 0,
         key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["Inteligencia Artificial"]:
+    if sel and sel not in ["Asistente IA"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Inteligencia Artificial"
+        st.session_state.current_group = "Asistente IA"
 
 with m7:
     sel = st.selectbox("Noticias", ["Noticias"] + page_groups["Noticias"],
@@ -816,7 +892,7 @@ st.markdown("---")
 # =============================================================================
 
 if page == "Posición":
-    st.title("CARTERA LA CARIHUELA")
+    st.title("POSICIÓN GLOBAL")
 
     # =========================================================================
     # OBTENER VALORES DESDE TABLA POSICION (BD)
