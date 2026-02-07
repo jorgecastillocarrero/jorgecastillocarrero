@@ -96,7 +96,7 @@ def check_authentication():
         st.markdown("""
         <div style="text-align: center; margin-bottom: 20px;">
             <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
-                Patrimonio<span style="color: #2a5a80;">Smart</span>
+                Patrimonio<span style="color: #3a6a90;">Smart</span>
             </div>
             <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
                 GESTIÓN PATRIMONIAL INTELIGENTE
