@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="PatrimonioSmart",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # =====================================================
@@ -304,7 +304,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Logo comment removed - now in navigation bar
+# Logout button top right
+if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+    logout_col1, logout_col2 = st.columns([9, 1])
+    with logout_col2:
+        if st.button("Cerrar sesión", key="logout_top"):
+            st.session_state.authenticated = False
+            st.rerun()
+
+# Logo en el sidebar
+with st.sidebar:
+    st.image("web/static/logo_carihuela.png", use_container_width=True)
 
 # Initialize components
 settings = get_settings()
@@ -689,195 +699,40 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Elegant Horizontal Navigation with Logo
+# Sidebar
 # =============================================================================
 
-# Define page groups for dropdown menus
-page_groups = {
-    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
-    "Análisis": ["Backtesting", "Screener", "Symbol Analysis"],
-    "Datos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
-    "IA": ["Asistente IA", "News Feed"],
-    "Mercado": ["VIX", "Fear & Greed"]
-}
+st.sidebar.title("Financial Data Dashboard")
 
-# Initialize session state for navigation
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Posición"
-if "current_group" not in st.session_state:
-    st.session_state.current_group = "Cartera"
+st.sidebar.markdown("---")
 
-# =============================================================================
-# Navigation Bar with Logo and Styled Selectboxes
-# =============================================================================
+st.sidebar.markdown("**Data Source:** Yahoo Finance")
 
-# CSS for navigation - full width, no top gap, min height 6cm
-st.markdown("""
-<style>
-    /* Remove Streamlit default top padding and header */
-    .stApp > header {
-        display: none !important;
-    }
+# Navegación unificada
+all_pages = [
+    "Posición", "Composición", "Acciones", "Futuros y ETF",
+    "Asistente IA", "Backtesting", "Screener",
+    "Symbol Analysis", "Data Management", "Download Status",
+    "---",  # Separador visual
+    "BBDD", "Pantalla"
+]
 
-    .main .block-container {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
+# Filtrar separador para el radio
+page_options = [p for p in all_pages if p != "---"]
 
-    /* Hide first element top margin */
-    .main .block-container > div:first-child {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
+page = st.sidebar.radio(
+    "Navigation",
+    page_options,
+    label_visibility="collapsed"
+)
 
-    /* Navigation wrapper - full width */
-    .nav-wrapper {
-        background: linear-gradient(135deg, #4a6fa5 0%, #3d5a80 100%);
-        margin-left: calc(-50vw + 50%);
-        margin-right: calc(-50vw + 50%);
-        padding: 20px calc(50vw - 50% + 1rem);
-        min-height: 100px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(74, 111, 165, 0.3);
-    }
-
-    /* Style selectboxes in nav area - make them look like buttons */
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div {
-        background-color: rgba(255,255,255,0.1) !important;
-        border: 1px solid rgba(255,255,255,0.25) !important;
-        border-radius: 8px !important;
-        min-height: 44px !important;
-    }
-
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover {
-        background-color: rgba(255,255,255,0.2) !important;
-        border-color: rgba(255,255,255,0.4) !important;
-    }
-
-    /* Text color white in selectboxes */
-    [data-testid="stHorizontalBlock"] .stSelectbox > div > div > div {
-        color: white !important;
-        font-weight: 500 !important;
-    }
-
-    /* Arrow color white */
-    [data-testid="stHorizontalBlock"] .stSelectbox svg {
-        fill: white !important;
-    }
-
-    /* Hide selectbox labels */
-    [data-testid="stHorizontalBlock"] .stSelectbox label {
-        display: none !important;
-    }
-
-    /* Logo in nav */
-    [data-testid="stHorizontalBlock"] .stImage img {
-        max-height: 70px !important;
-    }
-
-    /* Logout button style */
-    [data-testid="stHorizontalBlock"] .stButton > button {
-        background-color: rgba(255,255,255,0.15) !important;
-        color: white !important;
-        border: 1px solid rgba(255,255,255,0.3) !important;
-        border-radius: 8px !important;
-        padding: 8px 16px !important;
-        font-weight: 500 !important;
-    }
-
-    [data-testid="stHorizontalBlock"] .stButton > button:hover {
-        background-color: rgba(255,255,255,0.25) !important;
-        border-color: rgba(255,255,255,0.5) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Navigation bar HTML wrapper
-st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
-
-# Create columns: Logo + 5 menus + spacer
-logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.2, 1, 1, 1, 0.8, 1, 2])
-
-# Logo
-with logo_col:
-    import os
-    logo_paths = [
-        "web/static/logo_carihuela.png",
-        os.path.join(os.path.dirname(__file__), "static/logo_carihuela.png"),
-        "/app/web/static/logo_carihuela.png",
-    ]
-    for logo_path in logo_paths:
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=120)
-            break
-
-# Menu dropdowns
-with m1:
-    sel = st.selectbox("Cartera", ["📊 Cartera"] + page_groups["Cartera"],
-        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
-        key="nav_cartera", label_visibility="collapsed")
-    if sel and sel not in ["📊 Cartera"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Cartera"
-
-with m2:
-    sel = st.selectbox("Análisis", ["📈 Análisis"] + page_groups["Análisis"],
-        index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
-        key="nav_analisis", label_visibility="collapsed")
-    if sel and sel not in ["📈 Análisis"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Análisis"
-
-with m3:
-    sel = st.selectbox("Datos", ["💾 Datos"] + page_groups["Datos"],
-        index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
-        key="nav_datos", label_visibility="collapsed")
-    if sel and sel not in ["💾 Datos"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Datos"
-
-with m4:
-    sel = st.selectbox("IA", ["🤖 IA"] + page_groups["IA"],
-        index=0 if st.session_state.current_group != "IA" else page_groups["IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["IA"] else 0,
-        key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["🤖 IA"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "IA"
-
-with m5:
-    sel = st.selectbox("Mercado", ["🌍 Mercado"] + page_groups["Mercado"],
-        index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
-        key="nav_mercado", label_visibility="collapsed")
-    if sel and sel not in ["🌍 Mercado"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Mercado"
-
-# Logout button aligned with menus
-with spacer:
-    spacer_left, spacer_right = st.columns([3, 1])
-    with spacer_right:
-        if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-            if st.button("🚪 Salir", key="logout_nav"):
-                st.session_state.authenticated = False
-                st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Get current page
-page = st.session_state.current_page
-
-# Submenú for Backtesting
-backtesting_option = None
+# Submenú para Backtesting
 if page == "Backtesting":
-    bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
-    with bt_col1:
-        backtesting_option = st.selectbox(
-            "Tipo de análisis",
-            ["Estrategia Mensual", "Portfolio Backtest"],
-            key="backtesting_type"
-        )
-
-st.markdown("---")
+    backtesting_option = st.sidebar.radio(
+        "Tipo de Backtesting",
+        ["Estrategia Mensual", "Portfolio Backtest"],
+        label_visibility="visible"
+    )
 
 # =============================================================================
 # Main Content
@@ -1355,132 +1210,6 @@ if page == "Posición":
 
     # Display table
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
-
-    # =========================================================================
-    # RENTABILIDAD MENSUAL
-    # =========================================================================
-    st.subheader("Rentabilidad Mensual 2026")
-
-    # Calculate monthly returns for Portfolio, SPY, and QQQ
-    months_data = {}
-    current_year = date.today().year
-    current_month = date.today().month
-
-    # Get first day value for each month (for monthly returns calculation)
-    for month in range(1, 13):
-        month_name = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]
-
-        # Skip future months (after current month)
-        if month > current_month:
-            continue
-
-        # Find first and last trading day of the month
-        month_dates = [d for d in trading_dates_from_db
-                       if d.year == current_year and d.month == month and d not in excluded_dates]
-
-        if not month_dates:
-            continue
-
-        first_day = min(month_dates)
-        # For current month: use latest available date (current position)
-        # For past months: use last day of that month
-        last_day = max(month_dates)
-
-        # Get values at start and end of month
-        if month == 1:
-            # January: compare to Dec 31
-            start_val = all_day_totals.get(date(2025, 12, 31), 0)
-        else:
-            # Other months: get last day of previous month
-            prev_month_dates = [d for d in trading_dates_from_db
-                               if d.year == current_year and d.month == month - 1 and d not in excluded_dates]
-            if prev_month_dates:
-                start_val = all_day_totals.get(max(prev_month_dates), 0)
-            else:
-                start_val = all_day_totals.get(date(2025, 12, 31), 0)
-
-        end_val = all_day_totals.get(last_day, 0)
-
-        # Portfolio monthly return
-        if start_val > 0:
-            port_monthly_ret = ((end_val / start_val) - 1) * 100
-        else:
-            port_monthly_ret = 0
-
-        # SPY monthly return
-        spy_monthly_ret = 0
-        if not spy_prices.empty:
-            spy_month = spy_prices[spy_prices.index.month == month]
-            if not spy_month.empty:
-                if month == 1:
-                    spy_start = spy_prices['close'].iloc[0]
-                else:
-                    spy_prev = spy_prices[spy_prices.index.month == month - 1]
-                    spy_start = spy_prev['close'].iloc[-1] if not spy_prev.empty else spy_prices['close'].iloc[0]
-                spy_end = spy_month['close'].iloc[-1]
-                if spy_start > 0:
-                    spy_monthly_ret = ((spy_end / spy_start) - 1) * 100
-
-        # QQQ monthly return
-        qqq_monthly_ret = 0
-        if not qqq_prices.empty:
-            qqq_month = qqq_prices[qqq_prices.index.month == month]
-            if not qqq_month.empty:
-                if month == 1:
-                    qqq_start = qqq_prices['close'].iloc[0]
-                else:
-                    qqq_prev = qqq_prices[qqq_prices.index.month == month - 1]
-                    qqq_start = qqq_prev['close'].iloc[-1] if not qqq_prev.empty else qqq_prices['close'].iloc[0]
-                qqq_end = qqq_month['close'].iloc[-1]
-                if qqq_start > 0:
-                    qqq_monthly_ret = ((qqq_end / qqq_start) - 1) * 100
-
-        months_data[month_name] = {
-            'Cartera': port_monthly_ret,
-            'SPY': spy_monthly_ret,
-            'QQQ': qqq_monthly_ret
-        }
-
-    # Build monthly returns table (vertical: assets as rows, months as columns)
-    # All 12 months as columns
-    all_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-
-    # Build table with Activo as first column, then all months, then TOTAL
-    monthly_table = {'Activo': ['Cartera', 'SPY', 'QQQ']}
-
-    for month_name in all_months:
-        if month_name in months_data:
-            monthly_table[month_name] = [
-                months_data[month_name]['Cartera'],
-                months_data[month_name]['SPY'],
-                months_data[month_name]['QQQ']
-            ]
-        else:
-            # Month without data yet
-            monthly_table[month_name] = [None, None, None]
-
-    # Add TOTAL column
-    monthly_table['TOTAL'] = [return_pct, spy_return, qqq_return]
-
-    monthly_df = pd.DataFrame(monthly_table)
-
-    # Style the table
-    def color_monthly_pct(val):
-        if isinstance(val, (int, float)):
-            if val > 0:
-                return 'background-color: #2E7D32; color: white'
-            elif val < 0:
-                return 'background-color: #C62828; color: white'
-        return ''
-
-    # Format columns (all except 'Activo')
-    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
-    format_dict = {col: '{:+.2f}%' for col in pct_columns}
-
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='')
-
-    st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
 
 elif page == "Composición":
@@ -3895,4 +3624,7 @@ elif page == "Asistente IA":
         """)
 
 
-# Footer (hidden - navigation moved to horizontal menu)
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.markdown("Financial Data Project v3.0")
+st.sidebar.markdown("*Data: 28/01/2026*")
