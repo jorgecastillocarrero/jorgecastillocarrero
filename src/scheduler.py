@@ -23,7 +23,7 @@ from .config import get_settings
 from .database import get_db_manager, Symbol
 from .yahoo_downloader import YahooDownloader
 from .technical import MetricsCalculator
-from .posicion_calculator import PosicionCalculator
+from .valor_actual import ValorActualCalculator
 from .news_manager import NewsManager
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class DailyDataUpdater:
         self.db = get_db_manager()
         self.downloader = YahooDownloader()
         self.metrics_calculator = MetricsCalculator()
-        self.posicion_calculator = PosicionCalculator(self.db)
+        self.valor_actual = ValorActualCalculator(self.db)
         self.news_manager = NewsManager()
 
     def get_all_symbols(self) -> list[str]:
@@ -373,52 +373,6 @@ class DailyDataUpdater:
 
         return results
 
-    def update_posicion(self) -> dict:
-        """
-        Update posicion table for all accounts.
-        Calculates portfolio values from holding_diario + prices.
-
-        Returns:
-            Dictionary with update results
-        """
-        started_at = datetime.now(ET)
-        logger.info("Starting posicion calculation")
-
-        try:
-            # First update any missing dates
-            missing_results = self.posicion_calculator.recalc_missing_dates()
-
-            # Then update today/most recent
-            today_results = self.posicion_calculator.recalc_today()
-
-            results = {
-                'missing_dates': missing_results['processed'],
-                'today_updated': today_results['date'],
-                'total_value': today_results['total_value'],
-                'success': True,
-                'error': None
-            }
-
-        except Exception as e:
-            logger.error(f"Error updating posicion: {e}")
-            results = {
-                'missing_dates': 0,
-                'today_updated': None,
-                'total_value': 0,
-                'success': False,
-                'error': str(e)
-            }
-
-        elapsed = (datetime.now(ET) - started_at).total_seconds()
-        logger.info(
-            f"Posicion calculation completed in {elapsed:.1f}s: "
-            f"{results['missing_dates']} missing dates, "
-            f"today={results['today_updated']}, "
-            f"total={results['total_value']:,.0f} EUR"
-        )
-
-        return results
-
     def update_news(self) -> dict:
         """
         Update news from external sources (GDELT, NewsAPI).
@@ -474,9 +428,6 @@ class DailyDataUpdater:
         # Update technical metrics
         metrics_results = self.update_metrics()
 
-        # Update posicion table
-        posicion_results = self.update_posicion()
-
         # Update news
         news_results = self.update_news()
 
@@ -486,11 +437,10 @@ class DailyDataUpdater:
         if fund_results:
             logger.info(f"Fundamentals: {fund_results['success']} updated")
         logger.info(f"Metrics: {metrics_results['success']} calculated")
-        logger.info(f"Posicion: {posicion_results['total_value']:,.0f} EUR")
         logger.info(f"News: {news_results['total_saved']} articles")
         logger.info("=" * 60)
 
-        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "posicion": posicion_results, "news": news_results}
+        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "news": news_results}
 
 
 class SchedulerManager:
