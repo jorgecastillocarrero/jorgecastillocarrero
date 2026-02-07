@@ -356,6 +356,14 @@ st.markdown("""
         border: none !important;
         border-radius: 0 !important;
         min-height: 20px !important;
+        border-bottom: none !important;
+        border-top: none !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div > div {
+        border: none !important;
+        box-shadow: none !important;
     }
 
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div:hover {
@@ -704,7 +712,7 @@ if "current_group" not in st.session_state:
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
 # Create columns: Logo + 7 menus + spacer
-logo_col, m1, m2, m3, m4, m5, m6, m7, spacer = st.columns([1.3, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 1.2])
+logo_col, m1, m2, m3, m4, m5, m6, m7, spacer = st.columns([1.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 2.6])
 
 # Logo
 with logo_col:
