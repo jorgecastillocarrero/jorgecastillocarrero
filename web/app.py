@@ -828,7 +828,7 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 # Define page groups for dropdown menus
 page_groups = {
-    "Posición": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
+    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
     "Estrategias": ["Backtesting", "Screener", "Symbol Analysis"],
     "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
     "Indicadores": ["Indicadores"],
@@ -841,7 +841,7 @@ page_groups = {
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Posición"
 if "current_group" not in st.session_state:
-    st.session_state.current_group = "Posición"
+    st.session_state.current_group = "Cartera"
 
 # Navigation bar HTML wrapper
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
@@ -864,12 +864,12 @@ with logo_col:
 
 # Menu dropdowns
 with m1:
-    sel = st.selectbox("Posición", ["Posición"] + page_groups["Posición"],
-        index=0 if st.session_state.current_group != "Posición" else page_groups["Posición"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Posición"] else 0,
-        key="nav_posicion", label_visibility="collapsed")
-    if sel and sel not in ["Posición"]:
+    sel = st.selectbox("Cartera", ["Cartera"] + page_groups["Cartera"],
+        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
+        key="nav_cartera", label_visibility="collapsed")
+    if sel and sel not in ["Cartera"]:
         st.session_state.current_page = sel
-        st.session_state.current_group = "Posición"
+        st.session_state.current_group = "Cartera"
 
 with m2:
     sel = st.selectbox("Estrategias", ["Estrategias"] + page_groups["Estrategias"],
@@ -1532,9 +1532,13 @@ if page == "Posición":
 
     monthly_df = pd.DataFrame(monthly_table)
 
+    # Convert None to NaN for proper formatting
+    import numpy as np
+    monthly_df = monthly_df.fillna(np.nan)
+
     # Style the table
     def color_monthly_pct(val):
-        if isinstance(val, (int, float)):
+        if pd.notna(val) and isinstance(val, (int, float)):
             if val > 0:
                 return 'background-color: #2E7D32; color: white'
             elif val < 0:
