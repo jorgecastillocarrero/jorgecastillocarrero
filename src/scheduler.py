@@ -102,11 +102,11 @@ class DailyDataUpdater:
             "new_records": 0,
         }
 
-        # Use parallel downloads
+        # Use parallel downloads (5 workers to avoid Yahoo rate limiting)
         completed = 0
         lock = threading.Lock()
 
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             future_to_symbol = {
                 executor.submit(self._download_symbol_safe, symbol): symbol
                 for symbol in missing_symbols
@@ -135,6 +135,8 @@ class DailyDataUpdater:
         Returns: (symbol, count, error)
         """
         try:
+            # Small delay to avoid Yahoo rate limiting
+            time.sleep(0.1)
             count = self.downloader.download_historical_prices(
                 symbol, period="5d", incremental=True
             )
@@ -142,7 +144,7 @@ class DailyDataUpdater:
         except Exception as e:
             return (symbol, 0, str(e)[:100])
 
-    def update_prices(self, max_workers: int = 10) -> dict:
+    def update_prices(self, max_workers: int = 5) -> dict:
         """
         Update prices for all symbols using parallel downloads.
 
