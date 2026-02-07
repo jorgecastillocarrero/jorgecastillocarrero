@@ -301,20 +301,89 @@ st.markdown("""
             padding: 1rem !important;
         }
     }
+
+    /* Remove Streamlit default top padding and header */
+    .stApp > header {
+        display: none !important;
+    }
+
+    .main .block-container {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    /* Hide first element top margin */
+    .main .block-container > div:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Navigation wrapper - full width */
+    .nav-wrapper {
+        background: linear-gradient(135deg, #4a6fa5 0%, #3d5a80 100%);
+        margin-left: calc(-50vw + 50%);
+        margin-right: calc(-50vw + 50%);
+        padding: 20px calc(50vw - 50% + 1rem);
+        min-height: 100px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(74, 111, 165, 0.3);
+    }
+
+    /* Style selectboxes in nav area - make them look like buttons */
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div {
+        background-color: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.25) !important;
+        border-radius: 8px !important;
+        min-height: 44px !important;
+    }
+
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover {
+        background-color: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.4) !important;
+    }
+
+    /* Text color white in selectboxes */
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div > div {
+        color: white !important;
+        font-weight: 500 !important;
+    }
+
+    /* Arrow color white */
+    [data-testid="stHorizontalBlock"] .stSelectbox svg {
+        fill: white !important;
+    }
+
+    /* Hide selectbox labels */
+    [data-testid="stHorizontalBlock"] .stSelectbox label {
+        display: none !important;
+    }
+
+    /* Logo in nav */
+    [data-testid="stHorizontalBlock"] .stImage img {
+        max-height: 70px !important;
+    }
+
+    /* Logout button style */
+    [data-testid="stHorizontalBlock"] .stButton > button {
+        background-color: rgba(255,255,255,0.15) !important;
+        color: white !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 500 !important;
+    }
+
+    [data-testid="stHorizontalBlock"] .stButton > button:hover {
+        background-color: rgba(255,255,255,0.25) !important;
+        border-color: rgba(255,255,255,0.5) !important;
+    }
+
+    /* Hide sidebar */
+    [data-testid="stSidebar"] {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
-
-# Logout button top right
-if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-    logout_col1, logout_col2 = st.columns([9, 1])
-    with logout_col2:
-        if st.button("Cerrar sesión", key="logout_top"):
-            st.session_state.authenticated = False
-            st.rerun()
-
-# Logo en el sidebar
-with st.sidebar:
-    st.image("web/static/logo_carihuela.png", use_container_width=True)
 
 # Initialize components
 settings = get_settings()
@@ -699,40 +768,110 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Sidebar
+# Elegant Horizontal Navigation with Logo
 # =============================================================================
 
-st.sidebar.title("Financial Data Dashboard")
+# Define page groups for dropdown menus
+page_groups = {
+    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
+    "Análisis": ["Backtesting", "Screener", "Symbol Analysis"],
+    "Datos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
+    "IA": ["Asistente IA"],
+    "Mercado": ["VIX"]
+}
 
-st.sidebar.markdown("---")
+# Initialize session state for navigation
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Posición"
+if "current_group" not in st.session_state:
+    st.session_state.current_group = "Cartera"
 
-st.sidebar.markdown("**Data Source:** Yahoo Finance")
+# Navigation bar HTML wrapper
+st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
-# Navegación unificada
-all_pages = [
-    "Posición", "Composición", "Acciones", "Futuros y ETF",
-    "Asistente IA", "Backtesting", "Screener",
-    "Symbol Analysis", "Data Management", "Download Status",
-    "---",  # Separador visual
-    "BBDD", "Pantalla"
-]
+# Create columns: Logo + 5 menus + spacer
+logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.2, 1, 1, 1, 0.8, 1, 2])
 
-# Filtrar separador para el radio
-page_options = [p for p in all_pages if p != "---"]
+# Logo
+with logo_col:
+    import os
+    logo_paths = [
+        "web/static/logo_carihuela.png",
+        os.path.join(os.path.dirname(__file__), "static/logo_carihuela.png"),
+        "/app/web/static/logo_carihuela.png",
+    ]
+    for logo_path in logo_paths:
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=120)
+            break
 
-page = st.sidebar.radio(
-    "Navigation",
-    page_options,
-    label_visibility="collapsed"
-)
+# Menu dropdowns
+with m1:
+    sel = st.selectbox("Cartera", ["📊 Cartera"] + page_groups["Cartera"],
+        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
+        key="nav_cartera", label_visibility="collapsed")
+    if sel and sel not in ["📊 Cartera"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Cartera"
 
-# Submenú para Backtesting
+with m2:
+    sel = st.selectbox("Análisis", ["📈 Análisis"] + page_groups["Análisis"],
+        index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
+        key="nav_analisis", label_visibility="collapsed")
+    if sel and sel not in ["📈 Análisis"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Análisis"
+
+with m3:
+    sel = st.selectbox("Datos", ["💾 Datos"] + page_groups["Datos"],
+        index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
+        key="nav_datos", label_visibility="collapsed")
+    if sel and sel not in ["💾 Datos"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Datos"
+
+with m4:
+    sel = st.selectbox("IA", ["🤖 IA"] + page_groups["IA"],
+        index=0 if st.session_state.current_group != "IA" else page_groups["IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["IA"] else 0,
+        key="nav_ia", label_visibility="collapsed")
+    if sel and sel not in ["🤖 IA"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "IA"
+
+with m5:
+    sel = st.selectbox("Mercado", ["🌍 Mercado"] + page_groups["Mercado"],
+        index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
+        key="nav_mercado", label_visibility="collapsed")
+    if sel and sel not in ["🌍 Mercado"]:
+        st.session_state.current_page = sel
+        st.session_state.current_group = "Mercado"
+
+# Logout button aligned with menus
+with spacer:
+    spacer_left, spacer_right = st.columns([3, 1])
+    with spacer_right:
+        if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+            if st.button("🚪 Salir", key="logout_nav"):
+                st.session_state.authenticated = False
+                st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Get current page
+page = st.session_state.current_page
+
+# Submenú for Backtesting
+backtesting_option = None
 if page == "Backtesting":
-    backtesting_option = st.sidebar.radio(
-        "Tipo de Backtesting",
-        ["Estrategia Mensual", "Portfolio Backtest"],
-        label_visibility="visible"
-    )
+    bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
+    with bt_col1:
+        backtesting_option = st.selectbox(
+            "Tipo de análisis",
+            ["Estrategia Mensual", "Portfolio Backtest"],
+            key="backtesting_type"
+        )
+
+st.markdown("---")
 
 # =============================================================================
 # Main Content
