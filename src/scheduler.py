@@ -5,11 +5,14 @@ Runs at 00:01 AM Spain Time (Europe/Madrid) every day.
 
 import logging
 import time
+import io
+import csv
 from datetime import datetime, timedelta
 from typing import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
+import yfinance as yf
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -129,81 +132,146 @@ class DailyDataUpdater:
         logger.info(f"Missing prices update completed: {results['success']} updated, {results['new_records']} new records")
         return results
 
-    def _download_symbol_safe(self, symbol: str) -> tuple:
-        """
-        Download a single symbol safely (for parallel execution).
-        Returns: (symbol, count, error)
-        """
-        try:
-            # Small delay to avoid Yahoo rate limiting
-            time.sleep(0.1)
-            count = self.downloader.download_historical_prices(
-                symbol, period="5d", incremental=True
-            )
-            return (symbol, count, None)
-        except Exception as e:
-            return (symbol, 0, str(e)[:100])
+    def get_symbol_map(self) -> dict:
+        """Get mapping of symbol code to symbol_id."""
+        from sqlalchemy import text
+        with self.db.get_session() as session:
+            result = session.execute(text('SELECT id, code FROM symbols'))
+            return {r[1]: r[0] for r in result.fetchall()}
 
-    def update_prices(self, max_workers: int = 5) -> dict:
+    def update_prices(self, batch_size: int = 100) -> dict:
         """
-        Update prices for all symbols using parallel downloads.
+        Update prices for all symbols using batch download + COPY.
+        This is 10-100x faster than individual downloads.
 
         Args:
-            max_workers: Number of parallel download threads (default: 10)
+            batch_size: Number of symbols per batch (default: 100)
 
         Returns:
             Dictionary with update results
         """
+        from sqlalchemy import text
         started_at = datetime.now(ET)
-        symbols = self.get_all_symbols()
 
-        logger.info(f"[{started_at.strftime('%Y-%m-%d %H:%M:%S %Z')}] Starting parallel price update for {len(symbols)} symbols with {max_workers} workers")
+        # Get all symbols with their IDs
+        symbol_map = self.get_symbol_map()
+        symbols = list(symbol_map.keys())
+
+        logger.info(f"[{started_at.strftime('%Y-%m-%d %H:%M:%S %Z')}] Starting COPY price update for {len(symbols)} symbols (batch={batch_size})")
 
         results = {
             "date": started_at.strftime('%Y-%m-%d'),
             "total": len(symbols),
             "success": 0,
             "failed": 0,
-            "skipped": 0,
             "new_records": 0,
-            "errors": [],
         }
 
-        # Use ThreadPoolExecutor for parallel downloads
-        completed = 0
-        lock = threading.Lock()
+        for i in range(0, len(symbols), batch_size):
+            batch = symbols[i:i+batch_size]
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all download tasks
-            future_to_symbol = {
-                executor.submit(self._download_symbol_safe, symbol): symbol
-                for symbol in symbols
-            }
+            # Batch download from Yahoo
+            try:
+                data = yf.download(batch, period='5d', progress=False, threads=True, auto_adjust=False)
+            except Exception as e:
+                results["failed"] += len(batch)
+                continue
 
-            # Process results as they complete
-            for future in as_completed(future_to_symbol):
-                symbol, count, error = future.result()
+            if data.empty:
+                continue
 
-                with lock:
-                    completed += 1
-                    if error:
-                        results["failed"] += 1
-                        results["errors"].append({"symbol": symbol, "error": error})
-                    elif count > 0:
-                        results["success"] += 1
-                        results["new_records"] += count
+            # Prepare CSV data for COPY
+            csv_buffer = io.StringIO()
+            writer = csv.writer(csv_buffer, delimiter='\t')
+            rows_written = 0
+
+            for symbol in batch:
+                if symbol not in symbol_map:
+                    continue
+                symbol_id = symbol_map[symbol]
+
+                try:
+                    if len(batch) == 1:
+                        symbol_data = data
                     else:
-                        results["skipped"] += 1
+                        if symbol not in data.columns.get_level_values(1):
+                            continue
+                        symbol_data = data.xs(symbol, axis=1, level=1)
 
-                    if completed % 200 == 0:
-                        elapsed = (datetime.now(ET) - started_at).total_seconds()
-                        rate = completed / elapsed if elapsed > 0 else 0
-                        eta = (len(symbols) - completed) / rate / 60 if rate > 0 else 0
-                        logger.info(
-                            f"Progress: {completed}/{len(symbols)} ({completed*100//len(symbols)}%) | "
-                            f"Updated: {results['success']} | "
-                            f"Rate: {rate:.1f}/s | ETA: {eta:.1f}min"
-                        )
+                    if symbol_data is None or symbol_data.empty:
+                        continue
+
+                    for date_idx, row in symbol_data.iterrows():
+                        if row.isna().all():
+                            continue
+                        writer.writerow([
+                            symbol_id,
+                            date_idx.date(),
+                            float(row['Open']) if not row.isna()['Open'] else '',
+                            float(row['High']) if not row.isna()['High'] else '',
+                            float(row['Low']) if not row.isna()['Low'] else '',
+                            float(row['Close']) if not row.isna()['Close'] else '',
+                            float(row['Adj Close']) if not row.isna()['Adj Close'] else '',
+                            int(row['Volume']) if not row.isna()['Volume'] else '',
+                            datetime.now().isoformat()
+                        ])
+                        rows_written += 1
+                    results["success"] += 1
+                except Exception:
+                    results["failed"] += 1
+                    continue
+
+            # Use COPY to insert (much faster than individual INSERTs)
+            if rows_written > 0:
+                csv_buffer.seek(0)
+
+                with self.db.get_session() as session:
+                    conn = session.connection().connection
+                    cursor = conn.cursor()
+
+                    try:
+                        # Create temp table
+                        cursor.execute('''
+                            CREATE TEMP TABLE IF NOT EXISTS temp_prices (
+                                symbol_id INTEGER,
+                                date DATE,
+                                open FLOAT,
+                                high FLOAT,
+                                low FLOAT,
+                                close FLOAT,
+                                adjusted_close FLOAT,
+                                volume BIGINT,
+                                created_at TIMESTAMP
+                            ) ON COMMIT DROP
+                        ''')
+
+                        # COPY to temp table
+                        cursor.copy_from(csv_buffer, 'temp_prices', sep='\t', null='')
+
+                        # Insert from temp to real table with ON CONFLICT
+                        cursor.execute('''
+                            INSERT INTO price_history (symbol_id, date, open, high, low, close, adjusted_close, volume, created_at)
+                            SELECT symbol_id, date, open, high, low, close, adjusted_close, volume, created_at
+                            FROM temp_prices
+                            ON CONFLICT (symbol_id, date) DO NOTHING
+                        ''')
+
+                        conn.commit()
+                        results["new_records"] += rows_written
+                    except Exception as e:
+                        conn.rollback()
+                        logger.error(f"COPY error: {e}")
+
+            # Log progress every 500 symbols
+            done = min(i + batch_size, len(symbols))
+            if done % 500 == 0 or done == len(symbols):
+                elapsed = (datetime.now(ET) - started_at).total_seconds()
+                rate = done / elapsed if elapsed > 0 else 0
+                eta = (len(symbols) - done) / rate / 60 if rate > 0 else 0
+                logger.info(
+                    f"Progress: {done}/{len(symbols)} ({done*100//len(symbols)}%) | "
+                    f"Rate: {rate:.0f}/s | ETA: {eta:.1f}min"
+                )
 
         # Log the operation
         with self.db.get_session() as session:
