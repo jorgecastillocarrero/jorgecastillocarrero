@@ -48,40 +48,54 @@ class DailyDataUpdater:
 
     def update_missing_prices(self) -> dict:
         """
-        Update prices only for symbols missing today's data.
-        This is a faster, targeted update for completing partial downloads.
+        Update prices only for symbols missing the last market day's data.
+        Automatically detects the last market day from existing data.
 
         Returns:
             Dictionary with update results
         """
         from sqlalchemy import text
         started_at = datetime.now(ET)
-        today = started_at.strftime('%Y-%m-%d')
-        yesterday = (started_at - timedelta(days=1)).strftime('%Y-%m-%d')
 
-        # Get symbols that have yesterday's data but not today's
+        # Find the last two market days with data in the database
         with self.db.get_session() as session:
+            # Get the two most recent dates with price data
+            dates_result = session.execute(text('''
+                SELECT DISTINCT DATE(date) as d
+                FROM price_history
+                ORDER BY d DESC
+                LIMIT 2
+            ''')).fetchall()
+
+            if len(dates_result) < 2:
+                logger.info("Not enough historical data to detect missing symbols")
+                return {"total": 0, "success": 0, "failed": 0, "new_records": 0}
+
+            target_date = str(dates_result[0][0])  # Most recent date (last market day)
+            prev_date = str(dates_result[1][0])    # Previous market day
+
+            # Get symbols that have prev_date data but not target_date data
             result = session.execute(text('''
                 SELECT DISTINCT s.code
                 FROM symbols s
                 JOIN price_history p ON s.id = p.symbol_id
-                WHERE DATE(p.date) = :yesterday
+                WHERE DATE(p.date) = :prev_date
                 AND NOT EXISTS (
                     SELECT 1 FROM price_history p2
-                    WHERE p2.symbol_id = s.id AND DATE(p2.date) = :today
+                    WHERE p2.symbol_id = s.id AND DATE(p2.date) = :target_date
                 )
                 ORDER BY s.code
-            '''), {'yesterday': yesterday, 'today': today})
+            '''), {'prev_date': prev_date, 'target_date': target_date})
             missing_symbols = [r[0] for r in result.fetchall()]
 
         if not missing_symbols:
-            logger.info("No missing symbols to update")
+            logger.info(f"No missing symbols to update for {target_date}")
             return {"total": 0, "success": 0, "failed": 0, "new_records": 0}
 
-        logger.info(f"Updating {len(missing_symbols)} symbols missing data for {today} (parallel)")
+        logger.info(f"Updating {len(missing_symbols)} symbols missing data for {target_date} (parallel)")
 
         results = {
-            "date": today,
+            "date": target_date,
             "total": len(missing_symbols),
             "success": 0,
             "failed": 0,
