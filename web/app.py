@@ -304,17 +304,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Logout button top right
-if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-    logout_col1, logout_col2 = st.columns([9, 1])
-    with logout_col2:
-        if st.button("Cerrar sesión", key="logout_top"):
-            st.session_state.authenticated = False
-            st.rerun()
-
-# Logo (sidebar collapsed - navigation moved to horizontal menu)
-# with st.sidebar:
-#     st.image("web/static/logo_carihuela.png", use_container_width=True)
+# Logo comment removed - now in navigation bar
 
 # Initialize components
 settings = get_settings()
@@ -699,7 +689,7 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Horizontal Navigation Menu (5 dropdowns)
+# Elegant Horizontal Navigation with Logo
 # =============================================================================
 
 # Define page groups for dropdown menus
@@ -717,73 +707,172 @@ if "current_page" not in st.session_state:
 if "current_group" not in st.session_state:
     st.session_state.current_group = "Cartera"
 
-# Create horizontal navigation bar with 5 columns
-nav_cols = st.columns([1, 1, 1, 1, 1, 2])
+# =============================================================================
+# Navigation Bar with Logo and Styled Selectboxes
+# =============================================================================
 
-with nav_cols[0]:
-    cartera_page = st.selectbox(
-        "Cartera",
-        [""] + page_groups["Cartera"],
+# CSS for navigation - full width, no top gap, min height 6cm
+st.markdown("""
+<style>
+    /* Remove Streamlit default top padding and header */
+    .stApp > header {
+        display: none !important;
+    }
+
+    .main .block-container {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    /* Hide first element top margin */
+    .main .block-container > div:first-child {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Navigation wrapper - full width */
+    .nav-wrapper {
+        background: linear-gradient(135deg, #4a6fa5 0%, #3d5a80 100%);
+        margin-left: calc(-50vw + 50%);
+        margin-right: calc(-50vw + 50%);
+        padding: 20px calc(50vw - 50% + 1rem);
+        min-height: 100px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(74, 111, 165, 0.3);
+    }
+
+    /* Style selectboxes in nav area - make them look like buttons */
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div {
+        background-color: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.25) !important;
+        border-radius: 8px !important;
+        min-height: 44px !important;
+    }
+
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div:hover {
+        background-color: rgba(255,255,255,0.2) !important;
+        border-color: rgba(255,255,255,0.4) !important;
+    }
+
+    /* Text color white in selectboxes */
+    [data-testid="stHorizontalBlock"] .stSelectbox > div > div > div {
+        color: white !important;
+        font-weight: 500 !important;
+    }
+
+    /* Arrow color white */
+    [data-testid="stHorizontalBlock"] .stSelectbox svg {
+        fill: white !important;
+    }
+
+    /* Hide selectbox labels */
+    [data-testid="stHorizontalBlock"] .stSelectbox label {
+        display: none !important;
+    }
+
+    /* Logo in nav */
+    [data-testid="stHorizontalBlock"] .stImage img {
+        max-height: 70px !important;
+    }
+
+    /* Logout button style */
+    [data-testid="stHorizontalBlock"] .stButton > button {
+        background-color: rgba(255,255,255,0.15) !important;
+        color: white !important;
+        border: 1px solid rgba(255,255,255,0.3) !important;
+        border-radius: 8px !important;
+        padding: 8px 16px !important;
+        font-weight: 500 !important;
+    }
+
+    [data-testid="stHorizontalBlock"] .stButton > button:hover {
+        background-color: rgba(255,255,255,0.25) !important;
+        border-color: rgba(255,255,255,0.5) !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Navigation bar HTML wrapper
+st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
+
+# Create columns: Logo + 5 menus + spacer
+logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.2, 1, 1, 1, 0.8, 1, 2])
+
+# Logo
+with logo_col:
+    import os
+    logo_paths = [
+        "web/static/logo_carihuela.png",
+        os.path.join(os.path.dirname(__file__), "static/logo_carihuela.png"),
+        "/app/web/static/logo_carihuela.png",
+    ]
+    for logo_path in logo_paths:
+        if os.path.exists(logo_path):
+            st.image(logo_path, width=120)
+            break
+
+# Menu dropdowns
+with m1:
+    sel = st.selectbox("Cartera", ["📊 Cartera"] + page_groups["Cartera"],
         index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
-        key="nav_cartera"
-    )
-    if cartera_page and cartera_page != "":
-        st.session_state.current_page = cartera_page
+        key="nav_cartera", label_visibility="collapsed")
+    if sel and sel not in ["📊 Cartera"]:
+        st.session_state.current_page = sel
         st.session_state.current_group = "Cartera"
 
-with nav_cols[1]:
-    analisis_page = st.selectbox(
-        "Análisis",
-        [""] + page_groups["Análisis"],
+with m2:
+    sel = st.selectbox("Análisis", ["📈 Análisis"] + page_groups["Análisis"],
         index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
-        key="nav_analisis"
-    )
-    if analisis_page and analisis_page != "":
-        st.session_state.current_page = analisis_page
+        key="nav_analisis", label_visibility="collapsed")
+    if sel and sel not in ["📈 Análisis"]:
+        st.session_state.current_page = sel
         st.session_state.current_group = "Análisis"
 
-with nav_cols[2]:
-    datos_page = st.selectbox(
-        "Datos",
-        [""] + page_groups["Datos"],
+with m3:
+    sel = st.selectbox("Datos", ["💾 Datos"] + page_groups["Datos"],
         index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
-        key="nav_datos"
-    )
-    if datos_page and datos_page != "":
-        st.session_state.current_page = datos_page
+        key="nav_datos", label_visibility="collapsed")
+    if sel and sel not in ["💾 Datos"]:
+        st.session_state.current_page = sel
         st.session_state.current_group = "Datos"
 
-with nav_cols[3]:
-    ia_page = st.selectbox(
-        "IA",
-        [""] + page_groups["IA"],
+with m4:
+    sel = st.selectbox("IA", ["🤖 IA"] + page_groups["IA"],
         index=0 if st.session_state.current_group != "IA" else page_groups["IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["IA"] else 0,
-        key="nav_ia"
-    )
-    if ia_page and ia_page != "":
-        st.session_state.current_page = ia_page
+        key="nav_ia", label_visibility="collapsed")
+    if sel and sel not in ["🤖 IA"]:
+        st.session_state.current_page = sel
         st.session_state.current_group = "IA"
 
-with nav_cols[4]:
-    mercado_page = st.selectbox(
-        "Mercado",
-        [""] + page_groups["Mercado"],
+with m5:
+    sel = st.selectbox("Mercado", ["🌍 Mercado"] + page_groups["Mercado"],
         index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
-        key="nav_mercado"
-    )
-    if mercado_page and mercado_page != "":
-        st.session_state.current_page = mercado_page
+        key="nav_mercado", label_visibility="collapsed")
+    if sel and sel not in ["🌍 Mercado"]:
+        st.session_state.current_page = sel
         st.session_state.current_group = "Mercado"
+
+# Logout button aligned with menus
+with spacer:
+    spacer_left, spacer_right = st.columns([3, 1])
+    with spacer_right:
+        if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+            if st.button("🚪 Salir", key="logout_nav"):
+                st.session_state.authenticated = False
+                st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # Get current page
 page = st.session_state.current_page
 
-# Submenú for Backtesting (inline)
+# Submenú for Backtesting
 backtesting_option = None
 if page == "Backtesting":
-    with nav_cols[5]:
+    bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
+    with bt_col1:
         backtesting_option = st.selectbox(
-            "Tipo",
+            "Tipo de análisis",
             ["Estrategia Mensual", "Portfolio Backtest"],
             key="backtesting_type"
         )
@@ -1270,7 +1359,7 @@ if page == "Posición":
     # =========================================================================
     # RENTABILIDAD MENSUAL
     # =========================================================================
-    st.subheader("Rentabilidad Mensual")
+    st.subheader("Rentabilidad Mensual 2026")
 
     # Calculate monthly returns for Portfolio, SPY, and QQQ
     months_data = {}
@@ -1389,7 +1478,7 @@ if page == "Posición":
     pct_columns = [col for col in monthly_df.columns if col != 'Activo']
     format_dict = {col: '{:+.2f}%' for col in pct_columns}
 
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='-')
+    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='')
 
     st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
