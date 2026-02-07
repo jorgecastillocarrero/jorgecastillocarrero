@@ -7,8 +7,10 @@ import logging
 from datetime import datetime
 from contextlib import contextmanager
 from pathlib import Path
+from io import StringIO
 
 import pandas as pd
+import psycopg2
 from sqlalchemy import (
     Column,
     Integer,
@@ -795,7 +797,7 @@ class DatabaseManager:
         self, session: Session, symbol_id: int, prices_df: pd.DataFrame
     ) -> int:
         """
-        Bulk insert price history data.
+        Bulk insert price history data using PostgreSQL COPY for speed.
 
         Args:
             session: Database session
@@ -816,31 +818,56 @@ class DatabaseManager:
             .all()
         )
 
-        records = []
+        # Prepare data for COPY, filtering out existing dates
+        csv_buffer = StringIO()
+        count = 0
         for idx, row in prices_df.iterrows():
             date_val = idx.date() if hasattr(idx, "date") else idx
 
             if date_val in existing_dates:
                 continue
 
-            records.append(
-                PriceHistory(
-                    symbol_id=symbol_id,
-                    date=date_val,
-                    open=row.get("open"),
-                    high=row.get("high"),
-                    low=row.get("low"),
-                    close=row.get("close"),
-                    adjusted_close=row.get("adjusted_close"),
-                    volume=row.get("volume"),
-                )
+            # Get values with proper handling for missing columns
+            open_val = row.get("open") or row.get("Open", "")
+            high_val = row.get("high") or row.get("High", "")
+            low_val = row.get("low") or row.get("Low", "")
+            close_val = row.get("close") or row.get("Close", "")
+            adj_close = row.get("adjusted_close") or row.get("Adj Close", "")
+            volume = row.get("volume") or row.get("Volume", 0)
+
+            # Handle NaN values
+            open_val = "" if pd.isna(open_val) else open_val
+            high_val = "" if pd.isna(high_val) else high_val
+            low_val = "" if pd.isna(low_val) else low_val
+            close_val = "" if pd.isna(close_val) else close_val
+            adj_close = "" if pd.isna(adj_close) else adj_close
+            volume = 0 if pd.isna(volume) else int(volume)
+
+            csv_buffer.write(
+                f"{symbol_id}\t{date_val}\t{open_val}\t{high_val}\t{low_val}\t{close_val}\t{adj_close}\t{volume}\n"
             )
+            count += 1
 
-        if records:
-            session.add_all(records)
-            session.flush()
+        if count == 0:
+            return 0
 
-        return len(records)
+        # Use psycopg2 COPY for fast bulk insert
+        csv_buffer.seek(0)
+        settings = get_settings()
+        conn = psycopg2.connect(settings.database_url)
+        try:
+            cur = conn.cursor()
+            cur.copy_from(
+                csv_buffer,
+                'price_history',
+                columns=('symbol_id', 'date', 'open', 'high', 'low', 'close', 'adjusted_close', 'volume')
+            )
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
+
+        return count
 
     def get_price_history(
         self,
