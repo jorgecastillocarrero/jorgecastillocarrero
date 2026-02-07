@@ -1211,6 +1211,13 @@ if page == "Posición":
     # Display table
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
 
+    # =========================================================================
+    # RENTABILIDAD MENSUAL (temporalmente deshabilitado para debug)
+    # =========================================================================
+    # st.markdown("---")
+    # RENTABILIDAD MENSUAL - temporalmente deshabilitada por problemas de rendimiento
+    # TODO: Optimizar consultas para reducir latencia
+
 
 elif page == "Composición":
     st.title("COMPOSICIÓN DE CARTERA")
