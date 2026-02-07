@@ -318,15 +318,32 @@ st.markdown("""
         padding-top: 0 !important;
     }
 
-    /* Navigation wrapper - full width */
+    /* Navigation wrapper - full width, no gaps */
     .nav-wrapper {
         background: linear-gradient(135deg, #4a6fa5 0%, #3d5a80 100%);
         margin-left: calc(-50vw + 50%);
         margin-right: calc(-50vw + 50%);
-        padding: 20px calc(50vw - 50% + 1rem);
-        min-height: 100px;
+        margin-top: -100px;
+        padding: 120px calc(50vw - 50% + 1rem) 30px;
+        min-height: 150px;
         margin-bottom: 20px;
         box-shadow: 0 4px 15px rgba(74, 111, 165, 0.3);
+    }
+
+    /* Ensure app starts at very top */
+    .stApp {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* Remove any top spacing from main container */
+    [data-testid="stAppViewContainer"] {
+        padding-top: 0 !important;
+    }
+
+    [data-testid="stVerticalBlock"] > div:first-child {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
     }
 
     /* Style selectboxes in nav area - make them look like buttons */
@@ -360,7 +377,8 @@ st.markdown("""
 
     /* Logo in nav */
     [data-testid="stHorizontalBlock"] .stImage img {
-        max-height: 70px !important;
+        max-height: 120px !important;
+        margin-top: -20px;
     }
 
     /* Logout button style */
@@ -790,7 +808,7 @@ if "current_group" not in st.session_state:
 st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
 
 # Create columns: Logo + 5 menus + spacer
-logo_col, m1, m2, m3, m4, m5, spacer = st.columns([1.2, 1, 1, 1, 0.8, 1, 2])
+logo_col, m1, m2, m3, m4, m5, spacer = st.columns([2, 1, 1, 1, 0.8, 1, 1.5])
 
 # Logo
 with logo_col:
@@ -802,7 +820,7 @@ with logo_col:
     ]
     for logo_path in logo_paths:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=120)
+            st.image(logo_path, width=300)
             break
 
 # Menu dropdowns
