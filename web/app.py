@@ -330,6 +330,37 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(36, 82, 122, 0.3);
     }
 
+    /* GLOBAL: Remove ALL borders from ALL selectboxes */
+    .stSelectbox,
+    .stSelectbox *,
+    .stSelectbox div,
+    .stSelectbox input,
+    .stSelectbox [data-baseweb],
+    .stSelectbox [data-baseweb] * {
+        border: none !important;
+        border-width: 0 !important;
+        border-top: none !important;
+        border-bottom: none !important;
+        border-left: none !important;
+        border-right: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+        background-image: none !important;
+    }
+
+    /* Hide BaseWeb animated underline */
+    .stSelectbox [data-baseweb="select"]::after,
+    .stSelectbox [data-baseweb="select"]::before,
+    .stSelectbox [data-baseweb="select"] div::after,
+    .stSelectbox [data-baseweb="select"] div::before {
+        display: none !important;
+        content: none !important;
+        height: 0 !important;
+        border: none !important;
+        background: none !important;
+        transform: none !important;
+    }
+
     /* Ensure app starts at very top */
     .stApp {
         margin-top: 0 !important;
@@ -424,6 +455,34 @@ st.markdown("""
     /* Style selectboxes - positioned with margin-top */
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox {
         margin-top: -135px;
+        position: relative;
+    }
+
+    /* Cover the line above selectbox with background color */
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox::before {
+        content: "";
+        position: absolute;
+        top: -30px;
+        left: -20px;
+        right: -20px;
+        height: 35px;
+        background-color: #24527a;
+        z-index: 9999;
+    }
+
+    /* Force remove ALL borders and lines from selectbox */
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox div[data-baseweb] div {
+        border: 0 !important;
+        border-width: 0 !important;
+        border-style: none !important;
+        border-color: transparent !important;
+        background-image: none !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox input {
+        border: 0 !important;
+        border-bottom: 0 !important;
+        background: transparent !important;
     }
 
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox,
