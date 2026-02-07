@@ -1212,11 +1212,130 @@ if page == "Posición":
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
 
     # =========================================================================
-    # RENTABILIDAD MENSUAL (temporalmente deshabilitado para debug)
+    # RENTABILIDAD MENSUAL
     # =========================================================================
-    # st.markdown("---")
-    # RENTABILIDAD MENSUAL - temporalmente deshabilitada por problemas de rendimiento
-    # TODO: Optimizar consultas para reducir latencia
+    st.markdown("---")
+    st.subheader("Rentabilidad Mensual")
+
+    # Calculate monthly returns for Portfolio, SPY, and QQQ
+    months_data = {}
+    current_year = date.today().year
+    current_month = date.today().month
+
+    # Get first day value for each month (for monthly returns calculation)
+    for month in range(1, 13):
+        month_name = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]
+
+        # Skip future months (after current month)
+        if month > current_month:
+            continue
+
+        # Find first and last trading day of the month
+        month_dates = [d for d in trading_dates_from_db
+                       if d.year == current_year and d.month == month and d not in excluded_dates]
+
+        if not month_dates:
+            continue
+
+        first_day = min(month_dates)
+        # For current month: use latest available date (current position)
+        # For past months: use last day of that month
+        last_day = max(month_dates)
+
+        # Get values at start and end of month
+        if month == 1:
+            # January: compare to Dec 31
+            start_val = all_day_totals.get(date(2025, 12, 31), 0)
+        else:
+            # Other months: get last day of previous month
+            prev_month_dates = [d for d in trading_dates_from_db
+                               if d.year == current_year and d.month == month - 1 and d not in excluded_dates]
+            if prev_month_dates:
+                start_val = all_day_totals.get(max(prev_month_dates), 0)
+            else:
+                start_val = all_day_totals.get(date(2025, 12, 31), 0)
+
+        end_val = all_day_totals.get(last_day, 0)
+
+        # Portfolio monthly return
+        if start_val > 0:
+            port_monthly_ret = ((end_val / start_val) - 1) * 100
+        else:
+            port_monthly_ret = 0
+
+        # SPY monthly return
+        spy_monthly_ret = 0
+        if not spy_prices.empty:
+            spy_month = spy_prices[spy_prices.index.month == month]
+            if not spy_month.empty:
+                if month == 1:
+                    spy_start = spy_prices['close'].iloc[0]
+                else:
+                    spy_prev = spy_prices[spy_prices.index.month == month - 1]
+                    spy_start = spy_prev['close'].iloc[-1] if not spy_prev.empty else spy_prices['close'].iloc[0]
+                spy_end = spy_month['close'].iloc[-1]
+                if spy_start > 0:
+                    spy_monthly_ret = ((spy_end / spy_start) - 1) * 100
+
+        # QQQ monthly return
+        qqq_monthly_ret = 0
+        if not qqq_prices.empty:
+            qqq_month = qqq_prices[qqq_prices.index.month == month]
+            if not qqq_month.empty:
+                if month == 1:
+                    qqq_start = qqq_prices['close'].iloc[0]
+                else:
+                    qqq_prev = qqq_prices[qqq_prices.index.month == month - 1]
+                    qqq_start = qqq_prev['close'].iloc[-1] if not qqq_prev.empty else qqq_prices['close'].iloc[0]
+                qqq_end = qqq_month['close'].iloc[-1]
+                if qqq_start > 0:
+                    qqq_monthly_ret = ((qqq_end / qqq_start) - 1) * 100
+
+        months_data[month_name] = {
+            'Cartera': port_monthly_ret,
+            'SPY': spy_monthly_ret,
+            'QQQ': qqq_monthly_ret
+        }
+
+    # Build monthly returns table (vertical: assets as rows, months as columns)
+    all_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+    # Build table with Activo as first column, then all months, then TOTAL
+    monthly_table = {'Activo': ['Cartera', 'SPY', 'QQQ']}
+
+    for month_name in all_months:
+        if month_name in months_data:
+            monthly_table[month_name] = [
+                months_data[month_name]['Cartera'],
+                months_data[month_name]['SPY'],
+                months_data[month_name]['QQQ']
+            ]
+        else:
+            # Month without data yet
+            monthly_table[month_name] = [None, None, None]
+
+    # Add TOTAL column
+    monthly_table['TOTAL'] = [return_pct, spy_return, qqq_return]
+
+    monthly_df = pd.DataFrame(monthly_table)
+
+    # Style the table
+    def color_monthly_pct(val):
+        if isinstance(val, (int, float)):
+            if val > 0:
+                return 'background-color: #2E7D32; color: white'
+            elif val < 0:
+                return 'background-color: #C62828; color: white'
+        return ''
+
+    # Format columns (all except 'Activo')
+    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
+    format_dict = {col: '{:+.2f}%' for col in pct_columns}
+
+    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='-')
+
+    st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
 
 elif page == "Composición":
