@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="PatrimonioSmart",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # =====================================================
@@ -312,9 +312,9 @@ if settings.dashboard_auth_enabled and st.session_state.get("authenticated", Fal
             st.session_state.authenticated = False
             st.rerun()
 
-# Logo en el sidebar
-with st.sidebar:
-    st.image("web/static/logo_carihuela.png", use_container_width=True)
+# Logo (sidebar collapsed - navigation moved to horizontal menu)
+# with st.sidebar:
+#     st.image("web/static/logo_carihuela.png", use_container_width=True)
 
 # Initialize components
 settings = get_settings()
@@ -699,40 +699,96 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Sidebar
+# Horizontal Navigation Menu (5 dropdowns)
 # =============================================================================
 
-st.sidebar.title("Financial Data Dashboard")
+# Define page groups for dropdown menus
+page_groups = {
+    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
+    "Análisis": ["Backtesting", "Screener", "Symbol Analysis"],
+    "Datos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
+    "IA": ["Asistente IA", "News Feed"],
+    "Mercado": ["VIX", "Fear & Greed"]
+}
 
-st.sidebar.markdown("---")
+# Initialize session state for navigation
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "Posición"
+if "current_group" not in st.session_state:
+    st.session_state.current_group = "Cartera"
 
-st.sidebar.markdown("**Data Source:** Yahoo Finance")
+# Create horizontal navigation bar with 5 columns
+nav_cols = st.columns([1, 1, 1, 1, 1, 2])
 
-# Navegación unificada
-all_pages = [
-    "Posición", "Composición", "Acciones", "Futuros y ETF",
-    "Asistente IA", "Backtesting", "Screener",
-    "Symbol Analysis", "Data Management", "Download Status",
-    "---",  # Separador visual
-    "BBDD", "Pantalla"
-]
-
-# Filtrar separador para el radio
-page_options = [p for p in all_pages if p != "---"]
-
-page = st.sidebar.radio(
-    "Navigation",
-    page_options,
-    label_visibility="collapsed"
-)
-
-# Submenú para Backtesting
-if page == "Backtesting":
-    backtesting_option = st.sidebar.radio(
-        "Tipo de Backtesting",
-        ["Estrategia Mensual", "Portfolio Backtest"],
-        label_visibility="visible"
+with nav_cols[0]:
+    cartera_page = st.selectbox(
+        "Cartera",
+        [""] + page_groups["Cartera"],
+        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
+        key="nav_cartera"
     )
+    if cartera_page and cartera_page != "":
+        st.session_state.current_page = cartera_page
+        st.session_state.current_group = "Cartera"
+
+with nav_cols[1]:
+    analisis_page = st.selectbox(
+        "Análisis",
+        [""] + page_groups["Análisis"],
+        index=0 if st.session_state.current_group != "Análisis" else page_groups["Análisis"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Análisis"] else 0,
+        key="nav_analisis"
+    )
+    if analisis_page and analisis_page != "":
+        st.session_state.current_page = analisis_page
+        st.session_state.current_group = "Análisis"
+
+with nav_cols[2]:
+    datos_page = st.selectbox(
+        "Datos",
+        [""] + page_groups["Datos"],
+        index=0 if st.session_state.current_group != "Datos" else page_groups["Datos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Datos"] else 0,
+        key="nav_datos"
+    )
+    if datos_page and datos_page != "":
+        st.session_state.current_page = datos_page
+        st.session_state.current_group = "Datos"
+
+with nav_cols[3]:
+    ia_page = st.selectbox(
+        "IA",
+        [""] + page_groups["IA"],
+        index=0 if st.session_state.current_group != "IA" else page_groups["IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["IA"] else 0,
+        key="nav_ia"
+    )
+    if ia_page and ia_page != "":
+        st.session_state.current_page = ia_page
+        st.session_state.current_group = "IA"
+
+with nav_cols[4]:
+    mercado_page = st.selectbox(
+        "Mercado",
+        [""] + page_groups["Mercado"],
+        index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
+        key="nav_mercado"
+    )
+    if mercado_page and mercado_page != "":
+        st.session_state.current_page = mercado_page
+        st.session_state.current_group = "Mercado"
+
+# Get current page
+page = st.session_state.current_page
+
+# Submenú for Backtesting (inline)
+backtesting_option = None
+if page == "Backtesting":
+    with nav_cols[5]:
+        backtesting_option = st.selectbox(
+            "Tipo",
+            ["Estrategia Mensual", "Portfolio Backtest"],
+            key="backtesting_type"
+        )
+
+st.markdown("---")
 
 # =============================================================================
 # Main Content
@@ -1210,6 +1266,132 @@ if page == "Posición":
 
     # Display table
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
+
+    # =========================================================================
+    # RENTABILIDAD MENSUAL
+    # =========================================================================
+    st.subheader("Rentabilidad Mensual")
+
+    # Calculate monthly returns for Portfolio, SPY, and QQQ
+    months_data = {}
+    current_year = date.today().year
+    current_month = date.today().month
+
+    # Get first day value for each month (for monthly returns calculation)
+    for month in range(1, 13):
+        month_name = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]
+
+        # Skip future months (after current month)
+        if month > current_month:
+            continue
+
+        # Find first and last trading day of the month
+        month_dates = [d for d in trading_dates_from_db
+                       if d.year == current_year and d.month == month and d not in excluded_dates]
+
+        if not month_dates:
+            continue
+
+        first_day = min(month_dates)
+        # For current month: use latest available date (current position)
+        # For past months: use last day of that month
+        last_day = max(month_dates)
+
+        # Get values at start and end of month
+        if month == 1:
+            # January: compare to Dec 31
+            start_val = all_day_totals.get(date(2025, 12, 31), 0)
+        else:
+            # Other months: get last day of previous month
+            prev_month_dates = [d for d in trading_dates_from_db
+                               if d.year == current_year and d.month == month - 1 and d not in excluded_dates]
+            if prev_month_dates:
+                start_val = all_day_totals.get(max(prev_month_dates), 0)
+            else:
+                start_val = all_day_totals.get(date(2025, 12, 31), 0)
+
+        end_val = all_day_totals.get(last_day, 0)
+
+        # Portfolio monthly return
+        if start_val > 0:
+            port_monthly_ret = ((end_val / start_val) - 1) * 100
+        else:
+            port_monthly_ret = 0
+
+        # SPY monthly return
+        spy_monthly_ret = 0
+        if not spy_prices.empty:
+            spy_month = spy_prices[spy_prices.index.month == month]
+            if not spy_month.empty:
+                if month == 1:
+                    spy_start = spy_prices['close'].iloc[0]
+                else:
+                    spy_prev = spy_prices[spy_prices.index.month == month - 1]
+                    spy_start = spy_prev['close'].iloc[-1] if not spy_prev.empty else spy_prices['close'].iloc[0]
+                spy_end = spy_month['close'].iloc[-1]
+                if spy_start > 0:
+                    spy_monthly_ret = ((spy_end / spy_start) - 1) * 100
+
+        # QQQ monthly return
+        qqq_monthly_ret = 0
+        if not qqq_prices.empty:
+            qqq_month = qqq_prices[qqq_prices.index.month == month]
+            if not qqq_month.empty:
+                if month == 1:
+                    qqq_start = qqq_prices['close'].iloc[0]
+                else:
+                    qqq_prev = qqq_prices[qqq_prices.index.month == month - 1]
+                    qqq_start = qqq_prev['close'].iloc[-1] if not qqq_prev.empty else qqq_prices['close'].iloc[0]
+                qqq_end = qqq_month['close'].iloc[-1]
+                if qqq_start > 0:
+                    qqq_monthly_ret = ((qqq_end / qqq_start) - 1) * 100
+
+        months_data[month_name] = {
+            'Cartera': port_monthly_ret,
+            'SPY': spy_monthly_ret,
+            'QQQ': qqq_monthly_ret
+        }
+
+    # Build monthly returns table (vertical: assets as rows, months as columns)
+    # All 12 months as columns
+    all_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+    # Build table with Activo as first column, then all months, then TOTAL
+    monthly_table = {'Activo': ['Cartera', 'SPY', 'QQQ']}
+
+    for month_name in all_months:
+        if month_name in months_data:
+            monthly_table[month_name] = [
+                months_data[month_name]['Cartera'],
+                months_data[month_name]['SPY'],
+                months_data[month_name]['QQQ']
+            ]
+        else:
+            # Month without data yet
+            monthly_table[month_name] = [None, None, None]
+
+    # Add TOTAL column
+    monthly_table['TOTAL'] = [return_pct, spy_return, qqq_return]
+
+    monthly_df = pd.DataFrame(monthly_table)
+
+    # Style the table
+    def color_monthly_pct(val):
+        if isinstance(val, (int, float)):
+            if val > 0:
+                return 'background-color: #2E7D32; color: white'
+            elif val < 0:
+                return 'background-color: #C62828; color: white'
+        return ''
+
+    # Format columns (all except 'Activo')
+    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
+    format_dict = {col: '{:+.2f}%' for col in pct_columns}
+
+    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='-')
+
+    st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
 
 elif page == "Composición":
@@ -3624,7 +3806,4 @@ elif page == "Asistente IA":
         """)
 
 
-# Footer
-st.sidebar.markdown("---")
-st.sidebar.markdown("Financial Data Project v3.0")
-st.sidebar.markdown("*Data: 28/01/2026*")
+# Footer (hidden - navigation moved to horizontal menu)
