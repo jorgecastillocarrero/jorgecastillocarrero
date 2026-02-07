@@ -7,6 +7,8 @@ import logging
 import time
 from datetime import datetime, timedelta
 from typing import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -76,7 +78,7 @@ class DailyDataUpdater:
             logger.info("No missing symbols to update")
             return {"total": 0, "success": 0, "failed": 0, "new_records": 0}
 
-        logger.info(f"Updating {len(missing_symbols)} symbols missing data for {today}")
+        logger.info(f"Updating {len(missing_symbols)} symbols missing data for {today} (parallel)")
 
         results = {
             "date": today,
@@ -86,30 +88,52 @@ class DailyDataUpdater:
             "new_records": 0,
         }
 
-        for i, symbol in enumerate(missing_symbols, 1):
-            try:
-                count = self.downloader.download_historical_prices(
-                    symbol, period="5d", incremental=True
-                )
-                if count > 0:
-                    results["success"] += 1
-                    results["new_records"] += count
+        # Use parallel downloads
+        completed = 0
+        lock = threading.Lock()
 
-                if i % 100 == 0:
-                    logger.info(f"Missing update progress: {i}/{len(missing_symbols)}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_symbol = {
+                executor.submit(self._download_symbol_safe, symbol): symbol
+                for symbol in missing_symbols
+            }
 
-            except Exception as e:
-                results["failed"] += 1
+            for future in as_completed(future_to_symbol):
+                symbol, count, error = future.result()
 
-            if i % 50 == 0:
-                time.sleep(0.5)
+                with lock:
+                    completed += 1
+                    if error:
+                        results["failed"] += 1
+                    elif count > 0:
+                        results["success"] += 1
+                        results["new_records"] += count
+
+                    if completed % 200 == 0:
+                        logger.info(f"Missing update progress: {completed}/{len(missing_symbols)}")
 
         logger.info(f"Missing prices update completed: {results['success']} updated, {results['new_records']} new records")
         return results
 
-    def update_prices(self) -> dict:
+    def _download_symbol_safe(self, symbol: str) -> tuple:
         """
-        Update prices for all symbols (incremental - only new data).
+        Download a single symbol safely (for parallel execution).
+        Returns: (symbol, count, error)
+        """
+        try:
+            count = self.downloader.download_historical_prices(
+                symbol, period="5d", incremental=True
+            )
+            return (symbol, count, None)
+        except Exception as e:
+            return (symbol, 0, str(e)[:100])
+
+    def update_prices(self, max_workers: int = 10) -> dict:
+        """
+        Update prices for all symbols using parallel downloads.
+
+        Args:
+            max_workers: Number of parallel download threads (default: 10)
 
         Returns:
             Dictionary with update results
@@ -117,7 +141,7 @@ class DailyDataUpdater:
         started_at = datetime.now(ET)
         symbols = self.get_all_symbols()
 
-        logger.info(f"[{started_at.strftime('%Y-%m-%d %H:%M:%S %Z')}] Starting daily price update for {len(symbols)} symbols")
+        logger.info(f"[{started_at.strftime('%Y-%m-%d %H:%M:%S %Z')}] Starting parallel price update for {len(symbols)} symbols with {max_workers} workers")
 
         results = {
             "date": started_at.strftime('%Y-%m-%d'),
@@ -129,35 +153,41 @@ class DailyDataUpdater:
             "errors": [],
         }
 
-        for i, symbol in enumerate(symbols, 1):
-            try:
-                # Download only recent data (last 5 days) for efficiency
-                count = self.downloader.download_historical_prices(
-                    symbol, period="5d", incremental=True
-                )
+        # Use ThreadPoolExecutor for parallel downloads
+        completed = 0
+        lock = threading.Lock()
 
-                if count > 0:
-                    results["success"] += 1
-                    results["new_records"] += count
-                else:
-                    results["skipped"] += 1
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all download tasks
+            future_to_symbol = {
+                executor.submit(self._download_symbol_safe, symbol): symbol
+                for symbol in symbols
+            }
 
-                if i % 100 == 0:
-                    logger.info(
-                        f"Progress: {i}/{len(symbols)} | "
-                        f"Updated: {results['success']} | "
-                        f"New records: {results['new_records']}"
-                    )
+            # Process results as they complete
+            for future in as_completed(future_to_symbol):
+                symbol, count, error = future.result()
 
-            except Exception as e:
-                results["failed"] += 1
-                error_msg = str(e)[:100]
-                results["errors"].append({"symbol": symbol, "error": error_msg})
-                logger.warning(f"{symbol}: Error - {error_msg}")
+                with lock:
+                    completed += 1
+                    if error:
+                        results["failed"] += 1
+                        results["errors"].append({"symbol": symbol, "error": error})
+                    elif count > 0:
+                        results["success"] += 1
+                        results["new_records"] += count
+                    else:
+                        results["skipped"] += 1
 
-            # Small delay to avoid rate limiting
-            if i % 50 == 0:
-                time.sleep(0.5)
+                    if completed % 200 == 0:
+                        elapsed = (datetime.now(ET) - started_at).total_seconds()
+                        rate = completed / elapsed if elapsed > 0 else 0
+                        eta = (len(symbols) - completed) / rate / 60 if rate > 0 else 0
+                        logger.info(
+                            f"Progress: {completed}/{len(symbols)} ({completed*100//len(symbols)}%) | "
+                            f"Updated: {results['success']} | "
+                            f"Rate: {rate:.1f}/s | ETA: {eta:.1f}min"
+                        )
 
         # Log the operation
         with self.db.get_session() as session:
@@ -172,7 +202,7 @@ class DailyDataUpdater:
 
         elapsed = (datetime.now(ET) - started_at).total_seconds()
         logger.info(
-            f"Daily price update completed in {elapsed/60:.1f} min: "
+            f"Parallel price update completed in {elapsed/60:.1f} min: "
             f"{results['success']} updated, {results['skipped']} up-to-date, "
             f"{results['failed']} failed, {results['new_records']} new records"
         )
@@ -539,8 +569,8 @@ def run_scheduler_daemon():
     # Schedule daily update at 00:01 ET
     scheduler.add_daily_update_job(hour=0, minute=1)
 
-    # Schedule hourly job to complete missing downloads
-    scheduler.add_hourly_missing_update_job()
+    # Note: Hourly missing update job disabled - parallel downloads should complete in one run
+    # scheduler.add_hourly_missing_update_job()
 
     # Schedule weekly fundamentals on Sunday at 01:00 ET
     scheduler.add_weekly_fundamentals_job(day_of_week='sun', hour=1)
