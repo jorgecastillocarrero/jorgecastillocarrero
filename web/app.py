@@ -1704,31 +1704,31 @@ if page == "Posición":
 
     monthly_df = pd.DataFrame(monthly_table)
 
-    # Convert None to NaN for proper formatting
-    import numpy as np
-    monthly_df = monthly_df.fillna(np.nan)
+    # Replace None/NaN with empty string for display
+    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
+    for col in pct_columns:
+        monthly_df[col] = monthly_df[col].apply(
+            lambda x: '' if x is None or (isinstance(x, float) and pd.isna(x)) else x
+        )
 
     # Style the table
     def color_monthly_pct(val):
-        if pd.notna(val) and isinstance(val, (int, float)):
+        if val != '' and isinstance(val, (int, float)):
             if val > 0:
                 return 'background-color: #2E7D32; color: white'
             elif val < 0:
                 return 'background-color: #C62828; color: white'
         return ''
 
-    # Format columns (all except 'Activo')
-    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
-
-    def format_pct(val):
-        if val is None or pd.isna(val) or val == 'None' or val == '':
+    def format_pct_monthly(val):
+        if val == '' or val is None:
             return ''
         try:
             return f'{float(val):+.2f}%'
         except (ValueError, TypeError):
             return ''
 
-    format_dict = {col: format_pct for col in pct_columns}
+    format_dict = {col: format_pct_monthly for col in pct_columns}
 
     styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict)
 
