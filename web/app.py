@@ -483,6 +483,10 @@ st.markdown("""
         border: 0 !important;
         border-bottom: 0 !important;
         background: transparent !important;
+        caret-color: transparent !important;
+        color: transparent !important;
+        pointer-events: none !important;
+        user-select: none !important;
     }
 
     [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox,
@@ -1547,9 +1551,15 @@ if page == "Posición":
 
     # Format columns (all except 'Activo')
     pct_columns = [col for col in monthly_df.columns if col != 'Activo']
-    format_dict = {col: '{:+.2f}%' for col in pct_columns}
 
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict, na_rep='')
+    def format_pct(val):
+        if pd.isna(val) or val is None:
+            return ''
+        return f'{val:+.2f}%'
+
+    format_dict = {col: format_pct for col in pct_columns}
+
+    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict)
 
     st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
 
