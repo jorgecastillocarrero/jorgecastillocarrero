@@ -184,11 +184,33 @@ def parse_db_date(date_value, default=None):
     return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
 
 
+def sanitize_text_for_pdf(text: str) -> str:
+    """Remove special characters that fpdf can't handle."""
+    if not isinstance(text, str):
+        text = str(text)
+    # Replace accented characters
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
+        'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U',
+        '€': 'EUR', '£': 'GBP', '¥': 'JPY',
+        '–': '-', '—': '-', ''': "'", ''': "'", '"': '"', '"': '"',
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    # Remove any remaining non-ASCII characters
+    return text.encode('ascii', 'ignore').decode('ascii')
+
+
 def generate_posicion_pdf(data: dict) -> bytes:
     """Generate PDF report for Posición page."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Helper to sanitize all text
+    def s(text):
+        return sanitize_text_for_pdf(text)
 
     # Title
     pdf.set_font('Helvetica', 'B', 20)
@@ -198,7 +220,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
 
     # Date
     pdf.set_font('Helvetica', '', 10)
-    pdf.cell(0, 8, f"Fecha: {data.get('fecha', '')}", ln=True, align='R')
+    pdf.cell(0, 8, s(f"Fecha: {data.get('fecha', '')}"), ln=True, align='R')
     pdf.ln(5)
 
     # Resumen de Cartera
@@ -237,7 +259,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
                     pdf.set_text_color(0, 150, 0)
                 elif '-' in str(val):
                     pdf.set_text_color(200, 0, 0)
-            pdf.cell(col_widths[i], 7, str(val), 1, 0, 'C')
+            pdf.cell(col_widths[i], 7, s(str(val)), 1, 0, 'C')
             pdf.set_text_color(0, 0, 0)
         pdf.ln()
 
@@ -256,7 +278,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font('Helvetica', 'B', 9)
         for i, h in enumerate(var_headers):
-            pdf.cell(var_cols[i], 7, h, 1, 0, 'C', fill=True)
+            pdf.cell(var_cols[i], 7, s(h), 1, 0, 'C', fill=True)
         pdf.ln()
 
         pdf.set_text_color(0, 0, 0)
@@ -275,7 +297,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
                         pdf.set_text_color(0, 150, 0)
                     elif '-' in val:
                         pdf.set_text_color(200, 0, 0)
-                pdf.cell(var_cols[i], 6, val, 1, 0, 'C', fill=is_total)
+                pdf.cell(var_cols[i], 6, s(val), 1, 0, 'C', fill=is_total)
                 pdf.set_text_color(0, 0, 0)
             pdf.ln()
 
@@ -313,7 +335,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
                         pdf.set_text_color(0, 150, 0)
                     elif '-' in val:
                         pdf.set_text_color(200, 0, 0)
-                pdf.cell(month_cols[i], 5, val, 1, 0, 'C')
+                pdf.cell(month_cols[i], 5, s(val), 1, 0, 'C')
                 pdf.set_text_color(0, 0, 0)
             pdf.ln()
 
@@ -321,7 +343,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
     pdf.ln(10)
     pdf.set_font('Helvetica', 'I', 8)
     pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 5, f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align='C')
+    pdf.cell(0, 5, s(f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}"), ln=True, align='C')
 
     return pdf.output()
 
