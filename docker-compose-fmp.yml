@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  fmp-postgres:
+    image: postgres:16
+    container_name: fmp_database
+    environment:
+      POSTGRES_DB: fmp_data
+      POSTGRES_USER: fmp
+      POSTGRES_PASSWORD: fmp123
+    ports:
+      - "5433:5432"
+    volumes:
+      - fmp_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  fmp_pgdata:
