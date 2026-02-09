@@ -148,9 +148,12 @@ if not check_authentication():
 import logging
 import importlib
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta, date
+from fpdf import FPDF
+import io
 
 # Force reload of portfolio_data to pick up changes
 import src.portfolio_data
@@ -179,6 +182,149 @@ def parse_db_date(date_value, default=None):
     if isinstance(date_value, date):
         return date_value
     return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
+
+
+def generate_posicion_pdf(data: dict) -> bytes:
+    """Generate PDF report for Posición page."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Title
+    pdf.set_font('Helvetica', 'B', 20)
+    pdf.set_text_color(36, 82, 122)  # #24527a
+    pdf.cell(0, 15, 'POSICION GLOBAL', ln=True, align='C')
+    pdf.set_text_color(0, 0, 0)
+
+    # Date
+    pdf.set_font('Helvetica', '', 10)
+    pdf.cell(0, 8, f"Fecha: {data.get('fecha', '')}", ln=True, align='R')
+    pdf.ln(5)
+
+    # Resumen de Cartera
+    pdf.set_font('Helvetica', 'B', 14)
+    pdf.cell(0, 10, 'Resumen de Cartera', ln=True)
+    pdf.set_font('Helvetica', '', 11)
+
+    # Summary table
+    col_widths = [50, 45, 45, 50]
+    headers = ['Concepto', 'EUR', 'USD', '']
+
+    pdf.set_fill_color(36, 82, 122)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font('Helvetica', 'B', 10)
+    for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 8, h, 1, 0, 'C', fill=True)
+    pdf.ln()
+
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font('Helvetica', '', 10)
+
+    rows = [
+        ('Valor Inicial 31/12', data.get('valor_inicial_eur', ''), data.get('valor_inicial_usd', ''), ''),
+        ('Valor Actual', data.get('valor_actual_eur', ''), data.get('valor_actual_usd', ''), ''),
+        ('Ganancia Acumulada', data.get('ganancia_eur', ''), data.get('ganancia_usd', ''), ''),
+        ('Rentabilidad Acumulada', data.get('rent_eur', ''), data.get('rent_usd', ''), ''),
+        ('SPY Acumulado', '', '', data.get('spy_return', '')),
+        ('QQQ Acumulado', '', '', data.get('qqq_return', '')),
+    ]
+
+    for row in rows:
+        for i, val in enumerate(row):
+            # Color for gains/losses
+            if 'Ganancia' in row[0] or 'Rentabilidad' in row[0]:
+                if '+' in str(val):
+                    pdf.set_text_color(0, 150, 0)
+                elif '-' in str(val):
+                    pdf.set_text_color(200, 0, 0)
+            pdf.cell(col_widths[i], 7, str(val), 1, 0, 'C')
+            pdf.set_text_color(0, 0, 0)
+        pdf.ln()
+
+    pdf.ln(8)
+
+    # Variación Diaria por Tipo de Activo
+    if 'variacion_diaria' in data and data['variacion_diaria']:
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Variacion Diaria por Tipo de Activo', ln=True)
+        pdf.set_font('Helvetica', '', 10)
+
+        var_cols = [40, 35, 35, 35, 30]
+        var_headers = ['Tipo', data.get('fecha_prev', ''), data.get('fecha_last', ''), 'Diferencia', 'Var %']
+
+        pdf.set_fill_color(36, 82, 122)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 9)
+        for i, h in enumerate(var_headers):
+            pdf.cell(var_cols[i], 7, h, 1, 0, 'C', fill=True)
+        pdf.ln()
+
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Helvetica', '', 9)
+
+        for row in data['variacion_diaria']:
+            is_total = row.get('Tipo') == 'TOTAL'
+            if is_total:
+                pdf.set_font('Helvetica', 'B', 9)
+                pdf.set_fill_color(180, 180, 180)
+
+            for i, key in enumerate(['Tipo', 'prev', 'last', 'diff', 'var_pct']):
+                val = str(row.get(key, ''))
+                if key in ['diff', 'var_pct']:
+                    if '+' in val:
+                        pdf.set_text_color(0, 150, 0)
+                    elif '-' in val:
+                        pdf.set_text_color(200, 0, 0)
+                pdf.cell(var_cols[i], 6, val, 1, 0, 'C', fill=is_total)
+                pdf.set_text_color(0, 0, 0)
+            pdf.ln()
+
+            if is_total:
+                pdf.set_font('Helvetica', '', 9)
+
+    pdf.ln(8)
+
+    # Rentabilidad Mensual
+    if 'rentabilidad_mensual' in data and data['rentabilidad_mensual']:
+        pdf.set_font('Helvetica', 'B', 14)
+        pdf.cell(0, 10, 'Rentabilidad Mensual', ln=True)
+        pdf.set_font('Helvetica', '', 9)
+
+        # Monthly table
+        months = ['Activo', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+                  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'TOTAL']
+        month_cols = [20] + [12] * 13
+
+        pdf.set_fill_color(36, 82, 122)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font('Helvetica', 'B', 7)
+        for i, m in enumerate(months):
+            pdf.cell(month_cols[i], 6, m, 1, 0, 'C', fill=True)
+        pdf.ln()
+
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font('Helvetica', '', 7)
+
+        for row in data['rentabilidad_mensual']:
+            for i, m in enumerate(months):
+                val = str(row.get(m, ''))
+                if m != 'Activo' and val:
+                    if '+' in val:
+                        pdf.set_text_color(0, 150, 0)
+                    elif '-' in val:
+                        pdf.set_text_color(200, 0, 0)
+                pdf.cell(month_cols[i], 5, val, 1, 0, 'C')
+                pdf.set_text_color(0, 0, 0)
+            pdf.ln()
+
+    # Footer
+    pdf.ln(10)
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.set_text_color(128, 128, 128)
+    pdf.cell(0, 5, f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}", ln=True, align='C')
+
+    return pdf.output()
+
 
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
@@ -1553,15 +1699,96 @@ if page == "Posición":
     pct_columns = [col for col in monthly_df.columns if col != 'Activo']
 
     def format_pct(val):
-        if pd.isna(val) or val is None:
+        if val is None or pd.isna(val) or val == 'None' or val == '':
             return ''
-        return f'{val:+.2f}%'
+        try:
+            return f'{float(val):+.2f}%'
+        except (ValueError, TypeError):
+            return ''
 
     format_dict = {col: format_pct for col in pct_columns}
 
     styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict)
 
     st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
+
+    # =========================================================================
+    # PDF EXPORT BUTTON
+    # =========================================================================
+    st.markdown("---")
+
+    # Prepare data for PDF
+    def format_eur_pdf(value, show_sign=False):
+        if show_sign:
+            sign = "+" if value >= 0 else ""
+            return f"{sign}{value:,.0f} EUR".replace(",", ".")
+        return f"{value:,.0f} EUR".replace(",", ".")
+
+    def format_usd_pdf(value, show_sign=False):
+        if show_sign:
+            sign = "+" if value >= 0 else ""
+            return f"{sign}{value:,.0f} USD".replace(",", ".")
+        return f"{value:,.0f} USD".replace(",", ".")
+
+    def format_pct_pdf(value):
+        sign = "+" if value >= 0 else ""
+        return f"{sign}{value:.2f}%"
+
+    # Collect variación diaria data
+    variacion_data = []
+    if 'comparison_data' in dir() and comparison_data:
+        for row in comparison_data:
+            variacion_data.append({
+                'Tipo': row.get('Tipo', ''),
+                'prev': row.get(f'{day_prev.strftime("%d/%m")}', ''),
+                'last': row.get(f'{day_last.strftime("%d/%m")}', ''),
+                'diff': row.get('Diferencia', ''),
+                'var_pct': row.get('Var %', '')
+            })
+
+    # Collect monthly returns data
+    monthly_data = []
+    for _, row in monthly_df.iterrows():
+        row_dict = {'Activo': row.get('Activo', '')}
+        for col in monthly_df.columns:
+            if col != 'Activo':
+                val = row.get(col)
+                if pd.notna(val) and val is not None:
+                    try:
+                        row_dict[col] = f"{float(val):+.2f}%"
+                    except:
+                        row_dict[col] = ''
+                else:
+                    row_dict[col] = ''
+        monthly_data.append(row_dict)
+
+    pdf_data = {
+        'fecha': latest_date.strftime('%d/%m/%Y') if latest_date else '',
+        'fecha_prev': day_prev.strftime('%d/%m') if 'day_prev' in dir() and day_prev else '',
+        'fecha_last': day_last.strftime('%d/%m') if 'day_last' in dir() and day_last else '',
+        'valor_inicial_eur': format_eur_pdf(initial_value),
+        'valor_inicial_usd': format_usd_pdf(initial_value * eur_usd_31dic),
+        'valor_actual_eur': format_eur_pdf(current_value),
+        'valor_actual_usd': format_usd_pdf(current_value * eur_usd_current),
+        'ganancia_eur': format_eur_pdf(return_eur, show_sign=True),
+        'ganancia_usd': format_usd_pdf(return_usd, show_sign=True),
+        'rent_eur': format_pct_pdf(return_pct),
+        'rent_usd': format_pct_pdf(return_pct_usd),
+        'spy_return': format_pct_pdf(spy_return),
+        'qqq_return': format_pct_pdf(qqq_return),
+        'variacion_diaria': variacion_data,
+        'rentabilidad_mensual': monthly_data
+    }
+
+    pdf_bytes = generate_posicion_pdf(pdf_data)
+
+    st.download_button(
+        label="Descargar PDF",
+        data=pdf_bytes,
+        file_name=f"posicion_global_{latest_date.strftime('%Y%m%d') if latest_date else 'hoy'}.pdf",
+        mime="application/pdf",
+        key="download_pdf_posicion"
+    )
 
 
 elif page == "Composición":
