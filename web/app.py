@@ -345,7 +345,7 @@ def generate_posicion_pdf(data: dict) -> bytes:
     pdf.set_text_color(128, 128, 128)
     pdf.cell(0, 5, s(f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}"), ln=True, align='C')
 
-    return pdf.output()
+    return bytes(pdf.output())
 
 
 # Custom CSS for soft blue sidebar + responsive mobile
