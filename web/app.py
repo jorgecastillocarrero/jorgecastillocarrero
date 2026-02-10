@@ -1000,7 +1000,7 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 # Define page groups for dropdown menus
 page_groups = {
-    "Cartera": ["Posición", "Composición", "Acciones", "Futuros y ETF"],
+    "Cartera": ["Posición", "Composición", "Acciones", "ETFs", "Futuros"],
     "Estrategias": ["Backtesting", "Screener", "Symbol Analysis"],
     "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
     "Indicadores": ["Indicadores"],
@@ -2678,8 +2678,8 @@ elif page == "Acciones":
                 st.info("No hay posiciones cerradas")
 
 
-elif page == "Futuros y ETF":
-    st.title("FUTUROS Y ETF")
+elif page == "Futuros":
+    st.title("FUTUROS")
 
     # Obtener datos de futuros desde la base de datos
     futures_summary = portfolio_service.get_futures_summary()
@@ -2780,12 +2780,14 @@ elif page == "Futuros y ETF":
         unsafe_allow_html=True
     )
 
-    st.markdown("---")
+
+elif page == "ETFs":
+    st.title("ETFs")
 
     # ==========================================================================
     # POSICIONES ETFs ABIERTAS
     # ==========================================================================
-    st.subheader("Posiciones ETFs Abiertas")
+    st.subheader("Posiciones Abiertas")
 
     # Obtener fecha más reciente de IB en holding_diario
     with db.get_session() as session:
@@ -2915,9 +2917,9 @@ elif page == "Futuros y ETF":
     st.dataframe(styled_positions, use_container_width=True, hide_index=True)
 
     # ==========================================================================
-    # POSICIONES ETFs CERRADAS
+    # POSICIONES CERRADAS
     # ==========================================================================
-    st.subheader("Posiciones ETFs Cerradas")
+    st.subheader("Posiciones Cerradas")
 
     with db.get_session() as session:
         # Buscar ventas en ib_trades (posiciones cerradas)

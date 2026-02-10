@@ -25,6 +25,7 @@ from .yahoo_downloader import YahooDownloader
 from .technical import MetricsCalculator
 from .valor_actual import ValorActualCalculator
 from .news_manager import NewsManager
+from .ib_report_parser import process_ib_reports, IB_REPORTS_FOLDER
 
 logger = logging.getLogger(__name__)
 
@@ -472,6 +473,44 @@ class DailyDataUpdater:
 
         return results
 
+    def update_ib_reports(self) -> dict:
+        """
+        Process any new IB reports in the watched folder.
+
+        Returns:
+            Dictionary with processing results
+        """
+        started_at = datetime.now(ET)
+        logger.info(f"Checking for IB reports in {IB_REPORTS_FOLDER}")
+
+        results = {
+            'reports_processed': 0,
+            'etf_trades': 0,
+            'futures_trades': 0,
+            'errors': []
+        }
+
+        try:
+            report_results = process_ib_reports()
+
+            for r in report_results:
+                if r.get('success'):
+                    results['reports_processed'] += 1
+                    results['etf_trades'] += r.get('etf_trades_added', 0)
+                    results['futures_trades'] += r.get('futures_trades_added', 0)
+                else:
+                    results['errors'].append(r.get('error', 'Unknown error'))
+
+        except Exception as e:
+            logger.error(f"Error processing IB reports: {e}")
+            results['errors'].append(str(e))
+
+        elapsed = (datetime.now(ET) - started_at).total_seconds()
+        logger.info(f"IB reports processed in {elapsed:.1f}s: {results['reports_processed']} reports, "
+                   f"{results['etf_trades']} ETF trades, {results['futures_trades']} futures trades")
+
+        return results
+
     def run_daily_update(self):
         """Run the complete daily update (prices + fundamentals + metrics + news + positions)."""
         logger.info("=" * 60)
@@ -495,6 +534,9 @@ class DailyDataUpdater:
         # Update news
         news_results = self.update_news()
 
+        # Process IB reports (if any new ones in folder)
+        ib_results = self.update_ib_reports()
+
         # Update portfolio positions (holding_diario, cash_diario, posicion)
         position_results = self.update_positions()
 
@@ -505,10 +547,12 @@ class DailyDataUpdater:
             logger.info(f"Fundamentals: {fund_results['success']} updated")
         logger.info(f"Metrics: {metrics_results['success']} calculated")
         logger.info(f"News: {news_results['total_saved']} articles")
+        if ib_results['reports_processed'] > 0:
+            logger.info(f"IB Reports: {ib_results['reports_processed']} processed ({ib_results['etf_trades']} ETF, {ib_results['futures_trades']} futures)")
         logger.info(f"Positions: {position_results['total_eur']:,.0f} EUR ({position_results['holdings_count']} holdings)")
         logger.info("=" * 60)
 
-        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "news": news_results, "positions": position_results}
+        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "news": news_results, "ib_reports": ib_results, "positions": position_results}
 
 
 class SchedulerManager:
@@ -755,6 +799,18 @@ if __name__ == "__main__":
             if results['error']:
                 print(f"  Error: {results['error']}")
 
+        elif cmd == "--ib-reports":
+            print("\n=== Processing IB Reports ===\n")
+            print(f"Watching folder: {IB_REPORTS_FOLDER}")
+            updater = DailyDataUpdater()
+            results = updater.update_ib_reports()
+            print(f"\nResults:")
+            print(f"  Reports processed: {results['reports_processed']}")
+            print(f"  ETF trades added: {results['etf_trades']}")
+            print(f"  Futures trades added: {results['futures_trades']}")
+            if results['errors']:
+                print(f"  Errors: {results['errors']}")
+
         elif cmd == "--missing":
             print("\n=== Running Missing Prices Update ===\n")
             updater = DailyDataUpdater()
@@ -790,6 +846,7 @@ if __name__ == "__main__":
             print("  python -m src.scheduler --fundamentals  # Update fundamentals only")
             print("  python -m src.scheduler --metrics       # Calculate technical metrics")
             print("  python -m src.scheduler --positions     # Calculate portfolio positions")
+            print("  python -m src.scheduler --ib-reports    # Process IB reports from folder")
             print("  python -m src.scheduler --status        # Show status")
     else:
         run_scheduler_daemon()
