@@ -1001,7 +1001,7 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 # Define page groups for dropdown menus
 page_groups = {
     "Cartera": ["Posición", "Composición", "Acciones", "ETFs", "Futuros"],
-    "Estrategias": ["Backtesting", "Screener", "Symbol Analysis"],
+    "Estrategias": ["Estacionalidad", "Screener", "Symbol Analysis"],
     "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
     "Indicadores": ["Indicadores"],
     "Mercado": ["VIX"],
@@ -1107,7 +1107,7 @@ page = st.session_state.current_page
 
 # Submenú for Backtesting
 backtesting_option = None
-if page == "Backtesting":
+if page == "Estacionalidad":
     bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
     with bt_col1:
         backtesting_option = st.selectbox(
@@ -2996,7 +2996,7 @@ elif page == "ETFs":
     st.caption(f"Fecha: {ib_date.strftime('%d/%m/%Y')} | EUR/USD: {eur_usd:.4f}")
 
 
-elif page == "Backtesting" and backtesting_option == "Estrategia Mensual":
+elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
     st.title("Seleccion Mensual")
     st.markdown("Day 0 = Ultimo dia de negociacion del mes anterior (End-of-Day prices)")
 
@@ -3048,7 +3048,8 @@ elif page == "Backtesting" and backtesting_option == "Estrategia Mensual":
     symbols_input = st.text_input(
         "Symbols",
         value=default_symbols,
-        help="Stock symbols for this month's selection"
+        help="Stock symbols for this month's selection",
+        key=f"symbols_{selected_month}"
     )
 
     symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
@@ -3353,7 +3354,7 @@ elif page == "Screener":
         st.info(f"Metrics available for {metrics_count} records. Use filters below.")
 
 
-elif page == "Backtesting" and backtesting_option == "Portfolio Backtest":
+elif page == "Estacionalidad" and backtesting_option == "Portfolio Backtest":
     st.title("Portfolio Backtest")
     st.info("Herramienta de backtesting para estrategias de portfolio.")
 
