@@ -559,7 +559,7 @@ class PortfolioDataService:
                         pnl = (close['price'] - open_trade['price']) * multiplier * num_contracts
                     else:
                         pnl = (open_trade['price'] - close['price']) * multiplier * num_contracts
-                    pnl -= (open_trade['commission'] + close['commission'])
+                    pnl -= (open_trade.get('commission') or 0) + (close.get('commission') or 0)
 
                     matched_trades.append({
                         'contract': symbol,
