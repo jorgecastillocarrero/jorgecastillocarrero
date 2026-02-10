@@ -2695,55 +2695,150 @@ elif page == "Futuros":
     trades_cerradas = all_trades[all_trades['Estado'] == 'Cerrada'] if not all_trades.empty else all_trades
     total_ops = len(trades_cerradas)
 
-    # Contar ganadoras/perdedoras y calcular P&L numérico
-    ops_ganadoras = 0
-    ops_perdedoras = 0
-    pnl_values = []
-    total_gains = 0
-    total_losses = 0
+    # Función para calcular estadísticas de un conjunto de trades
+    def calc_stats(trades_df):
+        ops_gan, ops_perd = 0, 0
+        pnl_vals, gains, losses = [], 0, 0
+        for _, row in trades_df.iterrows():
+            pnl_str = row['P&G']
+            if isinstance(pnl_str, str) and pnl_str != '-':
+                pnl_clean = pnl_str.replace('$', '').replace(',', '').replace('+', '')
+                try:
+                    pnl_val = float(pnl_clean)
+                    pnl_vals.append(pnl_val)
+                    if pnl_val >= 0:
+                        ops_gan += 1
+                        gains += pnl_val
+                    else:
+                        ops_perd += 1
+                        losses += abs(pnl_val)
+                except:
+                    pass
+        total = len(trades_df)
+        pct_gan = (ops_gan / total * 100) if total > 0 else 0
+        pf = gains / losses if losses > 0 else float('inf')
+        avg_pnl = sum(pnl_vals) / len(pnl_vals) if pnl_vals else 0
+        return {'total': total, 'ganadoras': ops_gan, 'perdedoras': ops_perd,
+                'pct_gan': pct_gan, 'profit_factor': pf, 'avg_pnl': avg_pnl, 'total_pnl': sum(pnl_vals)}
 
+    # Estadísticas globales
+    stats_global = calc_stats(trades_cerradas)
+    eur_usd_rate = portfolio_service.get_eur_usd_rate(date.today())
+
+    import numpy as np
+    pnl_values = []
     for _, row in trades_cerradas.iterrows():
         pnl_str = row['P&G']
         if isinstance(pnl_str, str) and pnl_str != '-':
-            pnl_clean = pnl_str.replace('$', '').replace(',', '').replace('+', '')
             try:
-                pnl_val = float(pnl_clean)
-                pnl_values.append(pnl_val)
-                if pnl_val >= 0:
-                    ops_ganadoras += 1
-                    total_gains += pnl_val
-                else:
-                    ops_perdedoras += 1
-                    total_losses += abs(pnl_val)
-            except (ValueError, TypeError) as e:
-                logging.debug(f"Could not parse P&L value '{pnl_clean}': {e}")
-
-    pct_ganadoras = (ops_ganadoras / total_ops * 100) if total_ops > 0 else 0
-    profit_factor = total_gains / total_losses if total_losses > 0 else float('inf')
-    ganancia_media_usd = sum(pnl_values) / len(pnl_values) if pnl_values else 0
-    eur_usd_rate = portfolio_service.get_eur_usd_rate(date.today())
-    ganancia_media_eur = ganancia_media_usd / eur_usd_rate
-
-    import numpy as np
+                pnl_values.append(float(pnl_str.replace('$', '').replace(',', '').replace('+', '')))
+            except:
+                pass
     if len(pnl_values) > 1:
-        avg_pnl = np.mean(pnl_values)
-        std_pnl = np.std(pnl_values)
-        sqn = (np.sqrt(len(pnl_values)) * avg_pnl / std_pnl) if std_pnl > 0 else 0
+        sqn = (np.sqrt(len(pnl_values)) * np.mean(pnl_values) / np.std(pnl_values)) if np.std(pnl_values) > 0 else 0
     else:
         sqn = 0
 
-    # Estadísticas (debajo del título)
+    # === ESTADÍSTICAS GLOBALES ===
+    st.subheader("Estadísticas Globales")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Ops. Positivas", f"{ops_ganadoras} ({pct_ganadoras:.1f}%)")
-    col2.metric("Ops. Negativas", f"{ops_perdedoras} ({100-pct_ganadoras:.1f}%)")
-    col3.metric("Total Operaciones", f"{total_ops}")
-    col4.metric("Profit Factor", f"{profit_factor:.2f}")
+    col1.metric("Ops. Positivas", f"{stats_global['ganadoras']} ({stats_global['pct_gan']:.1f}%)")
+    col2.metric("Ops. Negativas", f"{stats_global['perdedoras']} ({100-stats_global['pct_gan']:.1f}%)")
+    col3.metric("Total Operaciones", f"{stats_global['total']}")
+    col4.metric("Profit Factor", f"{stats_global['profit_factor']:.2f}")
 
     col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Ganancia Media USD", f"${ganancia_media_usd:,.2f}".replace(",", "."))
-    col6.metric("Ganancia Media EUR", f"{ganancia_media_eur:,.2f} €".replace(",", "."))
+    col5.metric("Ganancia Media USD", f"${stats_global['avg_pnl']:,.2f}".replace(",", "."))
+    col6.metric("Ganancia Media EUR", f"{stats_global['avg_pnl']/eur_usd_rate:,.2f} €".replace(",", "."))
     col7.metric("SQN", f"{sqn:.2f}")
     col8.metric("Posición Abierta", f"{futures_open_position['contracts']} contratos")
+
+    st.markdown("---")
+
+    # === ESTADÍSTICAS POR TIPO (LARGO/CORTO) ===
+    st.subheader("Estadísticas por Tipo")
+    trades_largos = trades_cerradas[trades_cerradas['Tipo'] == 'Largo']
+    trades_cortos = trades_cerradas[trades_cerradas['Tipo'] == 'Corto']
+    stats_largos = calc_stats(trades_largos)
+    stats_cortos = calc_stats(trades_cortos)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("**LARGOS**")
+        st.write(f"Operaciones: {stats_largos['total']} ({stats_largos['ganadoras']}W / {stats_largos['perdedoras']}L)")
+        st.write(f"Win Rate: {stats_largos['pct_gan']:.1f}%")
+        st.write(f"Profit Factor: {stats_largos['profit_factor']:.2f}")
+        st.write(f"P&L Total: ${stats_largos['total_pnl']:,.2f}".replace(",", "."))
+    with col2:
+        st.markdown("**CORTOS**")
+        st.write(f"Operaciones: {stats_cortos['total']} ({stats_cortos['ganadoras']}W / {stats_cortos['perdedoras']}L)")
+        st.write(f"Win Rate: {stats_cortos['pct_gan']:.1f}%")
+        st.write(f"Profit Factor: {stats_cortos['profit_factor']:.2f}")
+        st.write(f"P&L Total: ${stats_cortos['total_pnl']:,.2f}".replace(",", "."))
+
+    st.markdown("---")
+
+    # === ESTADÍSTICAS POR DÍA DE LA SEMANA ===
+    col_dia, col_hora = st.columns(2)
+
+    with col_dia:
+        st.subheader("Por Día de la Semana")
+        if not trades_cerradas.empty and 'Fecha Entrada' in trades_cerradas.columns:
+            trades_cerradas_copy = trades_cerradas.copy()
+            # Convertir fecha a día de la semana
+            dias_semana = {0: 'Lunes', 1: 'Martes', 2: 'Miércoles', 3: 'Jueves', 4: 'Viernes', 5: 'Sábado', 6: 'Domingo'}
+
+            def get_dia_semana(fecha_str):
+                try:
+                    from datetime import datetime
+                    dt = datetime.strptime(fecha_str, '%Y/%m/%d')
+                    return dias_semana[dt.weekday()]
+                except:
+                    return '-'
+
+            trades_cerradas_copy['DiaSemana'] = trades_cerradas_copy['Fecha Entrada'].apply(get_dia_semana)
+
+            dia_stats = []
+            for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']:
+                trades_dia = trades_cerradas_copy[trades_cerradas_copy['DiaSemana'] == dia]
+                if len(trades_dia) > 0:
+                    stats_d = calc_stats(trades_dia)
+                    dia_stats.append({
+                        'Día': dia,
+                        'Ops': stats_d['total'],
+                        'W/L': f"{stats_d['ganadoras']}/{stats_d['perdedoras']}",
+                        'Win%': f"{stats_d['pct_gan']:.0f}%",
+                        'PF': f"{stats_d['profit_factor']:.2f}" if stats_d['profit_factor'] != float('inf') else '∞',
+                        'P&L': f"${stats_d['total_pnl']:,.0f}".replace(",", ".")
+                    })
+
+            if dia_stats:
+                dia_df = pd.DataFrame(dia_stats)
+                st.dataframe(dia_df, use_container_width=True, hide_index=True)
+
+    with col_hora:
+        st.subheader("Por Hora (Entrada)")
+        if not trades_cerradas.empty and 'Hora Entrada' in trades_cerradas.columns:
+            trades_cerradas_copy = trades_cerradas.copy()
+            trades_cerradas_copy['Hora'] = trades_cerradas_copy['Hora Entrada'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
+
+            hora_stats = []
+            for hora in sorted(trades_cerradas_copy['Hora'].unique()):
+                if hora != '-':
+                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['Hora'] == hora]
+                    stats_h = calc_stats(trades_hora)
+                    hora_stats.append({
+                        'Hora': f"{hora}:00",
+                        'Ops': stats_h['total'],
+                        'W/L': f"{stats_h['ganadoras']}/{stats_h['perdedoras']}",
+                        'Win%': f"{stats_h['pct_gan']:.0f}%",
+                        'PF': f"{stats_h['profit_factor']:.2f}" if stats_h['profit_factor'] != float('inf') else '∞',
+                        'P&L': f"${stats_h['total_pnl']:,.0f}".replace(",", ".")
+                    })
+
+            if hora_stats:
+                hora_df = pd.DataFrame(hora_stats)
+                st.dataframe(hora_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 

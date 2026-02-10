@@ -8,12 +8,31 @@ import logging
 from datetime import date, datetime, timedelta
 from functools import lru_cache
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import text
 
 from .database import get_db_manager
 from .exchange_rate_service import get_exchange_rate_service, ExchangeRateError
+
+# Timezone conversion: IB uses EST, we want Spanish time
+TZ_EST = ZoneInfo('America/New_York')
+TZ_SPAIN = ZoneInfo('Europe/Madrid')
+
+
+def convert_est_to_spain(dt):
+    """Convert datetime from EST to Spanish timezone (Europe/Madrid)."""
+    if dt is None:
+        return None
+    if not hasattr(dt, 'hour'):
+        # It's just a date, not datetime
+        return dt
+    # If naive datetime, assume it's EST
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TZ_EST)
+    # Convert to Spanish timezone
+    return dt.astimezone(TZ_SPAIN)
 
 logger = logging.getLogger(__name__)
 
@@ -605,26 +624,43 @@ class PortfolioDataService:
         }
 
     def get_futures_trades_df(self) -> pd.DataFrame:
-        """Get futures trades as DataFrame (from database)."""
+        """Get futures trades as DataFrame (from database).
+
+        Times are converted from EST (IB timezone) to Spanish timezone (Europe/Madrid).
+        """
         pnl_data = self.calculate_futures_pnl()
         matched_trades = pnl_data['matched_trades']
 
         data = []
         for trade in matched_trades:
-            # Format dates
-            buy_dt = trade['buy_date']
-            sell_dt = trade['sell_date']
-            buy_str = buy_dt.strftime('%d/%m %H:%M') if hasattr(buy_dt, 'strftime') else str(buy_dt)[5:16].replace('-', '/').replace(' ', ' ')
-            sell_str = sell_dt.strftime('%d/%m %H:%M') if hasattr(sell_dt, 'strftime') else str(sell_dt)[5:16].replace('-', '/').replace(' ', ' ')
+            # Convert from EST to Spanish timezone
+            buy_dt = convert_est_to_spain(trade['buy_date'])
+            sell_dt = convert_est_to_spain(trade['sell_date'])
+
+            if hasattr(buy_dt, 'strftime'):
+                buy_date_str = buy_dt.strftime('%Y/%m/%d')
+                buy_time_str = buy_dt.strftime('%H:%M')
+            else:
+                buy_date_str = str(buy_dt)[:10].replace('-', '/')
+                buy_time_str = str(buy_dt)[11:16] if len(str(buy_dt)) > 10 else '-'
+
+            if hasattr(sell_dt, 'strftime'):
+                sell_date_str = sell_dt.strftime('%Y/%m/%d')
+                sell_time_str = sell_dt.strftime('%H:%M')
+            else:
+                sell_date_str = str(sell_dt)[:10].replace('-', '/')
+                sell_time_str = str(sell_dt)[11:16] if len(str(sell_dt)) > 10 else '-'
 
             pnl = trade['pnl_usd']
             data.append({
                 'Contrato': trade['contract'],
                 'Tipo': trade['tipo'],
                 'Contratos': trade['contratos'],
-                'Entrada': buy_str,
+                'Fecha Entrada': buy_date_str,
+                'Hora Entrada': buy_time_str,
                 'Precio Entrada': f"${trade['buy_price']:,.2f}",
-                'Salida': sell_str,
+                'Fecha Salida': sell_date_str,
+                'Hora Salida': sell_time_str,
                 'Precio Salida': f"${trade['sell_price']:,.2f}",
                 'P&G': f"+${pnl:,.2f}" if pnl >= 0 else f"-${abs(pnl):,.2f}",
                 'Estado': trade['status'],
@@ -632,15 +668,24 @@ class PortfolioDataService:
 
         # Add open positions
         for pos in pnl_data['open_positions']:
-            pos_dt = pos['trade_date']
-            pos_str = pos_dt.strftime('%d/%m %H:%M') if hasattr(pos_dt, 'strftime') else str(pos_dt)[5:16].replace('-', '/').replace(' ', ' ')
+            # Convert from EST to Spanish timezone
+            pos_dt = convert_est_to_spain(pos['trade_date'])
+            if hasattr(pos_dt, 'strftime'):
+                pos_date_str = pos_dt.strftime('%Y/%m/%d')
+                pos_time_str = pos_dt.strftime('%H:%M')
+            else:
+                pos_date_str = str(pos_dt)[:10].replace('-', '/')
+                pos_time_str = str(pos_dt)[11:16] if len(str(pos_dt)) > 10 else '-'
+
             data.append({
                 'Contrato': pos['symbol'],
                 'Tipo': pos['tipo'],
                 'Contratos': pos['contratos'],
-                'Entrada': pos_str,
+                'Fecha Entrada': pos_date_str,
+                'Hora Entrada': pos_time_str,
                 'Precio Entrada': f"${pos['price']:,.2f}",
-                'Salida': '-',
+                'Fecha Salida': '-',
+                'Hora Salida': '-',
                 'Precio Salida': '-',
                 'P&G': '-',
                 'Estado': 'ABIERTA',
