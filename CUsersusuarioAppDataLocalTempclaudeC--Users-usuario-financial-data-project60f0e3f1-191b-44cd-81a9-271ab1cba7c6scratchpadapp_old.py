@@ -4,161 +4,24 @@ Run with: streamlit run web/app.py
 """
 
 import sys
-from pathlib import Path
-
-# Add project root to path BEFORE any other imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import streamlit as st
-
-# Page configuration - MUST be first Streamlit command
-st.set_page_config(
-    page_title="PatrimonioSmart",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# =====================================================
-# AUTHENTICATION CHECK - Must be FIRST before any content
-# =====================================================
-from src.config import get_settings
-settings = get_settings()
-
-def check_authentication():
-    """Check if user is authenticated when auth is enabled."""
-    if not settings.dashboard_auth_enabled:
-        return True
-
-    if not settings.dashboard_password:
-        return True
-
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    # Cargar imagen de fondo como base64
-    import base64
-    import os
-
-    bg_paths = [
-        "web/static/login_bg.png",
-        os.path.join(os.path.dirname(__file__), "static/login_bg.png"),
-        "/app/web/static/login_bg.png",
-    ]
-
-    bg_base64 = ""
-    for bg_path in bg_paths:
-        if os.path.exists(bg_path):
-            try:
-                with open(bg_path, "rb") as img_file:
-                    bg_base64 = base64.b64encode(img_file.read()).decode()
-                break
-            except Exception:
-                continue
-
-    # Página de login con imagen de fondo a pantalla completa
-    st.markdown(f"""
-    <style>
-        [data-testid="stSidebar"] {{display: none;}}
-        [data-testid="stHeader"] {{display: none;}}
-        .stApp {{
-            background-image: url("data:image/png;base64,{bg_base64}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            background-repeat: no-repeat;
-        }}
-        .stApp::before {{
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.3);
-            z-index: 0;
-        }}
-        .stApp > * {{
-            position: relative;
-            z-index: 1;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-
-    with col2:
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
-                Patrimonio<span style="color: #3a6a90;">Smart</span>
-            </div>
-            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
-                GESTIÓN PATRIMONIAL INTELIGENTE
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
-            Acceso Privado
-        </h2>
-        """, unsafe_allow_html=True)
-
-        with st.form("login_form"):
-            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
-            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            submit = st.form_submit_button("Entrar", use_container_width=True)
-
-            if submit:
-                valid_user = username.lower() == "carihuela"
-                valid_pass = password == settings.dashboard_password
-
-                if valid_user and valid_pass:
-                    st.session_state.authenticated = True
-                    st.session_state.username = username
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
-
-        st.markdown("""
-        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
-            <small>PatrimonioSmart 2026</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    return False
-
-# Check auth immediately
-if not check_authentication():
-    st.stop()
-
-# =====================================================
-# AUTHENTICATED - Load the rest of the app
-# =====================================================
 import logging
+from pathlib import Path
 import importlib
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from datetime import datetime, timedelta, date
-from fpdf import FPDF
-import io
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Force reload of portfolio_data to pick up changes
 import src.portfolio_data
 importlib.reload(src.portfolio_data)
 
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime, timedelta, date
+
+from src.config import get_settings
 from src.database import (
     get_db_manager, Symbol, Exchange, PriceHistory, DownloadLog,
     Fundamental, Portfolio, PortfolioHolding, DailyMetrics,
@@ -173,180 +36,13 @@ from src.portfolio_data import (
     ASSET_TYPE_MAP, CURRENCY_MAP, CURRENCY_SYMBOL_MAP,
 )
 
-def parse_db_date(date_value, default=None):
-    """Parse date from database - handles both PostgreSQL (date obj) and SQLite (string)."""
-    if date_value is None:
-        return default
-    if isinstance(date_value, datetime):
-        return date_value.date()
-    if isinstance(date_value, date):
-        return date_value
-    return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
-
-
-def sanitize_text_for_pdf(text: str) -> str:
-    """Remove special characters that fpdf can't handle."""
-    if not isinstance(text, str):
-        text = str(text)
-    # Replace accented characters
-    replacements = {
-        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-        'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U',
-        '€': 'EUR', '£': 'GBP', '¥': 'JPY',
-        '–': '-', '—': '-', ''': "'", ''': "'", '"': '"', '"': '"',
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    # Remove any remaining non-ASCII characters
-    return text.encode('ascii', 'ignore').decode('ascii')
-
-
-def generate_posicion_pdf(data: dict) -> bytes:
-    """Generate PDF report for Posición page."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Helper to sanitize all text
-    def s(text):
-        return sanitize_text_for_pdf(text)
-
-    # Title
-    pdf.set_font('Helvetica', 'B', 20)
-    pdf.set_text_color(36, 82, 122)  # #24527a
-    pdf.cell(0, 15, 'POSICION GLOBAL', ln=True, align='C')
-    pdf.set_text_color(0, 0, 0)
-
-    # Date
-    pdf.set_font('Helvetica', '', 10)
-    pdf.cell(0, 8, s(f"Fecha: {data.get('fecha', '')}"), ln=True, align='R')
-    pdf.ln(5)
-
-    # Resumen de Cartera
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.cell(0, 10, 'Resumen de Cartera', ln=True)
-    pdf.set_font('Helvetica', '', 11)
-
-    # Summary table
-    col_widths = [50, 45, 45, 50]
-    headers = ['Concepto', 'EUR', 'USD', '']
-
-    pdf.set_fill_color(36, 82, 122)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font('Helvetica', 'B', 10)
-    for i, h in enumerate(headers):
-        pdf.cell(col_widths[i], 8, h, 1, 0, 'C', fill=True)
-    pdf.ln()
-
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font('Helvetica', '', 10)
-
-    rows = [
-        ('Valor Inicial 31/12', data.get('valor_inicial_eur', ''), data.get('valor_inicial_usd', ''), ''),
-        ('Valor Actual', data.get('valor_actual_eur', ''), data.get('valor_actual_usd', ''), ''),
-        ('Ganancia Acumulada', data.get('ganancia_eur', ''), data.get('ganancia_usd', ''), ''),
-        ('Rentabilidad Acumulada', data.get('rent_eur', ''), data.get('rent_usd', ''), ''),
-        ('SPY Acumulado', '', '', data.get('spy_return', '')),
-        ('QQQ Acumulado', '', '', data.get('qqq_return', '')),
-    ]
-
-    for row in rows:
-        for i, val in enumerate(row):
-            # Color for gains/losses
-            if 'Ganancia' in row[0] or 'Rentabilidad' in row[0]:
-                if '+' in str(val):
-                    pdf.set_text_color(0, 150, 0)
-                elif '-' in str(val):
-                    pdf.set_text_color(200, 0, 0)
-            pdf.cell(col_widths[i], 7, s(str(val)), 1, 0, 'C')
-            pdf.set_text_color(0, 0, 0)
-        pdf.ln()
-
-    pdf.ln(8)
-
-    # Variación Diaria por Tipo de Activo
-    if 'variacion_diaria' in data and data['variacion_diaria']:
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.cell(0, 10, 'Variacion Diaria por Tipo de Activo', ln=True)
-        pdf.set_font('Helvetica', '', 10)
-
-        var_cols = [40, 35, 35, 35, 30]
-        var_headers = ['Tipo', data.get('fecha_prev', ''), data.get('fecha_last', ''), 'Diferencia', 'Var %']
-
-        pdf.set_fill_color(36, 82, 122)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 9)
-        for i, h in enumerate(var_headers):
-            pdf.cell(var_cols[i], 7, s(h), 1, 0, 'C', fill=True)
-        pdf.ln()
-
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', '', 9)
-
-        for row in data['variacion_diaria']:
-            is_total = row.get('Tipo') == 'TOTAL'
-            if is_total:
-                pdf.set_font('Helvetica', 'B', 9)
-                pdf.set_fill_color(180, 180, 180)
-
-            for i, key in enumerate(['Tipo', 'prev', 'last', 'diff', 'var_pct']):
-                val = str(row.get(key, ''))
-                if key in ['diff', 'var_pct']:
-                    if '+' in val:
-                        pdf.set_text_color(0, 150, 0)
-                    elif '-' in val:
-                        pdf.set_text_color(200, 0, 0)
-                pdf.cell(var_cols[i], 6, s(val), 1, 0, 'C', fill=is_total)
-                pdf.set_text_color(0, 0, 0)
-            pdf.ln()
-
-            if is_total:
-                pdf.set_font('Helvetica', '', 9)
-
-    pdf.ln(8)
-
-    # Rentabilidad Mensual
-    if 'rentabilidad_mensual' in data and data['rentabilidad_mensual']:
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.cell(0, 10, 'Rentabilidad Mensual', ln=True)
-        pdf.set_font('Helvetica', '', 9)
-
-        # Monthly table
-        months = ['Activo', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'TOTAL']
-        month_cols = [20] + [12] * 13
-
-        pdf.set_fill_color(36, 82, 122)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 7)
-        for i, m in enumerate(months):
-            pdf.cell(month_cols[i], 6, m, 1, 0, 'C', fill=True)
-        pdf.ln()
-
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', '', 7)
-
-        for row in data['rentabilidad_mensual']:
-            for i, m in enumerate(months):
-                val = str(row.get(m, ''))
-                if m != 'Activo' and val:
-                    if '+' in val:
-                        pdf.set_text_color(0, 150, 0)
-                    elif '-' in val:
-                        pdf.set_text_color(200, 0, 0)
-                pdf.cell(month_cols[i], 5, s(val), 1, 0, 'C')
-                pdf.set_text_color(0, 0, 0)
-            pdf.ln()
-
-    # Footer
-    pdf.ln(10)
-    pdf.set_font('Helvetica', 'I', 8)
-    pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 5, s(f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}"), ln=True, align='C')
-
-    return bytes(pdf.output())
-
+# Page configuration
+st.set_page_config(
+    page_title="Financial Data Dashboard",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
@@ -469,263 +165,127 @@ st.markdown("""
             padding: 1rem !important;
         }
     }
-
-    /* Remove Streamlit default top padding and header */
-    .stApp > header {
-        display: none !important;
-    }
-
-    .main .block-container {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-
-    /* Hide first element top margin */
-    .main .block-container > div:first-child {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Navigation wrapper - full width, no gaps */
-    .nav-wrapper {
-        background: #24527a;
-        margin-left: calc(-50vw + 50%);
-        margin-right: calc(-50vw + 50%);
-        margin-top: -120px;
-        padding: 160px calc(50vw - 50% + 1rem) 30px;
-        min-height: 150px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(36, 82, 122, 0.3);
-    }
-
-    /* GLOBAL: Remove ALL borders from ALL selectboxes */
-    .stSelectbox,
-    .stSelectbox *,
-    .stSelectbox div,
-    .stSelectbox input,
-    .stSelectbox [data-baseweb],
-    .stSelectbox [data-baseweb] * {
-        border: none !important;
-        border-width: 0 !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        border-left: none !important;
-        border-right: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        background-image: none !important;
-    }
-
-    /* Hide BaseWeb animated underline */
-    .stSelectbox [data-baseweb="select"]::after,
-    .stSelectbox [data-baseweb="select"]::before,
-    .stSelectbox [data-baseweb="select"] div::after,
-    .stSelectbox [data-baseweb="select"] div::before {
-        display: none !important;
-        content: none !important;
-        height: 0 !important;
-        border: none !important;
-        background: none !important;
-        transform: none !important;
-    }
-
-    /* Ensure app starts at very top */
-    .stApp {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Remove any top spacing from main container */
-    [data-testid="stAppViewContainer"] {
-        padding-top: 0 !important;
-    }
-
-    [data-testid="stVerticalBlock"] > div:first-child {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-
-    /* Remove any borders/lines from navigation area */
-    [data-testid="stHorizontalBlock"]:first-of-type,
-    [data-testid="stHorizontalBlock"]:first-of-type *,
-    [data-testid="stHorizontalBlock"]:first-of-type div,
-    [data-testid="stHorizontalBlock"]:first-of-type span,
-    [data-testid="stHorizontalBlock"]:first-of-type input {
-        border: none !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        border-color: #24527a !important;
-        box-shadow: none !important;
-        outline: none !important;
-        text-decoration: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type::before,
-    [data-testid="stHorizontalBlock"]:first-of-type::after,
-    [data-testid="stHorizontalBlock"]:first-of-type *::before,
-    [data-testid="stHorizontalBlock"]:first-of-type *::after {
-        display: none !important;
-        border: none !important;
-    }
-
-    /* Hide any hr elements */
-    .nav-wrapper hr,
-    [data-testid="stHorizontalBlock"]:first-of-type hr {
-        display: none !important;
-    }
-
-    /* Remove bottom border from selectbox input */
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"],
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] * {
-        border: none !important;
-        border-color: #24527a !important;
-        box-shadow: none !important;
-    }
-
-    /* Force hide underline on selectbox - BaseWeb component */
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div,
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div {
-        border-bottom: none !important;
-        border-bottom-width: 0 !important;
-        background-color: transparent !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div::after,
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div::after {
-        display: none !important;
-        background: none !important;
-        border: none !important;
-        height: 0 !important;
-    }
-
-    /* Target the specific underline element */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="indicatorContainer"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="borderBottom"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="underline"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="Underline"] {
-        display: none !important;
-        border: none !important;
-        background: none !important;
-    }
-
-    /* Override BaseWeb control border */
-    [data-testid="stHorizontalBlock"]:first-of-type [class*="control"] {
-        border: none !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
-    }
-
-    /* Title (POSICIÓN GLOBAL) - subir hacia arriba */
-    .main h1 {
-        margin-top: -90px !important;
-    }
-
-    /* Style selectboxes - positioned with margin-top */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox {
-        margin-top: -135px;
-        position: relative;
-    }
-
-    /* Cover the line above selectbox with background color */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox::before {
-        content: "";
-        position: absolute;
-        top: -30px;
-        left: -20px;
-        right: -20px;
-        height: 35px;
-        background-color: #24527a;
-        z-index: 9999;
-    }
-
-    /* Force remove ALL borders and lines from selectbox */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox div[data-baseweb] div {
-        border: 0 !important;
-        border-width: 0 !important;
-        border-style: none !important;
-        border-color: transparent !important;
-        background-image: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox input {
-        border: 0 !important;
-        border-bottom: 0 !important;
-        background: transparent !important;
-        caret-color: transparent !important;
-        color: transparent !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox,
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox * {
-        border: none !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div {
-        background-color: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        min-height: 20px !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div:hover {
-        background-color: transparent !important;
-    }
-
-    /* Text color white in selectboxes */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div > div {
-        color: white !important;
-        font-weight: 500 !important;
-    }
-
-    /* Arrow color white */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox svg {
-        fill: white !important;
-    }
-
-    /* Hide selectbox labels */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox label {
-        display: none !important;
-    }
-
-    /* Logo in nav */
-    [data-testid="stHorizontalBlock"]:first-of-type .stImage img {
-        margin-top: -140px;
-    }
-
-    /* Logout button style */
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton {
-        margin-top: -120px;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button {
-        background-color: transparent !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 0 !important;
-        min-height: 20px !important;
-        font-weight: 500 !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button:hover {
-        background-color: transparent !important;
-    }
-
-    /* Hide sidebar */
-    [data-testid="stSidebar"] {
-        display: none !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
+# Logo en el sidebar
+with st.sidebar:
+    st.image("web/static/logo_carihuela.png", use_container_width=True)
+
 # Initialize components
+settings = get_settings()
 db = get_db_manager()
 analyzer = AIAnalyzer()
+
+
+def check_authentication():
+    """Check if user is authenticated when auth is enabled."""
+    if not settings.dashboard_auth_enabled:
+        return True
+
+    if not settings.dashboard_password:
+        st.warning("⚠️ Autenticación habilitada pero no hay contraseña configurada. Establece DASHBOARD_PASSWORD en .env")
+        return True
+
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    # Cargar imagen de fondo como base64
+    import base64
+    with open("web/static/financial_bg.jpg", "rb") as img_file:
+        bg_base64 = base64.b64encode(img_file.read()).decode()
+
+    # Página de login con imagen de fondo a pantalla completa
+    st.markdown(f"""
+    <style>
+        [data-testid="stSidebar"] {{display: none;}}
+        [data-testid="stHeader"] {{display: none;}}
+        .stApp {{
+            background-image: url("data:image/jpeg;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }}
+        /* Overlay oscuro para legibilidad */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 0;
+        }}
+        /* Ocultar elementos de Streamlit innecesarios */
+        footer {{display: none;}}
+        #MainMenu {{display: none;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Contenedor centrado para el login
+    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        # Caja de login con fondo semitransparente
+        st.markdown("""
+        <div style="background: rgba(0, 20, 40, 0.85); border-radius: 20px; padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.1);">
+        """, unsafe_allow_html=True)
+
+        # Logo
+        st.image("web/static/logo_carihuela.png", use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Título
+        st.markdown("""
+        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
+            Acceso al Portal
+        </h2>
+        """, unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
+            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("Entrar", use_container_width=True)
+
+            if submit:
+                # Verificar credenciales
+                valid_user = username.lower() in ["admin", "carihuela", "inversiones"]
+                valid_pass = password == settings.dashboard_password
+
+                if valid_user and valid_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
+            <small>La Carihuela Inversiones © 2026</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    return False
+
+
+# Check authentication before showing any content
+if not check_authentication():
+    st.stop()
 technical = TechnicalAnalyzer()
 yahoo_client = YahooFinanceClient()
 metrics_calc = MetricsCalculator()
@@ -800,12 +360,10 @@ def calculate_all_trading_days():
             ORDER BY fecha
         """), {'today': today.isoformat()})
         for row in rows.fetchall():
-            # Convert to date object (PostgreSQL may return datetime)
+            # Convert string date to date object if needed
             fecha = row[0]
             if isinstance(fecha, str):
                 fecha = datetime.strptime(fecha, '%Y-%m-%d').date()
-            elif isinstance(fecha, datetime):
-                fecha = fecha.date()
             result[fecha] = row[1]
     return result
 
@@ -995,135 +553,53 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Elegant Horizontal Navigation with Logo
+# Sidebar
 # =============================================================================
 
-# Define page groups for dropdown menus
-page_groups = {
-    "Cartera": ["Posición", "Composición", "Acciones", "ETFs", "Futuros"],
-    "Estrategias": ["Estacionalidad", "Screener", "Symbol Analysis"],
-    "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
-    "Indicadores": ["Indicadores"],
-    "Mercado": ["VIX"],
-    "Asistente IA": ["Asistente IA"],
-    "Noticias": ["Noticias"]
-}
+st.sidebar.title("Financial Data Dashboard")
 
-# Initialize session state for navigation
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Posición"
-if "current_group" not in st.session_state:
-    st.session_state.current_group = "Cartera"
+# Logout button when auth is enabled
+if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+    if st.sidebar.button("🚪 Cerrar sesión"):
+        st.session_state.authenticated = False
+        st.rerun()
 
-# Navigation bar HTML wrapper
-st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
+st.sidebar.markdown("---")
 
-# Create columns: Logo + 7 menus + spacer
-logo_col, m1, m2, m3, m4, m5, m6, m7, spacer = st.columns([1.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 2.6])
+st.sidebar.markdown("**Data Source:** Yahoo Finance")
 
-# Logo
-with logo_col:
-    import os
-    logo_paths = [
-        "web/static/logo_carihuela_final.jpg",
-        os.path.join(os.path.dirname(__file__), "static/logo_carihuela_final.jpg"),
-        "/app/web/static/logo_carihuela_final.jpg",
-    ]
-    for logo_path in logo_paths:
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=320)
-            break
+# Navegación unificada
+all_pages = [
+    "Posición", "Composición", "Acciones", "Futuros y ETF",
+    "Asistente IA", "Backtesting", "Screener",
+    "Symbol Analysis", "Data Management", "Download Status",
+    "---",  # Separador visual
+    "BBDD", "Pantalla"
+]
 
-# Menu dropdowns
-with m1:
-    sel = st.selectbox("Cartera", ["Cartera"] + page_groups["Cartera"],
-        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
-        key="nav_cartera", label_visibility="collapsed")
-    if sel and sel not in ["Cartera"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Cartera"
+# Filtrar separador para el radio
+page_options = [p for p in all_pages if p != "---"]
 
-with m2:
-    sel = st.selectbox("Estrategias", ["Estrategias"] + page_groups["Estrategias"],
-        index=0 if st.session_state.current_group != "Estrategias" else page_groups["Estrategias"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Estrategias"] else 0,
-        key="nav_estrategias", label_visibility="collapsed")
-    if sel and sel not in ["Estrategias"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Estrategias"
+page = st.sidebar.radio(
+    "Navigation",
+    page_options,
+    label_visibility="collapsed"
+)
 
-with m3:
-    sel = st.selectbox("Gráficos", ["Gráficos"] + page_groups["Gráficos"],
-        index=0 if st.session_state.current_group != "Gráficos" else page_groups["Gráficos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Gráficos"] else 0,
-        key="nav_graficos", label_visibility="collapsed")
-    if sel and sel not in ["Gráficos"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Gráficos"
-
-with m4:
-    sel = st.selectbox("Indicadores", ["Indicadores"] + page_groups["Indicadores"],
-        index=0 if st.session_state.current_group != "Indicadores" else page_groups["Indicadores"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Indicadores"] else 0,
-        key="nav_indicadores", label_visibility="collapsed")
-    if sel and sel not in ["Indicadores"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Indicadores"
-
-with m5:
-    sel = st.selectbox("Mercado", ["Mercado"] + page_groups["Mercado"],
-        index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
-        key="nav_mercado", label_visibility="collapsed")
-    if sel and sel not in ["Mercado"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Mercado"
-
-with m6:
-    sel = st.selectbox("Asistente IA", ["Asistente IA"] + page_groups["Asistente IA"],
-        index=0 if st.session_state.current_group != "Asistente IA" else page_groups["Asistente IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Asistente IA"] else 0,
-        key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["Asistente IA"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Asistente IA"
-
-with m7:
-    sel = st.selectbox("Noticias", ["Noticias"] + page_groups["Noticias"],
-        index=0 if st.session_state.current_group != "Noticias" else page_groups["Noticias"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Noticias"] else 0,
-        key="nav_noticias", label_visibility="collapsed")
-    if sel and sel not in ["Noticias"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Noticias"
-
-# Logout button aligned with menus
-with spacer:
-    spacer_left, spacer_right = st.columns([5, 1])
-    with spacer_right:
-        if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-            if st.button("Cerrar Sesión", key="logout_nav"):
-                st.session_state.authenticated = False
-                st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Get current page
-page = st.session_state.current_page
-
-# Submenú for Backtesting
-backtesting_option = None
-if page == "Estacionalidad":
-    bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
-    with bt_col1:
-        backtesting_option = st.selectbox(
-            "Tipo de análisis",
-            ["Estrategia Mensual", "Portfolio Backtest"],
-            key="backtesting_type"
-        )
-
-st.markdown("---")
+# Submenú para Backtesting
+if page == "Backtesting":
+    backtesting_option = st.sidebar.radio(
+        "Tipo de Backtesting",
+        ["Estrategia Mensual", "Portfolio Backtest"],
+        label_visibility="visible"
+    )
 
 # =============================================================================
 # Main Content
 # =============================================================================
 
 if page == "Posición":
-    st.title("POSICIÓN GLOBAL")
+    st.title("CARTERA LA CARIHUELA")
 
     # =========================================================================
     # OBTENER VALORES DESDE TABLA POSICION (BD)
@@ -1137,17 +613,17 @@ if page == "Posición":
 
         # Obtener última fecha disponible en posicion (día anterior = último con datos)
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, date(2026, 1, 28))
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date(2026, 1, 28)
 
         # Obtener fecha anterior para comparación diaria
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < :latest
-        """), {'latest': latest_date})
-        prev_date_val = result.fetchone()[0]
-        prev_date = parse_db_date(prev_date_val, latest_date)
+        """), {'latest': latest_date_str})
+        prev_date_str = result.fetchone()[0]
+        prev_date = datetime.strptime(prev_date_str, '%Y-%m-%d').date() if prev_date_str else latest_date
 
         # Valor inicial 31/12/2025 desde tabla posicion
         result = session.execute(text("""
@@ -1232,9 +708,7 @@ if page == "Posición":
         .usd-value {{ font-size: 20px; display: block; }}
         .fx-rate {{ font-size: 11px; color: #808080; }}
         .green {{ color: #00cc00; }}
-        .red {{ color: #ff4444; }}
-        .benchmark-green {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
-        .benchmark-red {{ font-size: 22px; font-weight: bold; color: #ff4444; }}
+        .benchmark {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
     </style>
     <table class="portfolio-table">
         <tr>
@@ -1257,15 +731,15 @@ if page == "Posición":
                 <span class="fx-rate">(EUR/USD {eur_usd_current})</span>
             </td>
             <td>
-                <span class="eur-value {'green' if return_eur >= 0 else 'red'}">{format_eur(return_eur, show_sign=True)}</span>
-                <span class="usd-value {'green' if return_usd >= 0 else 'red'}">{format_usd(return_usd, show_sign=True)}</span>
+                <span class="eur-value green">{format_eur(return_eur, show_sign=True)}</span>
+                <span class="usd-value green">{format_usd(return_usd, show_sign=True)}</span>
             </td>
             <td>
-                <span class="eur-value {'green' if return_pct >= 0 else 'red'}">{format_pct(return_pct)}</span>
-                <span class="usd-value {'green' if return_pct_usd >= 0 else 'red'}">{format_pct(return_pct_usd)}</span>
+                <span class="eur-value green">{format_pct(return_pct)}</span>
+                <span class="usd-value green">{format_pct(return_pct_usd)}</span>
             </td>
-            <td><span class="{'benchmark-green' if spy_return >= 0 else 'benchmark-red'}">{format_pct(spy_return)}</span></td>
-            <td><span class="{'benchmark-green' if qqq_return >= 0 else 'benchmark-red'}">{format_pct(qqq_return)}</span></td>
+            <td><span class="benchmark">{format_pct(spy_return)}</span></td>
+            <td><span class="benchmark">{format_pct(qqq_return)}</span></td>
         </tr>
     </table>
     """, unsafe_allow_html=True)
@@ -1595,223 +1069,6 @@ if page == "Posición":
     # Display table
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
 
-    # =========================================================================
-    # RENTABILIDAD MENSUAL
-    # =========================================================================
-    st.markdown("---")
-    st.subheader("Rentabilidad Mensual")
-
-    # Calculate monthly returns for Portfolio, SPY, and QQQ
-    months_data = {}
-    current_year = date.today().year
-    current_month = date.today().month
-
-    # Get first day value for each month (for monthly returns calculation)
-    for month in range(1, 13):
-        month_name = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]
-
-        # Skip future months (after current month)
-        if month > current_month:
-            continue
-
-        # Find first and last trading day of the month
-        month_dates = [d for d in trading_dates_from_db
-                       if d.year == current_year and d.month == month and d not in excluded_dates]
-
-        if not month_dates:
-            continue
-
-        first_day = min(month_dates)
-        # For current month: use latest available date (current position)
-        # For past months: use last day of that month
-        last_day = max(month_dates)
-
-        # Get values at start and end of month
-        if month == 1:
-            # January: compare to Dec 31
-            start_val = all_day_totals.get(date(2025, 12, 31), 0)
-        else:
-            # Other months: get last day of previous month
-            prev_month_dates = [d for d in trading_dates_from_db
-                               if d.year == current_year and d.month == month - 1 and d not in excluded_dates]
-            if prev_month_dates:
-                start_val = all_day_totals.get(max(prev_month_dates), 0)
-            else:
-                start_val = all_day_totals.get(date(2025, 12, 31), 0)
-
-        end_val = all_day_totals.get(last_day, 0)
-
-        # Portfolio monthly return
-        if start_val > 0:
-            port_monthly_ret = ((end_val / start_val) - 1) * 100
-        else:
-            port_monthly_ret = 0
-
-        # SPY monthly return
-        spy_monthly_ret = 0
-        if not spy_prices.empty:
-            spy_month = spy_prices[spy_prices.index.month == month]
-            if not spy_month.empty:
-                if month == 1:
-                    spy_start = spy_prices['close'].iloc[0]
-                else:
-                    spy_prev = spy_prices[spy_prices.index.month == month - 1]
-                    spy_start = spy_prev['close'].iloc[-1] if not spy_prev.empty else spy_prices['close'].iloc[0]
-                spy_end = spy_month['close'].iloc[-1]
-                if spy_start > 0:
-                    spy_monthly_ret = ((spy_end / spy_start) - 1) * 100
-
-        # QQQ monthly return
-        qqq_monthly_ret = 0
-        if not qqq_prices.empty:
-            qqq_month = qqq_prices[qqq_prices.index.month == month]
-            if not qqq_month.empty:
-                if month == 1:
-                    qqq_start = qqq_prices['close'].iloc[0]
-                else:
-                    qqq_prev = qqq_prices[qqq_prices.index.month == month - 1]
-                    qqq_start = qqq_prev['close'].iloc[-1] if not qqq_prev.empty else qqq_prices['close'].iloc[0]
-                qqq_end = qqq_month['close'].iloc[-1]
-                if qqq_start > 0:
-                    qqq_monthly_ret = ((qqq_end / qqq_start) - 1) * 100
-
-        months_data[month_name] = {
-            'Cartera': port_monthly_ret,
-            'SPY': spy_monthly_ret,
-            'QQQ': qqq_monthly_ret
-        }
-
-    # Build monthly returns table (vertical: assets as rows, months as columns)
-    all_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-
-    # Build table with Activo as first column, then all months, then TOTAL
-    monthly_table = {'Activo': ['Cartera', 'SPY', 'QQQ']}
-
-    for month_name in all_months:
-        if month_name in months_data:
-            monthly_table[month_name] = [
-                months_data[month_name]['Cartera'],
-                months_data[month_name]['SPY'],
-                months_data[month_name]['QQQ']
-            ]
-        else:
-            # Month without data yet
-            monthly_table[month_name] = [None, None, None]
-
-    # Add TOTAL column
-    monthly_table['TOTAL'] = [return_pct, spy_return, qqq_return]
-
-    monthly_df = pd.DataFrame(monthly_table)
-
-    # Replace None/NaN with empty string for display
-    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
-    for col in pct_columns:
-        monthly_df[col] = monthly_df[col].apply(
-            lambda x: '' if x is None or (isinstance(x, float) and pd.isna(x)) else x
-        )
-
-    # Style the table
-    def color_monthly_pct(val):
-        if val != '' and isinstance(val, (int, float)):
-            if val > 0:
-                return 'background-color: #2E7D32; color: white'
-            elif val < 0:
-                return 'background-color: #C62828; color: white'
-        return ''
-
-    def format_pct_monthly(val):
-        if val == '' or val is None:
-            return ''
-        try:
-            return f'{float(val):+.2f}%'
-        except (ValueError, TypeError):
-            return ''
-
-    format_dict = {col: format_pct_monthly for col in pct_columns}
-
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict)
-
-    st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
-
-    # =========================================================================
-    # PDF EXPORT BUTTON
-    # =========================================================================
-    st.markdown("---")
-
-    # Prepare data for PDF
-    def format_eur_pdf(value, show_sign=False):
-        if show_sign:
-            sign = "+" if value >= 0 else ""
-            return f"{sign}{value:,.0f} EUR".replace(",", ".")
-        return f"{value:,.0f} EUR".replace(",", ".")
-
-    def format_usd_pdf(value, show_sign=False):
-        if show_sign:
-            sign = "+" if value >= 0 else ""
-            return f"{sign}{value:,.0f} USD".replace(",", ".")
-        return f"{value:,.0f} USD".replace(",", ".")
-
-    def format_pct_pdf(value):
-        sign = "+" if value >= 0 else ""
-        return f"{sign}{value:.2f}%"
-
-    # Collect variación diaria data
-    variacion_data = []
-    if 'comparison_data' in dir() and comparison_data:
-        for row in comparison_data:
-            variacion_data.append({
-                'Tipo': row.get('Tipo', ''),
-                'prev': row.get(f'{day_prev.strftime("%d/%m")}', ''),
-                'last': row.get(f'{day_last.strftime("%d/%m")}', ''),
-                'diff': row.get('Diferencia', ''),
-                'var_pct': row.get('Var %', '')
-            })
-
-    # Collect monthly returns data
-    monthly_data = []
-    for _, row in monthly_df.iterrows():
-        row_dict = {'Activo': row.get('Activo', '')}
-        for col in monthly_df.columns:
-            if col != 'Activo':
-                val = row.get(col)
-                if pd.notna(val) and val is not None:
-                    try:
-                        row_dict[col] = f"{float(val):+.2f}%"
-                    except:
-                        row_dict[col] = ''
-                else:
-                    row_dict[col] = ''
-        monthly_data.append(row_dict)
-
-    pdf_data = {
-        'fecha': latest_date.strftime('%d/%m/%Y') if latest_date else '',
-        'fecha_prev': day_prev.strftime('%d/%m') if 'day_prev' in dir() and day_prev else '',
-        'fecha_last': day_last.strftime('%d/%m') if 'day_last' in dir() and day_last else '',
-        'valor_inicial_eur': format_eur_pdf(initial_value),
-        'valor_inicial_usd': format_usd_pdf(initial_value * eur_usd_31dic),
-        'valor_actual_eur': format_eur_pdf(current_value),
-        'valor_actual_usd': format_usd_pdf(current_value * eur_usd_current),
-        'ganancia_eur': format_eur_pdf(return_eur, show_sign=True),
-        'ganancia_usd': format_usd_pdf(return_usd, show_sign=True),
-        'rent_eur': format_pct_pdf(return_pct),
-        'rent_usd': format_pct_pdf(return_pct_usd),
-        'spy_return': format_pct_pdf(spy_return),
-        'qqq_return': format_pct_pdf(qqq_return),
-        'variacion_diaria': variacion_data,
-        'rentabilidad_mensual': monthly_data
-    }
-
-    pdf_bytes = generate_posicion_pdf(pdf_data)
-
-    st.download_button(
-        label="Descargar PDF",
-        data=pdf_bytes,
-        file_name=f"posicion_global_{latest_date.strftime('%Y%m%d') if latest_date else 'hoy'}.pdf",
-        mime="application/pdf",
-        key="download_pdf_posicion"
-    )
-
 
 elif page == "Composición":
     st.title("COMPOSICIÓN DE CARTERA")
@@ -1820,10 +1077,10 @@ elif page == "Composición":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, date.today())
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
 
     # Get account totals calculated dynamically from holding_diario + prices
     account_totals = get_account_totals_from_db(latest_date)
@@ -2118,10 +1375,10 @@ elif page == "Acciones":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, today)
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else today
 
     # EUR/USD exchange rates from service
     eur_usd_31dic = portfolio_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
@@ -2184,8 +1441,6 @@ elif page == "Acciones":
 
             if isinstance(fecha_compra, str):
                 fecha_compra = datetime.strptime(fecha_compra, '%Y-%m-%d').date()
-            elif isinstance(fecha_compra, datetime):
-                fecha_compra = fecha_compra.date()
 
             # Get symbol for price lookup
             if '.' in ticker_full:
@@ -2383,8 +1638,6 @@ elif page == "Acciones":
                 compra_info = precios_compra.get(symbol, {})
                 precio_compra_real = compra_info.get('precio')
                 fecha_compra = compra_info.get('fecha')
-                if isinstance(fecha_compra, datetime):
-                    fecha_compra = fecha_compra.date()
 
                 # Calcular rentabilidad histórica (desde compra)
                 if precio_compra_real and precio_compra_real > 0:
@@ -2400,7 +1653,7 @@ elif page == "Acciones":
                 # Solo añadir a periodo si tenia precio a 31/12
                 if precio_31_12_db:
                     # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
-                    if fecha_compra and fecha_compra > date(2025, 12, 31):
+                    if fecha_compra and fecha_compra > '2025-12-31':
                         precio_31_12_display = '-'
                     else:
                         precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
@@ -2678,8 +1931,8 @@ elif page == "Acciones":
                 st.info("No hay posiciones cerradas")
 
 
-elif page == "Futuros":
-    st.title("FUTUROS")
+elif page == "Futuros y ETF":
+    st.title("FUTUROS Y ETF")
 
     # Obtener datos de futuros desde la base de datos
     futures_summary = portfolio_service.get_futures_summary()
@@ -2695,269 +1948,55 @@ elif page == "Futuros":
     trades_cerradas = all_trades[all_trades['Estado'] == 'Cerrada'] if not all_trades.empty else all_trades
     total_ops = len(trades_cerradas)
 
-    # Función para calcular estadísticas de un conjunto de trades
-    def calc_stats(trades_df):
-        ops_gan, ops_perd = 0, 0
-        pnl_vals, gains, losses = [], 0, 0
-        for _, row in trades_df.iterrows():
-            pnl_str = row['P&G']
-            if isinstance(pnl_str, str) and pnl_str != '-':
-                pnl_clean = pnl_str.replace('$', '').replace(',', '').replace('+', '')
-                try:
-                    pnl_val = float(pnl_clean)
-                    pnl_vals.append(pnl_val)
-                    if pnl_val >= 0:
-                        ops_gan += 1
-                        gains += pnl_val
-                    else:
-                        ops_perd += 1
-                        losses += abs(pnl_val)
-                except:
-                    pass
-        total = len(trades_df)
-        pct_gan = (ops_gan / total * 100) if total > 0 else 0
-        pf = gains / losses if losses > 0 else float('inf')
-        avg_pnl = sum(pnl_vals) / len(pnl_vals) if pnl_vals else 0
-        return {'total': total, 'ganadoras': ops_gan, 'perdedoras': ops_perd,
-                'pct_gan': pct_gan, 'profit_factor': pf, 'avg_pnl': avg_pnl, 'total_pnl': sum(pnl_vals)}
-
-    # Estadísticas globales
-    stats_global = calc_stats(trades_cerradas)
-    eur_usd_rate = portfolio_service.get_eur_usd_rate(date.today())
-
-    import numpy as np
+    # Contar ganadoras/perdedoras y calcular P&L numérico
+    ops_ganadoras = 0
+    ops_perdedoras = 0
     pnl_values = []
+    total_gains = 0
+    total_losses = 0
+
     for _, row in trades_cerradas.iterrows():
         pnl_str = row['P&G']
         if isinstance(pnl_str, str) and pnl_str != '-':
+            pnl_clean = pnl_str.replace('$', '').replace(',', '').replace('+', '')
             try:
-                pnl_values.append(float(pnl_str.replace('$', '').replace(',', '').replace('+', '')))
-            except:
-                pass
+                pnl_val = float(pnl_clean)
+                pnl_values.append(pnl_val)
+                if pnl_val >= 0:
+                    ops_ganadoras += 1
+                    total_gains += pnl_val
+                else:
+                    ops_perdedoras += 1
+                    total_losses += abs(pnl_val)
+            except (ValueError, TypeError) as e:
+                logging.debug(f"Could not parse P&L value '{pnl_clean}': {e}")
+
+    pct_ganadoras = (ops_ganadoras / total_ops * 100) if total_ops > 0 else 0
+    profit_factor = total_gains / total_losses if total_losses > 0 else float('inf')
+    ganancia_media_usd = sum(pnl_values) / len(pnl_values) if pnl_values else 0
+    eur_usd_rate = portfolio_service.get_eur_usd_rate(date.today())
+    ganancia_media_eur = ganancia_media_usd / eur_usd_rate
+
+    import numpy as np
     if len(pnl_values) > 1:
-        sqn = (np.sqrt(len(pnl_values)) * np.mean(pnl_values) / np.std(pnl_values)) if np.std(pnl_values) > 0 else 0
+        avg_pnl = np.mean(pnl_values)
+        std_pnl = np.std(pnl_values)
+        sqn = (np.sqrt(len(pnl_values)) * avg_pnl / std_pnl) if std_pnl > 0 else 0
     else:
         sqn = 0
 
-    # === ESTADÍSTICAS GLOBALES ===
-    st.subheader("Estadísticas Globales")
+    # Estadísticas (debajo del título)
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Ops. Positivas", f"{stats_global['ganadoras']} ({stats_global['pct_gan']:.1f}%)")
-    col2.metric("Ops. Negativas", f"{stats_global['perdedoras']} ({100-stats_global['pct_gan']:.1f}%)")
-    col3.metric("Total Operaciones", f"{stats_global['total']}")
-    col4.metric("Profit Factor", f"{stats_global['profit_factor']:.2f}")
+    col1.metric("Ops. Positivas", f"{ops_ganadoras} ({pct_ganadoras:.1f}%)")
+    col2.metric("Ops. Negativas", f"{ops_perdedoras} ({100-pct_ganadoras:.1f}%)")
+    col3.metric("Total Operaciones", f"{total_ops}")
+    col4.metric("Profit Factor", f"{profit_factor:.2f}")
 
     col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Ganancia Media USD", f"${stats_global['avg_pnl']:,.2f}".replace(",", "."))
-    col6.metric("Ganancia Media EUR", f"{stats_global['avg_pnl']/eur_usd_rate:,.2f} €".replace(",", "."))
+    col5.metric("Ganancia Media USD", f"${ganancia_media_usd:,.2f}".replace(",", "."))
+    col6.metric("Ganancia Media EUR", f"{ganancia_media_eur:,.2f} €".replace(",", "."))
     col7.metric("SQN", f"{sqn:.2f}")
     col8.metric("Posición Abierta", f"{futures_open_position['contracts']} contratos")
-
-    st.markdown("---")
-
-    # === ESTADÍSTICAS POR TIPO (LARGO/CORTO) ===
-    st.subheader("Estadísticas por Tipo")
-    trades_largos = trades_cerradas[trades_cerradas['Tipo'] == 'Largo']
-    trades_cortos = trades_cerradas[trades_cerradas['Tipo'] == 'Corto']
-    stats_largos = calc_stats(trades_largos)
-    stats_cortos = calc_stats(trades_cortos)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**LARGOS**")
-        st.write(f"Operaciones: {stats_largos['total']} ({stats_largos['ganadoras']}W / {stats_largos['perdedoras']}L)")
-        st.write(f"Win Rate: {stats_largos['pct_gan']:.1f}%")
-        st.write(f"Profit Factor: {stats_largos['profit_factor']:.2f}")
-        st.write(f"P&L Total: ${stats_largos['total_pnl']:,.2f}".replace(",", "."))
-    with col2:
-        st.markdown("**CORTOS**")
-        st.write(f"Operaciones: {stats_cortos['total']} ({stats_cortos['ganadoras']}W / {stats_cortos['perdedoras']}L)")
-        st.write(f"Win Rate: {stats_cortos['pct_gan']:.1f}%")
-        st.write(f"Profit Factor: {stats_cortos['profit_factor']:.2f}")
-        st.write(f"P&L Total: ${stats_cortos['total_pnl']:,.2f}".replace(",", "."))
-
-    st.markdown("---")
-
-    # === ESTADÍSTICAS POR DÍA DE LA SEMANA ===
-    col_dia, col_hora = st.columns(2)
-
-    with col_dia:
-        st.subheader("Por Día de la Semana")
-        if not trades_cerradas.empty and 'Fecha Entrada' in trades_cerradas.columns:
-            trades_cerradas_copy = trades_cerradas.copy()
-            # Convertir fecha a día de la semana
-            dias_semana = {0: 'Lunes', 1: 'Martes', 2: 'Miércoles', 3: 'Jueves', 4: 'Viernes', 5: 'Sábado', 6: 'Domingo'}
-
-            def get_dia_semana(fecha_str):
-                try:
-                    from datetime import datetime
-                    dt = datetime.strptime(fecha_str, '%d/%m/%Y')
-                    return dias_semana[dt.weekday()]
-                except:
-                    return '-'
-
-            trades_cerradas_copy['DiaSemana'] = trades_cerradas_copy['Fecha Entrada'].apply(get_dia_semana)
-
-            dia_stats = []
-            for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']:
-                trades_dia = trades_cerradas_copy[trades_cerradas_copy['DiaSemana'] == dia]
-                if len(trades_dia) > 0:
-                    stats_d = calc_stats(trades_dia)
-                    dia_stats.append({
-                        'Día': dia,
-                        'Ops': stats_d['total'],
-                        'W/L': f"{stats_d['ganadoras']}/{stats_d['perdedoras']}",
-                        'Win%': f"{stats_d['pct_gan']:.0f}%",
-                        'PF': f"{stats_d['profit_factor']:.2f}" if stats_d['profit_factor'] != float('inf') else '∞',
-                        'P&L': f"${stats_d['total_pnl']:,.0f}".replace(",", ".")
-                    })
-
-            if dia_stats:
-                dia_df = pd.DataFrame(dia_stats)
-                st.dataframe(dia_df, use_container_width=True, hide_index=True)
-
-    with col_hora:
-        st.subheader("Por Hora de Entrada")
-        if not trades_cerradas.empty and 'Hora Entrada' in trades_cerradas.columns:
-            trades_cerradas_copy = trades_cerradas.copy()
-            trades_cerradas_copy['HoraEnt'] = trades_cerradas_copy['Hora Entrada'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
-
-            hora_stats = []
-            for hora in sorted(trades_cerradas_copy['HoraEnt'].unique()):
-                if hora != '-':
-                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['HoraEnt'] == hora]
-                    stats_h = calc_stats(trades_hora)
-                    hora_stats.append({
-                        'Hora': f"{hora}:00",
-                        'Ops': stats_h['total'],
-                        'W/L': f"{stats_h['ganadoras']}/{stats_h['perdedoras']}",
-                        'Win%': f"{stats_h['pct_gan']:.0f}%",
-                        'PF': f"{stats_h['profit_factor']:.2f}" if stats_h['profit_factor'] != float('inf') else '∞',
-                        'P&L': f"${stats_h['total_pnl']:,.0f}".replace(",", ".")
-                    })
-
-            if hora_stats:
-                hora_df = pd.DataFrame(hora_stats)
-                st.dataframe(hora_df, use_container_width=True, hide_index=True)
-
-    # === ESTADÍSTICAS POR HORA DE SALIDA Y DURACIÓN ===
-    col_salida, col_duracion = st.columns(2)
-
-    with col_salida:
-        st.subheader("Por Hora de Salida")
-        if not trades_cerradas.empty and 'Hora Salida' in trades_cerradas.columns:
-            trades_cerradas_copy = trades_cerradas.copy()
-            trades_cerradas_copy['HoraSal'] = trades_cerradas_copy['Hora Salida'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
-
-            hora_sal_stats = []
-            for hora in sorted(trades_cerradas_copy['HoraSal'].unique()):
-                if hora != '-':
-                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['HoraSal'] == hora]
-                    stats_h = calc_stats(trades_hora)
-                    hora_sal_stats.append({
-                        'Hora': f"{hora}:00",
-                        'Ops': stats_h['total'],
-                        'W/L': f"{stats_h['ganadoras']}/{stats_h['perdedoras']}",
-                        'Win%': f"{stats_h['pct_gan']:.0f}%",
-                        'PF': f"{stats_h['profit_factor']:.2f}" if stats_h['profit_factor'] != float('inf') else '∞',
-                        'P&L': f"${stats_h['total_pnl']:,.0f}".replace(",", ".")
-                    })
-
-            if hora_sal_stats:
-                hora_sal_df = pd.DataFrame(hora_sal_stats)
-                st.dataframe(hora_sal_df, use_container_width=True, hide_index=True)
-
-    with col_duracion:
-        st.subheader("Por Duración del Trade")
-        if not trades_cerradas.empty and 'Fecha Entrada' in trades_cerradas.columns:
-            trades_cerradas_copy = trades_cerradas.copy()
-
-            def calc_duracion(row):
-                try:
-                    from datetime import datetime
-                    fecha_ent = row['Fecha Entrada']
-                    hora_ent = row['Hora Entrada']
-                    fecha_sal = row['Fecha Salida']
-                    hora_sal = row['Hora Salida']
-                    if fecha_sal == '-' or hora_sal == '-':
-                        return '-'
-                    dt_ent = datetime.strptime(f"{fecha_ent} {hora_ent}", '%d/%m/%Y %H:%M')
-                    dt_sal = datetime.strptime(f"{fecha_sal} {hora_sal}", '%d/%m/%Y %H:%M')
-                    diff = dt_sal - dt_ent
-                    minutos = int(diff.total_seconds() / 60)
-                    if minutos < 60:
-                        return '<1h'
-                    elif minutos < 180:
-                        return '1-3h'
-                    elif minutos < 360:
-                        return '3-6h'
-                    else:
-                        return '>6h'
-                except:
-                    return '-'
-
-            trades_cerradas_copy['Duracion'] = trades_cerradas_copy.apply(calc_duracion, axis=1)
-
-            duracion_order = ['<1h', '1-3h', '3-6h', '>6h']
-            duracion_stats = []
-            for dur in duracion_order:
-                trades_dur = trades_cerradas_copy[trades_cerradas_copy['Duracion'] == dur]
-                if len(trades_dur) > 0:
-                    stats_d = calc_stats(trades_dur)
-                    duracion_stats.append({
-                        'Duración': dur,
-                        'Ops': stats_d['total'],
-                        'W/L': f"{stats_d['ganadoras']}/{stats_d['perdedoras']}",
-                        'Win%': f"{stats_d['pct_gan']:.0f}%",
-                        'PF': f"{stats_d['profit_factor']:.2f}" if stats_d['profit_factor'] != float('inf') else '∞',
-                        'P&L': f"${stats_d['total_pnl']:,.0f}".replace(",", ".")
-                    })
-
-            if duracion_stats:
-                duracion_df = pd.DataFrame(duracion_stats)
-                st.dataframe(duracion_df, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-
-    # === ESTADÍSTICAS POR SÍMBOLO DE FUTURO ===
-    st.subheader("Estadísticas por Símbolo")
-    if not trades_cerradas.empty and 'Contrato' in trades_cerradas.columns:
-        trades_cerradas_copy = trades_cerradas.copy()
-        # Extraer símbolo base (GC, NQ, ES, etc.) - primeros 2 caracteres
-        trades_cerradas_copy['Simbolo'] = trades_cerradas_copy['Contrato'].apply(
-            lambda x: ''.join([c for c in x if c.isalpha()])[:2] if isinstance(x, str) else '-'
-        )
-
-        # Mapear nombres completos
-        symbol_names = {
-            'GC': 'Gold (GC)',
-            'NQ': 'Nasdaq (NQ)',
-            'ES': 'S&P 500 (ES)',
-            'CL': 'Crude Oil (CL)',
-            'SI': 'Silver (SI)',
-            'ZB': 'T-Bond (ZB)',
-            'ZN': 'T-Note (ZN)',
-            'YM': 'Dow (YM)',
-            'RT': 'Russell (RTY)',
-        }
-
-        symbol_stats = []
-        for symbol in sorted(trades_cerradas_copy['Simbolo'].unique()):
-            if symbol != '-':
-                trades_symbol = trades_cerradas_copy[trades_cerradas_copy['Simbolo'] == symbol]
-                stats_s = calc_stats(trades_symbol)
-                symbol_stats.append({
-                    'Símbolo': symbol_names.get(symbol, symbol),
-                    'Ops': stats_s['total'],
-                    'W/L': f"{stats_s['ganadoras']}/{stats_s['perdedoras']}",
-                    'Win%': f"{stats_s['pct_gan']:.0f}%",
-                    'PF': f"{stats_s['profit_factor']:.2f}" if stats_s['profit_factor'] != float('inf') else '∞',
-                    'P&L': f"${stats_s['total_pnl']:,.0f}".replace(",", ".")
-                })
-
-        if symbol_stats:
-            symbol_df = pd.DataFrame(symbol_stats)
-            st.dataframe(symbol_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
@@ -2994,23 +2033,21 @@ elif page == "Futuros":
         unsafe_allow_html=True
     )
 
-
-elif page == "ETFs":
-    st.title("ETFs")
+    st.markdown("---")
 
     # ==========================================================================
     # POSICIONES ETFs ABIERTAS
     # ==========================================================================
-    st.subheader("Posiciones Abiertas")
+    st.subheader("Posiciones ETFs Abiertas")
 
-    # Obtener fecha más reciente de IB en holding_diario
+    # Obtener fecha más reciente
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM holding_diario WHERE account_code = 'IB'
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        ib_date_val = result.fetchone()[0]
-        ib_date = parse_db_date(ib_date_val, date.today())
+        latest_date_str = result.fetchone()[0]
+        ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
 
         # Obtener precios de compra desde ib_trades (promedio ponderado)
         precios_compra = {}
@@ -3026,10 +2063,10 @@ elif page == "ETFs":
 
         # Para posiciones sin trades en ib_trades, usar precio de primera fecha en holding_diario
         result = session.execute(text("""
-            SELECT DISTINCT ON (symbol) symbol, precio_entrada, fecha as first_date
+            SELECT symbol, precio_entrada, MIN(fecha) as first_date
             FROM holding_diario
-            WHERE account_code = 'IB' AND precio_entrada IS NOT NULL
-            ORDER BY symbol, fecha
+            WHERE account_code = 'IB'
+            GROUP BY symbol
         """))
         for row in result:
             if row[0] not in precios_compra and row[1]:
@@ -3131,9 +2168,9 @@ elif page == "ETFs":
     st.dataframe(styled_positions, use_container_width=True, hide_index=True)
 
     # ==========================================================================
-    # POSICIONES CERRADAS
+    # POSICIONES ETFs CERRADAS
     # ==========================================================================
-    st.subheader("Posiciones Cerradas")
+    st.subheader("Posiciones ETFs Cerradas")
 
     with db.get_session() as session:
         # Buscar ventas en ib_trades (posiciones cerradas)
@@ -3210,7 +2247,7 @@ elif page == "ETFs":
     st.caption(f"Fecha: {ib_date.strftime('%d/%m/%Y')} | EUR/USD: {eur_usd:.4f}")
 
 
-elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
+elif page == "Backtesting" and backtesting_option == "Estrategia Mensual":
     st.title("Seleccion Mensual")
     st.markdown("Day 0 = Ultimo dia de negociacion del mes anterior (End-of-Day prices)")
 
@@ -3232,110 +2269,6 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
         "Abril 2025": "TYL, UL, STZ, TT, BSX, MA, EQT, BKNG, HAS, AMZN",
         "Marzo 2025": "ANET, CHD, STZ, EQIX, AEM, GSK, EW, WST, CTRA, BKNG",
     }
-
-    # Mostrar resumen histórico con botón para cargar
-    st.subheader("Histórico de Meses")
-
-    # Usar datos hardcodeados para evitar latencia
-    # Estos son los retornos calculados previamente
-    historical_data = {
-        "Febrero 2026": {"avg": 2.45, "symbols": 10, "positive": 7},
-        "Enero 2026": {"avg": 3.12, "symbols": 10, "positive": 8},
-        "Diciembre 2025": {"avg": 1.87, "symbols": 10, "positive": 6},
-        "Noviembre 2025": {"avg": 4.23, "symbols": 10, "positive": 8},
-        "Octubre 2025": {"avg": 2.91, "symbols": 10, "positive": 7},
-        "Septiembre 2025": {"avg": -1.45, "symbols": 7, "positive": 3},
-        "Agosto 2025": {"avg": 3.67, "symbols": 10, "positive": 8},
-        "Julio 2025": {"avg": 5.12, "symbols": 10, "positive": 9},
-        "Junio 2025": {"avg": 2.34, "symbols": 10, "positive": 6},
-        "Mayo 2025": {"avg": 4.89, "symbols": 10, "positive": 8},
-        "Abril 2025": {"avg": 1.23, "symbols": 10, "positive": 6},
-        "Marzo 2025": {"avg": 3.45, "symbols": 10, "positive": 7},
-    }
-
-    if st.button("Calcular Retornos Reales", key="calc_hist"):
-        with st.spinner("Calculando retornos históricos..."):
-            monthly_returns = {}
-            with db.get_session() as session:
-                for month_key, symbols_str in monthly_selections.items():
-                    parts = month_key.split()
-                    m_name = parts[0]
-                    m_year = int(parts[1])
-                    m_num = [k for k, v in month_names.items() if v == m_name][0]
-
-                    if m_num == 1:
-                        prev_m, prev_y = 12, m_year - 1
-                    else:
-                        prev_m, prev_y = m_num - 1, m_year
-                    if m_num == 12:
-                        next_m, next_y = 1, m_year + 1
-                    else:
-                        next_m, next_y = m_num + 1, m_year
-
-                    first_day = datetime(m_year, m_num, 1)
-                    first_day_next = datetime(next_y, next_m, 1)
-                    start_date = datetime(prev_y, prev_m, 1)
-
-                    symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-                    returns = []
-
-                    for sym in symbols:
-                        db_symbol = session.query(Symbol).filter(Symbol.code == sym).first()
-                        if db_symbol:
-                            prices = db.get_price_history(session, db_symbol.id, start_date=start_date)
-                            if not prices.empty:
-                                prev_prices = prices[(prices.index >= start_date) & (prices.index < first_day)]
-                                curr_prices = prices[(prices.index >= first_day) & (prices.index < first_day_next)]
-                                if not prev_prices.empty and not curr_prices.empty:
-                                    open_p = prev_prices['close'].iloc[-1]
-                                    close_p = curr_prices['close'].iloc[-1]
-                                    ret = ((close_p - open_p) / open_p) * 100
-                                    returns.append(ret)
-
-                    if returns:
-                        historical_data[month_key] = {
-                            "avg": sum(returns) / len(returns),
-                            "symbols": len(symbols),
-                            "positive": sum(1 for r in returns if r > 0)
-                        }
-    hist_data = []
-    for month_key in list(monthly_selections.keys()):
-        if month_key in historical_data:
-            r = historical_data[month_key]
-            hist_data.append({
-                'Mes': month_key,
-                'Símbolos': r['symbols'],
-                'Positivos': r['positive'],
-                'Win%': f"{r['positive']/r['symbols']*100:.0f}%" if r['symbols'] > 0 else '-',
-                'Ret. Medio': f"{r['avg']:+.2f}%"
-            })
-
-    if hist_data:
-        hist_df = pd.DataFrame(hist_data)
-
-        def style_hist(row):
-            styles = [''] * len(row)
-            try:
-                ret_medio = float(row['Ret. Medio'].replace('%', '').replace('+', ''))
-                ret_idx = hist_df.columns.get_loc('Ret. Medio')
-                color = 'color: green' if ret_medio > 0 else 'color: red' if ret_medio < 0 else ''
-                styles[ret_idx] = color
-            except:
-                pass
-            return styles
-
-        st.dataframe(hist_df.style.apply(style_hist, axis=1), use_container_width=True, hide_index=True)
-
-        # Métricas globales del histórico
-        all_avg = [historical_data[m]['avg'] for m in historical_data]
-        positive_months = sum(1 for a in all_avg if a > 0)
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Meses Analizados", len(historical_data))
-        col2.metric("Meses Positivos", positive_months)
-        col3.metric("Meses Negativos", len(historical_data) - positive_months)
-        col4.metric("Ret. Medio Global", f"{sum(all_avg)/len(all_avg):+.2f}%")
-
-    st.markdown("---")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -3366,8 +2299,7 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
     symbols_input = st.text_input(
         "Symbols",
         value=default_symbols,
-        help="Stock symbols for this month's selection",
-        key=f"symbols_{selected_month}"
+        help="Stock symbols for this month's selection"
     )
 
     symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
@@ -3672,7 +2604,7 @@ elif page == "Screener":
         st.info(f"Metrics available for {metrics_count} records. Use filters below.")
 
 
-elif page == "Estacionalidad" and backtesting_option == "Portfolio Backtest":
+elif page == "Backtesting" and backtesting_option == "Portfolio Backtest":
     st.title("Portfolio Backtest")
     st.info("Herramienta de backtesting para estrategias de portfolio.")
 
