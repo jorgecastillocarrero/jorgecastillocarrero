@@ -638,17 +638,20 @@ class PortfolioDataService:
             sell_dt = convert_est_to_spain(trade['sell_date'])
 
             if hasattr(buy_dt, 'strftime'):
-                buy_date_str = buy_dt.strftime('%Y/%m/%d')
+                buy_date_str = buy_dt.strftime('%d/%m/%Y')
                 buy_time_str = buy_dt.strftime('%H:%M')
             else:
-                buy_date_str = str(buy_dt)[:10].replace('-', '/')
+                # Fallback for string dates
+                parts = str(buy_dt)[:10].split('-')
+                buy_date_str = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else str(buy_dt)[:10]
                 buy_time_str = str(buy_dt)[11:16] if len(str(buy_dt)) > 10 else '-'
 
             if hasattr(sell_dt, 'strftime'):
-                sell_date_str = sell_dt.strftime('%Y/%m/%d')
+                sell_date_str = sell_dt.strftime('%d/%m/%Y')
                 sell_time_str = sell_dt.strftime('%H:%M')
             else:
-                sell_date_str = str(sell_dt)[:10].replace('-', '/')
+                parts = str(sell_dt)[:10].split('-')
+                sell_date_str = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else str(sell_dt)[:10]
                 sell_time_str = str(sell_dt)[11:16] if len(str(sell_dt)) > 10 else '-'
 
             pnl = trade['pnl_usd']
@@ -671,10 +674,11 @@ class PortfolioDataService:
             # Convert from EST to Spanish timezone
             pos_dt = convert_est_to_spain(pos['trade_date'])
             if hasattr(pos_dt, 'strftime'):
-                pos_date_str = pos_dt.strftime('%Y/%m/%d')
+                pos_date_str = pos_dt.strftime('%d/%m/%Y')
                 pos_time_str = pos_dt.strftime('%H:%M')
             else:
-                pos_date_str = str(pos_dt)[:10].replace('-', '/')
+                parts = str(pos_dt)[:10].split('-')
+                pos_date_str = f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else str(pos_dt)[:10]
                 pos_time_str = str(pos_dt)[11:16] if len(str(pos_dt)) > 10 else '-'
 
             data.append({

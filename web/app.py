@@ -2791,7 +2791,7 @@ elif page == "Futuros":
             def get_dia_semana(fecha_str):
                 try:
                     from datetime import datetime
-                    dt = datetime.strptime(fecha_str, '%Y/%m/%d')
+                    dt = datetime.strptime(fecha_str, '%d/%m/%Y')
                     return dias_semana[dt.weekday()]
                 except:
                     return '-'
@@ -2817,15 +2817,15 @@ elif page == "Futuros":
                 st.dataframe(dia_df, use_container_width=True, hide_index=True)
 
     with col_hora:
-        st.subheader("Por Hora (Entrada)")
+        st.subheader("Por Hora de Entrada")
         if not trades_cerradas.empty and 'Hora Entrada' in trades_cerradas.columns:
             trades_cerradas_copy = trades_cerradas.copy()
-            trades_cerradas_copy['Hora'] = trades_cerradas_copy['Hora Entrada'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
+            trades_cerradas_copy['HoraEnt'] = trades_cerradas_copy['Hora Entrada'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
 
             hora_stats = []
-            for hora in sorted(trades_cerradas_copy['Hora'].unique()):
+            for hora in sorted(trades_cerradas_copy['HoraEnt'].unique()):
                 if hora != '-':
-                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['Hora'] == hora]
+                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['HoraEnt'] == hora]
                     stats_h = calc_stats(trades_hora)
                     hora_stats.append({
                         'Hora': f"{hora}:00",
@@ -2839,6 +2839,83 @@ elif page == "Futuros":
             if hora_stats:
                 hora_df = pd.DataFrame(hora_stats)
                 st.dataframe(hora_df, use_container_width=True, hide_index=True)
+
+    # === ESTADÍSTICAS POR HORA DE SALIDA Y DURACIÓN ===
+    col_salida, col_duracion = st.columns(2)
+
+    with col_salida:
+        st.subheader("Por Hora de Salida")
+        if not trades_cerradas.empty and 'Hora Salida' in trades_cerradas.columns:
+            trades_cerradas_copy = trades_cerradas.copy()
+            trades_cerradas_copy['HoraSal'] = trades_cerradas_copy['Hora Salida'].apply(lambda x: x.split(':')[0] if isinstance(x, str) and ':' in x else '-')
+
+            hora_sal_stats = []
+            for hora in sorted(trades_cerradas_copy['HoraSal'].unique()):
+                if hora != '-':
+                    trades_hora = trades_cerradas_copy[trades_cerradas_copy['HoraSal'] == hora]
+                    stats_h = calc_stats(trades_hora)
+                    hora_sal_stats.append({
+                        'Hora': f"{hora}:00",
+                        'Ops': stats_h['total'],
+                        'W/L': f"{stats_h['ganadoras']}/{stats_h['perdedoras']}",
+                        'Win%': f"{stats_h['pct_gan']:.0f}%",
+                        'PF': f"{stats_h['profit_factor']:.2f}" if stats_h['profit_factor'] != float('inf') else '∞',
+                        'P&L': f"${stats_h['total_pnl']:,.0f}".replace(",", ".")
+                    })
+
+            if hora_sal_stats:
+                hora_sal_df = pd.DataFrame(hora_sal_stats)
+                st.dataframe(hora_sal_df, use_container_width=True, hide_index=True)
+
+    with col_duracion:
+        st.subheader("Por Duración del Trade")
+        if not trades_cerradas.empty and 'Fecha Entrada' in trades_cerradas.columns:
+            trades_cerradas_copy = trades_cerradas.copy()
+
+            def calc_duracion(row):
+                try:
+                    from datetime import datetime
+                    fecha_ent = row['Fecha Entrada']
+                    hora_ent = row['Hora Entrada']
+                    fecha_sal = row['Fecha Salida']
+                    hora_sal = row['Hora Salida']
+                    if fecha_sal == '-' or hora_sal == '-':
+                        return '-'
+                    dt_ent = datetime.strptime(f"{fecha_ent} {hora_ent}", '%d/%m/%Y %H:%M')
+                    dt_sal = datetime.strptime(f"{fecha_sal} {hora_sal}", '%d/%m/%Y %H:%M')
+                    diff = dt_sal - dt_ent
+                    minutos = int(diff.total_seconds() / 60)
+                    if minutos < 60:
+                        return '<1h'
+                    elif minutos < 240:
+                        return '1-4h'
+                    elif minutos < 1440:
+                        return '4-24h'
+                    else:
+                        return '>24h'
+                except:
+                    return '-'
+
+            trades_cerradas_copy['Duracion'] = trades_cerradas_copy.apply(calc_duracion, axis=1)
+
+            duracion_order = ['<1h', '1-4h', '4-24h', '>24h']
+            duracion_stats = []
+            for dur in duracion_order:
+                trades_dur = trades_cerradas_copy[trades_cerradas_copy['Duracion'] == dur]
+                if len(trades_dur) > 0:
+                    stats_d = calc_stats(trades_dur)
+                    duracion_stats.append({
+                        'Duración': dur,
+                        'Ops': stats_d['total'],
+                        'W/L': f"{stats_d['ganadoras']}/{stats_d['perdedoras']}",
+                        'Win%': f"{stats_d['pct_gan']:.0f}%",
+                        'PF': f"{stats_d['profit_factor']:.2f}" if stats_d['profit_factor'] != float('inf') else '∞',
+                        'P&L': f"${stats_d['total_pnl']:,.0f}".replace(",", ".")
+                    })
+
+            if duracion_stats:
+                duracion_df = pd.DataFrame(duracion_stats)
+                st.dataframe(duracion_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
