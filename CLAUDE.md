@@ -46,6 +46,10 @@ financial-data-project/
   scripts/
     continue_migration.py     - Migracion incremental SQLite -> PostgreSQL
     migrate_exchange_rates.py - Migracion tipos de cambio
+    fmp_key_metrics.py        - Descarga Key Metrics desde FMP API
+    fmp_ratios.py             - Descarga Ratios financieros desde FMP API
+    fmp_etf_holdings.py       - Descarga ETF Holdings desde FMP API
+    fmp_earnings_transcripts.py - Descarga Earnings Call Transcripts desde FMP API
   data/                 - Datos locales (excluidos de deploy)
   Dockerfile            - Build para Railway (soporta web y scheduler)
   railway.toml          - Config Railway
@@ -57,6 +61,8 @@ financial-data-project/
 ## Credenciales y conexiones
 
 - PostgreSQL (Railway): `DATABASE_URL` en .env
+- PostgreSQL FMP (Docker local): `postgresql://fmp:fmp123@localhost:5433/fmp_data`
+- FMP API Key: `PzRngOxBgNBSIhxbMOrOOAWjVZcna5Yf` (suscripcion Plus)
 - Anthropic API: `ANTHROPIC_API_KEY` en .env
 - Dashboard login: password en `DASHBOARD_PASSWORD` en .env
 - Dominio: patrimoniosmart.club (servicio "enthusiastic" en Railway)
@@ -104,6 +110,15 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 - Acceso directo Desktop renombrado: PatrimonioSmart.bat
 - Secuencia download_logs_id_seq corregida (estaba desincronizada tras migracion)
 - Datos actualizados hasta 04/02/2026 (5877 registros, posicion: 4,111,180 EUR)
+
+### Descarga masiva FMP (09/02/2026)
+- Base de datos FMP local en Docker (localhost:5433) con 101.4M registros, 25 GB
+- Descargados Key Metrics: 200,897 registros
+- Descargados Ratios: 199,607 registros
+- Descargados ETF Holdings: 565,514 registros (1,753 ETFs con datos)
+- Descargados Earnings Transcripts: 42,244 transcripts
+- Scripts creados: fmp_key_metrics.py, fmp_ratios.py, fmp_etf_holdings.py, fmp_earnings_transcripts.py
+- 13F Institutional Holdings: endpoint no devuelve datos (pendiente investigar)
 
 ### Bugs PostgreSQL corregidos (05/02/2026)
 - exchange_rate_service.py: eliminadas queries DEBUG que hacian spam en logs
@@ -153,6 +168,53 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 3. Ir a la carpeta del proyecto: `cd C:\Users\usuario\financial-data-project`
 4. Levantar: `docker-compose up --build`
 5. Acceder al dashboard en localhost:8502
+
+---
+
+## Base de datos FMP (Financial Modeling Prep)
+
+Base de datos local en Docker con datos financieros descargados desde la API de FMP.
+
+### Conexion
+- Host: localhost:5433
+- Database: fmp_data
+- User: fmp
+- Password: fmp123
+- Conexion: `postgresql://fmp:fmp123@localhost:5433/fmp_data`
+
+### Estado actual (09/02/2026)
+- **Tamano total**: 25 GB
+- **Total registros**: 101.4 millones
+
+### Tablas FMP
+| Tabla | Registros | Descripcion |
+|-------|-----------|-------------|
+| fmp_price_history | 87,272,323 | Precios historicos diarios |
+| fmp_crypto | 5,784,510 | Precios criptomonedas |
+| fmp_earnings | 2,819,775 | Datos de earnings |
+| fmp_forex | 1,942,728 | Tipos de cambio forex |
+| fmp_dividends | 801,556 | Historial de dividendos |
+| fmp_balance_sheets | 656,133 | Balance sheets |
+| fmp_income_statements | 653,929 | Income statements |
+| fmp_cash_flow | 648,223 | Cash flow statements |
+| fmp_key_metrics | 200,897 | Metricas clave (P/E, EV/EBITDA, ROE, etc.) |
+| fmp_ratios | 199,607 | Ratios financieros |
+| fmp_etf_holdings | 565,514 | Holdings de ETFs |
+| fmp_profiles | 92,036 | Perfiles de empresas |
+| fmp_symbols | 89,103 | Lista de simbolos |
+| fmp_commodities | 51,452 | Precios commodities |
+| fmp_earnings_transcripts | 42,244 | Transcripts de earnings calls |
+| fmp_splits | 27,232 | Stock splits |
+
+### Scripts de descarga
+Los scripts en `scripts/fmp_*.py` usan async/aiohttp con semaforo de 10 conexiones concurrentes.
+Ejecutar con: `py -3 scripts/fmp_[nombre].py`
+
+### Endpoints FMP API (Stable)
+- Key Metrics: `/stable/key-metrics?symbol=X`
+- Ratios: `/stable/ratios?symbol=X`
+- ETF Holdings: `/stable/etf/holdings?symbol=X`
+- Earnings Transcripts: `/stable/earning-call-transcript?symbol=X&year=Y&quarter=Q`
 
 ---
 
