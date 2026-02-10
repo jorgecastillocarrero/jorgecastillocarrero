@@ -323,12 +323,20 @@ class YahooDownloader:
                         # Reverse to get most recent first
                         quarters = earnings_hist.iloc[::-1].head(4)
 
+                        # Helper to convert numpy types to native Python types
+                        def to_native(val):
+                            if val is None:
+                                return None
+                            if hasattr(val, 'item'):  # numpy scalar
+                                return val.item()
+                            return val
+
                         for i, (quarter_date, row) in enumerate(quarters.iterrows()):
                             q_date = quarter_date.date() if hasattr(quarter_date, 'date') else quarter_date
-                            eps_actual = row.get('epsActual')
-                            eps_estimate = row.get('epsEstimate')
-                            eps_diff = row.get('epsDifference')
-                            surprise_pct = row.get('surprisePercent')
+                            eps_actual = to_native(row.get('epsActual'))
+                            eps_estimate = to_native(row.get('epsEstimate'))
+                            eps_diff = to_native(row.get('epsDifference'))
+                            surprise_pct = to_native(row.get('surprisePercent'))
 
                             if i == 0:
                                 fundamental.q0_eps_actual = eps_actual
