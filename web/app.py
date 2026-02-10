@@ -2842,6 +2842,48 @@ elif page == "Futuros":
 
     st.markdown("---")
 
+    # === ESTADÍSTICAS POR SÍMBOLO DE FUTURO ===
+    st.subheader("Estadísticas por Símbolo")
+    if not trades_cerradas.empty and 'Contrato' in trades_cerradas.columns:
+        trades_cerradas_copy = trades_cerradas.copy()
+        # Extraer símbolo base (GC, NQ, ES, etc.) - primeros 2 caracteres
+        trades_cerradas_copy['Simbolo'] = trades_cerradas_copy['Contrato'].apply(
+            lambda x: ''.join([c for c in x if c.isalpha()])[:2] if isinstance(x, str) else '-'
+        )
+
+        # Mapear nombres completos
+        symbol_names = {
+            'GC': 'Gold (GC)',
+            'NQ': 'Nasdaq (NQ)',
+            'ES': 'S&P 500 (ES)',
+            'CL': 'Crude Oil (CL)',
+            'SI': 'Silver (SI)',
+            'ZB': 'T-Bond (ZB)',
+            'ZN': 'T-Note (ZN)',
+            'YM': 'Dow (YM)',
+            'RT': 'Russell (RTY)',
+        }
+
+        symbol_stats = []
+        for symbol in sorted(trades_cerradas_copy['Simbolo'].unique()):
+            if symbol != '-':
+                trades_symbol = trades_cerradas_copy[trades_cerradas_copy['Simbolo'] == symbol]
+                stats_s = calc_stats(trades_symbol)
+                symbol_stats.append({
+                    'Símbolo': symbol_names.get(symbol, symbol),
+                    'Ops': stats_s['total'],
+                    'W/L': f"{stats_s['ganadoras']}/{stats_s['perdedoras']}",
+                    'Win%': f"{stats_s['pct_gan']:.0f}%",
+                    'PF': f"{stats_s['profit_factor']:.2f}" if stats_s['profit_factor'] != float('inf') else '∞',
+                    'P&L': f"${stats_s['total_pnl']:,.0f}".replace(",", ".")
+                })
+
+        if symbol_stats:
+            symbol_df = pd.DataFrame(symbol_stats)
+            st.dataframe(symbol_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
     # Historial de Operaciones
     st.subheader("Historial de Operaciones")
 
