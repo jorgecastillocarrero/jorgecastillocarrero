@@ -2782,7 +2782,8 @@ elif page == "Acciones":
 
                 # Mostrar si hay posiciones sin datos de market cap
                 if mcap_stats['Sin datos']['count'] > 0:
-                    st.caption(f"⚠️ {mcap_stats['Sin datos']['count']} posiciones sin datos de market cap")
+                    sin_datos_tickers = ', '.join(set(mcap_stats['Sin datos']['tickers']))
+                    st.caption(f"⚠️ {mcap_stats['Sin datos']['count']} posiciones sin datos de market cap: {sin_datos_tickers}")
             else:
                 st.info("No hay datos de market cap disponibles")
         else:
