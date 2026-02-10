@@ -3473,15 +3473,17 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
 
     # === SIMULACIÓN DE CARTERA ===
     st.subheader("Simulación de Cartera")
-    st.caption("Inversión: $50,000 por ticker cada mes")
+    st.caption("Inversión: $50,000 por ticker | Comisiones + Deslizamiento: 0.3% por ticker")
 
     INVERSION_POR_TICKER = 50000
     TICKERS_ESTANDAR = 10
+    COMISION_DESLIZAMIENTO = 0.003  # 0.3% por ticker
 
     # Calcular P&L mes a mes
     portfolio_data = []
     total_invertido = 0
     total_pnl = 0
+    total_comisiones = 0
     capital_acumulado = 0
 
     for month_key in month_order:
@@ -3494,19 +3496,29 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
             inversion_mes = INVERSION_POR_TICKER * num_tickers
             cash_mes = INVERSION_POR_TICKER * (TICKERS_ESTANDAR - num_tickers) if num_tickers < TICKERS_ESTANDAR else 0
 
-            # P&L del mes (retorno medio aplicado a la inversión)
-            pnl_mes = inversion_mes * (ret_medio / 100)
+            # Comisiones y deslizamientos (0.3% por cada ticker)
+            comisiones_mes = inversion_mes * COMISION_DESLIZAMIENTO
+
+            # P&L del mes (retorno medio aplicado a la inversión, menos comisiones)
+            pnl_bruto = inversion_mes * (ret_medio / 100)
+            pnl_mes = pnl_bruto - comisiones_mes
 
             total_invertido += inversion_mes
             total_pnl += pnl_mes
+            total_comisiones += comisiones_mes
             capital_acumulado += inversion_mes + pnl_mes
+
+            # Retorno neto (después de comisiones)
+            ret_neto = ((pnl_mes) / inversion_mes) * 100 if inversion_mes > 0 else 0
 
             portfolio_data.append({
                 'Mes': month_key,
                 'Tickers': num_tickers,
                 'Inversión': f"${inversion_mes:,.0f}",
                 'Cash': f"${cash_mes:,.0f}" if cash_mes > 0 else '-',
-                'Ret. %': f"{ret_medio:+.2f}%",
+                'Comisiones': f"${comisiones_mes:,.0f}",
+                'Ret. Bruto': f"{ret_medio:+.2f}%",
+                'Ret. Neto': f"{ret_neto:+.2f}%",
                 'P&L Mes': f"${pnl_mes:+,.0f}",
                 'P&L Acum.': f"${total_pnl:+,.0f}"
             })
@@ -3521,10 +3533,16 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
                 pnl_val = float(pnl_str)
                 pnl_idx = portfolio_df.columns.get_loc('P&L Mes')
                 acum_idx = portfolio_df.columns.get_loc('P&L Acum.')
-                ret_idx = portfolio_df.columns.get_loc('Ret. %')
+                ret_bruto_idx = portfolio_df.columns.get_loc('Ret. Bruto')
+                ret_neto_idx = portfolio_df.columns.get_loc('Ret. Neto')
                 color = 'color: green' if pnl_val > 0 else 'color: red' if pnl_val < 0 else ''
                 styles[pnl_idx] = color
-                styles[ret_idx] = color
+                styles[ret_neto_idx] = color
+
+                # Color para retorno bruto
+                ret_bruto_str = row['Ret. Bruto'].replace('%', '').replace('+', '')
+                ret_bruto_val = float(ret_bruto_str)
+                styles[ret_bruto_idx] = 'color: green' if ret_bruto_val > 0 else 'color: red' if ret_bruto_val < 0 else ''
 
                 acum_str = row['P&L Acum.'].replace('$', '').replace(',', '').replace('+', '')
                 acum_val = float(acum_str)
@@ -3538,13 +3556,14 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
         # Métricas del portafolio
         meses_positivos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] > 0)
         meses_negativos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] < 0)
-        rentabilidad_total = (total_pnl / total_invertido) * 100 if total_invertido > 0 else 0
+        rentabilidad_neta = (total_pnl / total_invertido) * 100 if total_invertido > 0 else 0
 
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Total Invertido", f"${total_invertido:,.0f}")
-        col2.metric("P&L Total", f"${total_pnl:+,.0f}")
-        col3.metric("Rentabilidad", f"{rentabilidad_total:+.2f}%")
-        col4.metric("Win Rate", f"{meses_positivos}/{meses_positivos + meses_negativos}")
+        col2.metric("Comisiones", f"${total_comisiones:,.0f}")
+        col3.metric("P&L Neto", f"${total_pnl:+,.0f}")
+        col4.metric("Rentabilidad Neta", f"{rentabilidad_neta:+.2f}%")
+        col5.metric("Win Rate", f"{meses_positivos}/{meses_positivos + meses_negativos}")
 
     st.markdown("---")
 
