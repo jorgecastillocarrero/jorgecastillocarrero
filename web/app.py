@@ -2140,6 +2140,7 @@ elif page == "Acciones":
 
     with db.get_session() as session:
         # Get holdings with fecha_compra and precio_compra from compras table (datos reales)
+        # Excluir ETFs y Futuros (solo mostrar acciones)
         holdings_result = session.execute(text("""
             SELECT h.account_code, h.symbol, h.shares, h.currency, h.asset_type,
                    c.fecha as fecha_compra, c.precio as precio_compra
@@ -2154,6 +2155,7 @@ elif page == "Acciones":
                 GROUP BY account_code, symbol
             ) c ON h.account_code = c.account_code AND h.symbol = c.symbol
             WHERE h.fecha = :fecha
+            AND (h.asset_type IS NULL OR h.asset_type NOT IN ('ETF', 'ETFs', 'Future', 'Futures'))
             ORDER BY h.account_code, h.symbol
         """), {'fecha': latest_date})
 
@@ -2713,11 +2715,11 @@ elif page == "Acciones":
 
             # Calcular rentabilidad por categoría (combinando abiertas y cerradas)
             mcap_stats = {
-                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
-                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
-                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
-                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
-                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
+                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
+                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
+                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
+                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
             }
 
             # Procesar posiciones abiertas
@@ -2729,6 +2731,7 @@ elif page == "Acciones":
                 mcap_stats[category]['rent_sum'] += row['Rent.Periodo %']
                 mcap_stats[category]['rent_eur_sum'] += row['Rent.Periodo EUR']
                 mcap_stats[category]['tickers'].append(ticker)
+                mcap_stats[category]['rents'].append(row['Rent.Periodo %'])
 
             # Procesar posiciones cerradas
             for pos in closed_positions:
@@ -2739,6 +2742,7 @@ elif page == "Acciones":
                 mcap_stats[category]['rent_sum'] += pos['Rent. %']
                 mcap_stats[category]['rent_eur_sum'] += pos['Rent. EUR']
                 mcap_stats[category]['tickers'].append(ticker)
+                mcap_stats[category]['rents'].append(pos['Rent. %'])
 
             # Crear tabla de resumen
             mcap_table_data = []
@@ -2747,10 +2751,14 @@ elif page == "Acciones":
                 stats = mcap_stats[cat]
                 if stats['count'] > 0:
                     avg_rent = stats['rent_sum'] / stats['count']
+                    max_rent = max(stats['rents'])
+                    min_rent = min(stats['rents'])
                     mcap_table_data.append({
                         'Market Cap': cat,
                         'Operaciones': stats['count'],
                         'Rent. Media %': avg_rent,
+                        'Máx %': max_rent,
+                        'Mín %': min_rent,
                         'Rent. Total EUR': stats['rent_eur_sum'],
                         'Tickers': ', '.join(set(stats['tickers'][:5])) + ('...' if len(set(stats['tickers'])) > 5 else '')
                     })
@@ -2765,6 +2773,8 @@ elif page == "Acciones":
                         'Market Cap': st.column_config.TextColumn('Market Cap', width='medium'),
                         'Operaciones': st.column_config.NumberColumn('Operaciones', width='small', format='%d'),
                         'Rent. Media %': st.column_config.NumberColumn('Rent. Media %', width='small', format='%.2f %%'),
+                        'Máx %': st.column_config.NumberColumn('Máx %', width='small', format='%.2f %%'),
+                        'Mín %': st.column_config.NumberColumn('Mín %', width='small', format='%.2f %%'),
                         'Rent. Total EUR': st.column_config.NumberColumn('Rent. Total EUR', width='medium', format='%.0f €'),
                         'Tickers': st.column_config.TextColumn('Tickers', width='large'),
                     }
