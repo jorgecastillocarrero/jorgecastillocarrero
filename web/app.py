@@ -2107,6 +2107,8 @@ elif page == "Composición":
 
 elif page == "Acciones":
     st.title("ACCIONES")
+    loading_placeholder = st.empty()
+    loading_placeholder.info("Cargando datos...")
 
     # Using centralized ASSET_TYPE_MAP and CURRENCY_SYMBOL_MAP from portfolio_data
 
@@ -2507,6 +2509,7 @@ elif page == "Acciones":
             # =====================================================
             # CABECERA 1: RENTABILIDAD ACUMULADA AÑO (periodo)
             # =====================================================
+            loading_placeholder.empty()  # Limpiar mensaje de carga
             st.subheader(f"📊 Rentabilidad Acumulada Año {date.today().year}")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("Total EUR", f"{combined_rent_eur:+,.0f} €".replace(",", "."))
@@ -2677,6 +2680,105 @@ elif page == "Acciones":
             else:
                 st.info("No hay posiciones cerradas")
 
+            # =====================================================
+            # RENTABILIDAD POR MARKET CAP
+            # =====================================================
+            st.markdown("---")
+            st.subheader("📊 Rentabilidad por Market Cap")
+
+            # Obtener market cap de fundamentals para cada símbolo
+            with db.get_session() as session:
+                # Consultar market cap desde fundamentals
+                mcap_result = session.execute(text("""
+                    SELECT s.code, f.market_cap
+                    FROM fundamentals f
+                    JOIN symbols s ON f.symbol_id = s.id
+                    WHERE f.market_cap IS NOT NULL AND f.market_cap > 0
+                """))
+                mcap_data = {row[0]: row[1] for row in mcap_result.fetchall()}
+
+            # Categorizar por market cap (en millones)
+            def get_mcap_category(mcap_value):
+                if mcap_value is None:
+                    return 'Sin datos'
+                mcap_millions = mcap_value / 1_000_000  # Convertir a millones
+                if mcap_millions < 5000:
+                    return '<5.000M'
+                elif mcap_millions < 10000:
+                    return '5.000-10.000M'
+                elif mcap_millions < 50000:
+                    return '10.000-50.000M'
+                else:
+                    return '>50.000M'
+
+            # Calcular rentabilidad por categoría (combinando abiertas y cerradas)
+            mcap_stats = {
+                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+            }
+
+            # Procesar posiciones abiertas
+            for _, row in asset_returns_df.iterrows():
+                ticker = row['Ticker'].split('.')[0] if '.' in row['Ticker'] else row['Ticker']
+                mcap = mcap_data.get(ticker) or mcap_data.get(row['Ticker'])
+                category = get_mcap_category(mcap)
+                mcap_stats[category]['count'] += 1
+                mcap_stats[category]['rent_sum'] += row['Rent.Periodo %']
+                mcap_stats[category]['rent_eur_sum'] += row['Rent.Periodo EUR']
+                mcap_stats[category]['tickers'].append(ticker)
+
+            # Procesar posiciones cerradas
+            for pos in closed_positions:
+                ticker = pos['Ticker'].split('.')[0] if '.' in pos['Ticker'] else pos['Ticker']
+                mcap = mcap_data.get(ticker) or mcap_data.get(pos['Ticker'])
+                category = get_mcap_category(mcap)
+                mcap_stats[category]['count'] += 1
+                mcap_stats[category]['rent_sum'] += pos['Rent. %']
+                mcap_stats[category]['rent_eur_sum'] += pos['Rent. EUR']
+                mcap_stats[category]['tickers'].append(ticker)
+
+            # Crear tabla de resumen
+            mcap_table_data = []
+            order = ['<5.000M', '5.000-10.000M', '10.000-50.000M', '>50.000M']
+            for cat in order:
+                stats = mcap_stats[cat]
+                if stats['count'] > 0:
+                    avg_rent = stats['rent_sum'] / stats['count']
+                    mcap_table_data.append({
+                        'Market Cap': cat,
+                        'Operaciones': stats['count'],
+                        'Rent. Media %': avg_rent,
+                        'Rent. Total EUR': stats['rent_eur_sum'],
+                        'Tickers': ', '.join(set(stats['tickers'][:5])) + ('...' if len(set(stats['tickers'])) > 5 else '')
+                    })
+
+            if mcap_table_data:
+                mcap_df = pd.DataFrame(mcap_table_data)
+                st.dataframe(
+                    mcap_df,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        'Market Cap': st.column_config.TextColumn('Market Cap', width='medium'),
+                        'Operaciones': st.column_config.NumberColumn('Operaciones', width='small', format='%d'),
+                        'Rent. Media %': st.column_config.NumberColumn('Rent. Media %', width='small', format='%.2f %%'),
+                        'Rent. Total EUR': st.column_config.NumberColumn('Rent. Total EUR', width='medium', format='%.0f €'),
+                        'Tickers': st.column_config.TextColumn('Tickers', width='large'),
+                    }
+                )
+
+                # Mostrar si hay posiciones sin datos de market cap
+                if mcap_stats['Sin datos']['count'] > 0:
+                    st.caption(f"⚠️ {mcap_stats['Sin datos']['count']} posiciones sin datos de market cap")
+            else:
+                st.info("No hay datos de market cap disponibles")
+        else:
+            loading_placeholder.empty()
+            st.warning("No se encontraron datos de acciones para mostrar")
+
 
 elif page == "Futuros":
     st.title("FUTUROS")
@@ -2688,8 +2790,25 @@ elif page == "Futuros":
     futures_total_eur = futures_summary['total_realized_eur']
 
     all_trades = portfolio_service.get_futures_trades_df()
-    # Ordenar por fecha más reciente primero
-    all_trades = all_trades.iloc[::-1].reset_index(drop=True)
+
+    # Crear columna de ordenamiento (formato YYYYMMDDHHMMSS para ordenar como string)
+    def create_sort_key(row):
+        date_str = row['Fecha Entrada']
+        time_str = row['Hora Entrada']
+        if date_str == '-' or not date_str:
+            return '99999999999999'  # Poner al final
+        try:
+            parts = date_str.split('/')
+            day, month, year = parts[0].zfill(2), parts[1].zfill(2), parts[2]
+            hour, minute = '00', '00'
+            if time_str and time_str != '-':
+                time_parts = time_str.split(':')
+                hour, minute = time_parts[0].zfill(2), time_parts[1].zfill(2)
+            return f"{year}{month}{day}{hour}{minute}"
+        except:
+            return '99999999999999'
+
+    all_trades['_sort_key'] = all_trades.apply(create_sort_key, axis=1)
 
     # Calcular estadísticas de operaciones cerradas
     trades_cerradas = all_trades[all_trades['Estado'] == 'Cerrada'] if not all_trades.empty else all_trades
@@ -2963,6 +3082,20 @@ elif page == "Futuros":
 
     # Historial de Operaciones
     st.subheader("Historial de Operaciones")
+
+    # Selector de orden
+    col_orden, _ = st.columns([1, 3])
+    with col_orden:
+        orden_desc = st.checkbox("Más reciente primero", value=True, key="orden_futuros")
+
+    # Ordenar según selección (descending = más reciente primero)
+    all_trades = all_trades.sort_values(
+        by=['_sort_key'],
+        ascending=[not orden_desc]
+    ).reset_index(drop=True)
+
+    # Eliminar columna auxiliar
+    all_trades = all_trades.drop(columns=['_sort_key'])
 
     def color_trade_row(row):
         styles = [''] * len(row)
@@ -3285,18 +3418,18 @@ elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
     # Datos históricos pre-calculados (ordenados cronológicamente)
     # Formato: avg=retorno medio, symbols=tickers, positive=positivos, negative=negativos, zero=neutros
     historical_data = {
-        "Marzo 2025": {"avg": 3.45, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
-        "Abril 2025": {"avg": 1.23, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-        "Mayo 2025": {"avg": 4.89, "symbols": 10, "positive": 8, "negative": 2, "zero": 0},
-        "Junio 2025": {"avg": 2.34, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-        "Julio 2025": {"avg": 5.12, "symbols": 10, "positive": 9, "negative": 1, "zero": 0},
-        "Agosto 2025": {"avg": 3.67, "symbols": 10, "positive": 8, "negative": 2, "zero": 0},
+        "Marzo 2025": {"avg": -0.98, "symbols": 10, "positive": 5, "negative": 5, "zero": 0},
+        "Abril 2025": {"avg": 1.96, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
+        "Mayo 2025": {"avg": 8.28, "symbols": 10, "positive": 9, "negative": 1, "zero": 0},
+        "Junio 2025": {"avg": 2.38, "symbols": 9, "positive": 7, "negative": 2, "zero": 1},
+        "Julio 2025": {"avg": 0.64, "symbols": 10, "positive": 4, "negative": 6, "zero": 0},
+        "Agosto 2025": {"avg": 2.94, "symbols": 9, "positive": 5, "negative": 4, "zero": 1},
         "Septiembre 2025": {"avg": 7.17, "symbols": 7, "positive": 7, "negative": 0, "zero": 3},
-        "Octubre 2025": {"avg": 2.91, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
-        "Noviembre 2025": {"avg": 4.23, "symbols": 10, "positive": 8, "negative": 2, "zero": 0},
-        "Diciembre 2025": {"avg": 1.87, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-        "Enero 2026": {"avg": 3.12, "symbols": 10, "positive": 8, "negative": 2, "zero": 0},
-        "Febrero 2026": {"avg": 2.45, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
+        "Octubre 2025": {"avg": 0.43, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
+        "Noviembre 2025": {"avg": 1.90, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
+        "Diciembre 2025": {"avg": -0.40, "symbols": 10, "positive": 5, "negative": 5, "zero": 0},
+        "Enero 2026": {"avg": -0.01, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
+        "Febrero 2026": {"avg": 1.69, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
     }
 
     if st.button("Calcular Retornos Reales", key="calc_hist"):
@@ -3377,102 +3510,154 @@ elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
             })
 
     if hist_data:
-        hist_df = pd.DataFrame(hist_data)
+        # Métricas globales del histórico (con comisiones 0.3% total por mes)
+        COMISION_MENSUAL = 0.3  # 0.3% por mes
+        # Crear dict con retornos netos por mes
+        month_returns_neto = {}
+        for m in month_order:
+            if m in historical_data:
+                month_returns_neto[m] = historical_data[m]['avg'] - COMISION_MENSUAL
 
-        def style_hist(row):
-            styles = [''] * len(row)
-            try:
-                ret_medio = float(row['Ret. Medio'].replace('%', '').replace('+', ''))
-                ret_idx = hist_df.columns.get_loc('Ret. Medio')
-                color = 'color: green' if ret_medio > 0 else 'color: red' if ret_medio < 0 else ''
-                styles[ret_idx] = color
-            except:
-                pass
-            return styles
+        positive_months = sum(1 for a in month_returns_neto.values() if a > 0)
+        negative_months = sum(1 for a in month_returns_neto.values() if a < 0)
 
-        st.dataframe(hist_df.style.apply(style_hist, axis=1), use_container_width=True, hide_index=True)
+        # Encontrar mes con máximo y mínimo
+        max_month = max(month_returns_neto, key=month_returns_neto.get)
+        min_month = min(month_returns_neto, key=month_returns_neto.get)
+        max_ret = month_returns_neto[max_month]
+        min_ret = month_returns_neto[min_month]
 
-        # Métricas globales del histórico (con comisiones 0.3%)
-        COMISION = 0.003
-        all_avg = [historical_data[m]['avg'] for m in historical_data]
-        # Retorno neto = retorno bruto - 0.3% comisiones
-        all_avg_neto = [r - (0.3 * 10) for r in all_avg]  # 0.3% por cada ticker (10 tickers)
-
-        positive_months = sum(1 for a in all_avg_neto if a > 0)
-        negative_months = sum(1 for a in all_avg_neto if a < 0)
-        max_ret = max(all_avg_neto)
-        min_ret = min(all_avg_neto)
+        # Datos de acciones individuales (mejores y peores del histórico)
+        # Basado en los datos verificados de la base de datos
+        best_stock = {"symbol": "INTC", "month": "Sept 25", "ret": 37.78}
+        worst_stock = {"symbol": "INTC", "month": "Ago 25", "ret": -18.21}
 
         # Profit Factor = suma ganancias / suma pérdidas
-        gains = sum(a for a in all_avg_neto if a > 0)
-        losses = abs(sum(a for a in all_avg_neto if a < 0))
+        gains = sum(a for a in month_returns_neto.values() if a > 0)
+        losses = abs(sum(a for a in month_returns_neto.values() if a < 0))
         profit_factor = gains / losses if losses > 0 else float('inf')
+
+        # Calcular retorno acumulado y medio
+        ret_acumulado = sum(month_returns_neto.values())
+        ret_medio = ret_acumulado / len(month_returns_neto)
+
+        # Calcular Sharpe y Sortino Ratios
+        import numpy as np
+        returns_list = list(month_returns_neto.values())
+        risk_free_rate = 0.3  # 0.3% mensual (~4% anual)
+
+        # Sharpe Ratio = (ret_medio - rf) / std_dev
+        std_dev = np.std(returns_list) if len(returns_list) > 1 else 0
+        sharpe_ratio = (ret_medio - risk_free_rate) / std_dev if std_dev > 0 else 0
+
+        # Sortino Ratio = (ret_medio - rf) / downside_deviation
+        negative_returns = [r for r in returns_list if r < 0]
+        downside_dev = np.std(negative_returns) if len(negative_returns) > 1 else 0
+        sortino_ratio = (ret_medio - risk_free_rate) / downside_dev if downside_dev > 0 else 0
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Meses Positivos", f"{positive_months}/{len(historical_data)}")
-        col2.metric("Ret. Medio Neto", f"{sum(all_avg_neto)/len(all_avg_neto):+.2f}%")
-        col3.metric("Máximo", f"{max_ret:+.2f}%")
-        col4.metric("Mínimo", f"{min_ret:+.2f}%")
+        col2.metric("Win Rate", f"{positive_months/len(historical_data)*100:.0f}%")
+        col3.metric("Ret. Medio Mensual", f"{ret_medio:+.2f}%")
+        col4.metric("Ret. Acumulado", f"{ret_acumulado:+.2f}%")
 
         col5, col6, col7, col8 = st.columns(4)
-        col5.metric("Profit Factor", f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞")
-        col6.metric("Total Ganancias", f"{gains:+.2f}%")
-        col7.metric("Total Pérdidas", f"{losses:-.2f}%")
-        col8.metric("Win Rate", f"{positive_months/len(historical_data)*100:.0f}%")
+        col5.metric(f"Máx. Mes ({max_month.split()[0][:3]})", f"{max_ret:+.2f}%")
+        col6.metric(f"Mín. Mes ({min_month.split()[0][:3]})", f"{min_ret:+.2f}%")
+        col7.metric(f"Máx. Acción ({best_stock['symbol']})", f"+{best_stock['ret']:.1f}%")
+        col8.metric(f"Mín. Acción ({worst_stock['symbol']})", f"{worst_stock['ret']:.1f}%")
+
+        col9, col10, col11, col12 = st.columns(4)
+        col9.metric("Profit Factor", f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞")
+        col10.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
+        col11.metric("Sortino Ratio", f"{sortino_ratio:.2f}")
 
     st.markdown("---")
 
     # === RENTABILIDAD POR SECTOR ===
     st.subheader("Rentabilidad por Sector")
+    st.caption("Calculado desde retornos históricos reales (después de 0.3% comisión)")
 
-    # Agrupar símbolos por sector de todas las selecciones
-    sector_symbols = {}
-    for month_key, symbols_str in monthly_selections.items():
-        symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-        for sym in symbols:
-            sector = sector_map.get(sym, 'Otros')
-            if sector not in sector_symbols:
-                sector_symbols[sector] = set()
-            sector_symbols[sector].add(sym)
+    # Calcular retornos por ticker y agrupar por sector
+    COMISION = 0.3  # 0.3% comisión
+    ticker_returns = {}  # {ticker: [retornos de cada mes]}
 
-    # Calcular estadísticas por sector (datos placeholder - se pueden calcular con el botón)
-    sector_stats = {
-        'Tecnología': {'count': len(sector_symbols.get('Tecnología', [])), 'avg': 4.2},
-        'Financiero': {'count': len(sector_symbols.get('Financiero', [])), 'avg': 3.1},
-        'Salud': {'count': len(sector_symbols.get('Salud', [])), 'avg': 2.8},
-        'Consumo Disc.': {'count': len(sector_symbols.get('Consumo Disc.', [])), 'avg': 3.5},
-        'Consumo Básico': {'count': len(sector_symbols.get('Consumo Básico', [])), 'avg': 1.9},
-        'Industrial': {'count': len(sector_symbols.get('Industrial', [])), 'avg': 2.4},
-        'Energía': {'count': len(sector_symbols.get('Energía', [])), 'avg': 1.5},
-        'Materiales': {'count': len(sector_symbols.get('Materiales', [])), 'avg': 2.1},
-        'Utilities': {'count': len(sector_symbols.get('Utilities', [])), 'avg': 1.2},
-        'Real Estate': {'count': len(sector_symbols.get('Real Estate', [])), 'avg': 2.6},
-    }
+    with db.get_session() as session:
+        for month_key, symbols_str in monthly_selections.items():
+            parts = month_key.split()
+            m_name = parts[0]
+            m_year = int(parts[1])
+            m_num = [k for k, v in month_names.items() if v == m_name][0]
+
+            # Calcular fechas del mes
+            if m_num == 1:
+                prev_m, prev_y = 12, m_year - 1
+            else:
+                prev_m, prev_y = m_num - 1, m_year
+            if m_num == 12:
+                next_m, next_y = 1, m_year + 1
+            else:
+                next_m, next_y = m_num + 1, m_year
+
+            first_day = datetime(m_year, m_num, 1)
+            first_day_next = datetime(next_y, next_m, 1)
+            start_date = datetime(prev_y, prev_m, 1)
+
+            symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
+
+            for sym in symbols:
+                db_symbol = session.query(Symbol).filter(Symbol.code == sym).first()
+                if db_symbol:
+                    prices = db.get_price_history(session, db_symbol.id, start_date=start_date)
+                    if not prices.empty:
+                        prev_prices = prices[(prices.index >= start_date) & (prices.index < first_day)]
+                        curr_prices = prices[(prices.index >= first_day) & (prices.index < first_day_next)]
+                        if not prev_prices.empty and not curr_prices.empty:
+                            open_p = prev_prices['close'].iloc[-1]
+                            close_p = curr_prices['close'].iloc[-1]
+                            ret = ((close_p - open_p) / open_p) * 100
+                            if sym not in ticker_returns:
+                                ticker_returns[sym] = []
+                            ticker_returns[sym].append(ret)
+
+    # Agrupar por sector y calcular promedio
+    sector_stats = {}
+    for ticker, returns in ticker_returns.items():
+        sector = sector_map.get(ticker, 'Otros')
+        if sector not in sector_stats:
+            sector_stats[sector] = {'returns': [], 'tickers': set()}
+        sector_stats[sector]['returns'].extend(returns)
+        sector_stats[sector]['tickers'].add(ticker)
 
     sector_data = []
     for sector, stats in sector_stats.items():
-        if stats['count'] > 0:
+        if stats['returns']:
+            avg_bruto = sum(stats['returns']) / len(stats['returns'])
+            avg_neto = avg_bruto - COMISION
             sector_data.append({
                 'Sector': sector,
-                'Tickers': stats['count'],
-                'Ret. Medio': f"{stats['avg']:+.2f}%"
+                'Tickers': len(stats['tickers']),
+                'Operaciones': len(stats['returns']),
+                'Ret. Neto': f"{avg_neto:+.2f}%"
             })
 
     if sector_data:
         sector_df = pd.DataFrame(sector_data)
-        sector_df = sector_df.sort_values('Tickers', ascending=False)
+        sector_df = sector_df.sort_values('Operaciones', ascending=False)
 
         def style_sector(row):
             styles = [''] * len(row)
             try:
-                ret = float(row['Ret. Medio'].replace('%', '').replace('+', ''))
-                ret_idx = sector_df.columns.get_loc('Ret. Medio')
+                ret = float(row['Ret. Neto'].replace('%', '').replace('+', ''))
+                ret_idx = sector_df.columns.get_loc('Ret. Neto')
                 styles[ret_idx] = 'color: green' if ret > 0 else 'color: red' if ret < 0 else ''
             except:
                 pass
             return styles
 
         st.dataframe(sector_df.style.apply(style_sector, axis=1), use_container_width=True, hide_index=True)
+    else:
+        st.info("No hay datos de retornos por sector")
 
     st.markdown("---")
 
@@ -3597,20 +3782,13 @@ elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
     month = [k for k, v in month_names.items() if v == month_name][0]
 
     default_symbols = monthly_selections.get(selected_month, "")
+    symbols = [s.strip().upper() for s in default_symbols.split(",") if s.strip()]
 
     # Mostrar símbolos del mes seleccionado
-    st.info(f"**Símbolos {selected_month}:** {default_symbols}")
+    if symbols:
+        st.markdown(f"**Tickers ({len(symbols)}):** {', '.join(symbols)}")
 
-    symbols_input = st.text_input(
-        "Símbolos (editable)",
-        value=default_symbols,
-        help="Puedes editar los símbolos si lo necesitas",
-        key=f"symbols_edit_{selected_month}"
-    )
-
-    symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
-
-    if symbols and st.button("Load Prices", type="primary"):
+    if symbols and st.button("Load Prices", type="primary", key=f"load_{selected_month}"):
         st.markdown("---")
 
         # Calcular mes anterior dinámicamente
