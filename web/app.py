@@ -3471,6 +3471,83 @@ elif page == "Estacionalidad" and backtesting_option == "Estrategia Mensual":
 
     st.markdown("---")
 
+    # === SIMULACIÓN DE CARTERA ===
+    st.subheader("Simulación de Cartera")
+    st.caption("Inversión: $50,000 por ticker cada mes")
+
+    INVERSION_POR_TICKER = 50000
+    TICKERS_ESTANDAR = 10
+
+    # Calcular P&L mes a mes
+    portfolio_data = []
+    total_invertido = 0
+    total_pnl = 0
+    capital_acumulado = 0
+
+    for month_key in month_order:
+        if month_key in historical_data:
+            r = historical_data[month_key]
+            num_tickers = r['symbols']
+            ret_medio = r['avg']
+
+            # Inversión del mes
+            inversion_mes = INVERSION_POR_TICKER * num_tickers
+            cash_mes = INVERSION_POR_TICKER * (TICKERS_ESTANDAR - num_tickers) if num_tickers < TICKERS_ESTANDAR else 0
+
+            # P&L del mes (retorno medio aplicado a la inversión)
+            pnl_mes = inversion_mes * (ret_medio / 100)
+
+            total_invertido += inversion_mes
+            total_pnl += pnl_mes
+            capital_acumulado += inversion_mes + pnl_mes
+
+            portfolio_data.append({
+                'Mes': month_key,
+                'Tickers': num_tickers,
+                'Inversión': f"${inversion_mes:,.0f}",
+                'Cash': f"${cash_mes:,.0f}" if cash_mes > 0 else '-',
+                'Ret. %': f"{ret_medio:+.2f}%",
+                'P&L Mes': f"${pnl_mes:+,.0f}",
+                'P&L Acum.': f"${total_pnl:+,.0f}"
+            })
+
+    if portfolio_data:
+        portfolio_df = pd.DataFrame(portfolio_data)
+
+        def style_portfolio(row):
+            styles = [''] * len(row)
+            try:
+                pnl_str = row['P&L Mes'].replace('$', '').replace(',', '').replace('+', '')
+                pnl_val = float(pnl_str)
+                pnl_idx = portfolio_df.columns.get_loc('P&L Mes')
+                acum_idx = portfolio_df.columns.get_loc('P&L Acum.')
+                ret_idx = portfolio_df.columns.get_loc('Ret. %')
+                color = 'color: green' if pnl_val > 0 else 'color: red' if pnl_val < 0 else ''
+                styles[pnl_idx] = color
+                styles[ret_idx] = color
+
+                acum_str = row['P&L Acum.'].replace('$', '').replace(',', '').replace('+', '')
+                acum_val = float(acum_str)
+                styles[acum_idx] = 'color: green' if acum_val > 0 else 'color: red' if acum_val < 0 else ''
+            except:
+                pass
+            return styles
+
+        st.dataframe(portfolio_df.style.apply(style_portfolio, axis=1), use_container_width=True, hide_index=True)
+
+        # Métricas del portafolio
+        meses_positivos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] > 0)
+        meses_negativos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] < 0)
+        rentabilidad_total = (total_pnl / total_invertido) * 100 if total_invertido > 0 else 0
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Invertido", f"${total_invertido:,.0f}")
+        col2.metric("P&L Total", f"${total_pnl:+,.0f}")
+        col3.metric("Rentabilidad", f"{rentabilidad_total:+.2f}%")
+        col4.metric("Win Rate", f"{meses_positivos}/{meses_positivos + meses_negativos}")
+
+    st.markdown("---")
+
     col1, col2 = st.columns(2)
     with col1:
         current_month = datetime.now().month
