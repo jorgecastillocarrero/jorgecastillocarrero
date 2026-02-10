@@ -66,6 +66,8 @@ desktop.ini
 *.temp
 *.bak
 *~
+railway.exe
+scratchpad*.py
 
 # =============================================================================
 # GENERATED DOCS (optional - uncomment to exclude)
