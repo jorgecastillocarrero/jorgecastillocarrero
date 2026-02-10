@@ -408,8 +408,72 @@ class DailyDataUpdater:
 
         return results
 
+    def update_positions(self) -> dict:
+        """
+        Update portfolio positions (holding_diario, cash_diario, posicion).
+
+        Returns:
+            Dictionary with update results
+        """
+        from sqlalchemy import text
+        started_at = datetime.now(ET)
+        logger.info("Starting positions calculation")
+
+        results = {
+            'fecha': None,
+            'valid': False,
+            'holdings_count': 0,
+            'total_eur': 0,
+            'error': None
+        }
+
+        try:
+            # Calculate valor actual (updates holding_diario and cash_diario)
+            valor_results = self.valor_actual.calculate_valor_actual()
+
+            results['fecha'] = valor_results.get('fecha')
+            results['valid'] = valor_results.get('valid', False)
+            results['holdings_count'] = valor_results.get('holdings_count', 0)
+            results['total_eur'] = valor_results.get('total_eur', 0)
+            results['error'] = valor_results.get('error')
+
+            if results['valid'] and valor_results.get('by_account'):
+                # Save to posicion table
+                with self.db.get_session() as session:
+                    fecha = results['fecha']
+
+                    # Delete existing records for this date
+                    session.execute(text(
+                        "DELETE FROM posicion WHERE DATE(fecha) = :fecha"
+                    ), {'fecha': fecha})
+
+                    # Insert new records per account
+                    for account, data in valor_results['by_account'].items():
+                        session.execute(text("""
+                            INSERT INTO posicion (fecha, account_code, holding_eur, cash_eur, total_eur)
+                            VALUES (:fecha, :account, :holding, :cash, :total)
+                        """), {
+                            'fecha': fecha,
+                            'account': account,
+                            'holding': data['holdings'],
+                            'cash': data['cash'],
+                            'total': data['total']
+                        })
+
+                    session.commit()
+                    logger.info(f"Saved posicion for {len(valor_results['by_account'])} accounts on {fecha}")
+
+        except Exception as e:
+            results['error'] = str(e)
+            logger.error(f"Error updating positions: {e}")
+
+        elapsed = (datetime.now(ET) - started_at).total_seconds()
+        logger.info(f"Positions calculation completed in {elapsed:.1f}s: {results['total_eur']:,.0f} EUR")
+
+        return results
+
     def run_daily_update(self):
-        """Run the complete daily update (prices + fundamentals + metrics + news)."""
+        """Run the complete daily update (prices + fundamentals + metrics + news + positions)."""
         logger.info("=" * 60)
         logger.info("DAILY UPDATE STARTED")
         logger.info(f"Time: {datetime.now(ET).strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -431,6 +495,9 @@ class DailyDataUpdater:
         # Update news
         news_results = self.update_news()
 
+        # Update portfolio positions (holding_diario, cash_diario, posicion)
+        position_results = self.update_positions()
+
         logger.info("=" * 60)
         logger.info("DAILY UPDATE COMPLETED")
         logger.info(f"Prices: {price_results['new_records']} new records")
@@ -438,9 +505,10 @@ class DailyDataUpdater:
             logger.info(f"Fundamentals: {fund_results['success']} updated")
         logger.info(f"Metrics: {metrics_results['success']} calculated")
         logger.info(f"News: {news_results['total_saved']} articles")
+        logger.info(f"Positions: {position_results['total_eur']:,.0f} EUR ({position_results['holdings_count']} holdings)")
         logger.info("=" * 60)
 
-        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "news": news_results}
+        return {"prices": price_results, "fundamentals": fund_results, "metrics": metrics_results, "news": news_results, "positions": position_results}
 
 
 class SchedulerManager:
@@ -675,6 +743,18 @@ if __name__ == "__main__":
             print(f"  Skipped: {results['skipped']}")
             print(f"  Failed: {results['failed']}")
 
+        elif cmd == "--positions":
+            print("\n=== Running Positions Calculation ===\n")
+            updater = DailyDataUpdater()
+            results = updater.update_positions()
+            print(f"\nResults:")
+            print(f"  Fecha: {results['fecha']}")
+            print(f"  Valid: {results['valid']}")
+            print(f"  Holdings: {results['holdings_count']}")
+            print(f"  Total: {results['total_eur']:,.0f} EUR")
+            if results['error']:
+                print(f"  Error: {results['error']}")
+
         elif cmd == "--missing":
             print("\n=== Running Missing Prices Update ===\n")
             updater = DailyDataUpdater()
@@ -709,6 +789,7 @@ if __name__ == "__main__":
             print("  python -m src.scheduler --missing       # Update missing prices only")
             print("  python -m src.scheduler --fundamentals  # Update fundamentals only")
             print("  python -m src.scheduler --metrics       # Calculate technical metrics")
+            print("  python -m src.scheduler --positions     # Calculate portfolio positions")
             print("  python -m src.scheduler --status        # Show status")
     else:
         run_scheduler_daemon()
