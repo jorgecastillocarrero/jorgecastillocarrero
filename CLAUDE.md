@@ -218,6 +218,105 @@ Ejecutar con: `py -3 scripts/fmp_[nombre].py`
 
 ---
 
+## Modulo NLP / Sentiment Analysis (11/02/2026)
+
+Modulo de analisis de sentimiento con transformers, disenado para escalar de 35 GB a 1 TB.
+
+### Estado: INFRAESTRUCTURA CREADA - INTEGRACION PAUSADA
+
+El modulo esta creado pero la integracion con el resto del sistema esta pausada hasta que la infraestructura de datos este completa (objetivo: 700 GB - 1.75 TB).
+
+### Estructura creada (36 archivos, ~4,200 lineas)
+
+```
+src/nlp/
+├── __init__.py, config.py           # Configuracion Pydantic (NLP_* env vars)
+├── models/                          # Modelos de Sentiment
+│   ├── base.py                      # BaseSentimentModel + SentimentResult
+│   ├── finbert.py                   # ProsusAI/finbert (financiero)
+│   ├── roberta.py                   # cardiffnlp/roberta-sentiment
+│   └── ensemble.py                  # Combinacion 60% FinBERT + 40% RoBERTa
+├── processors/                      # Preprocesamiento
+│   ├── text_cleaner.py              # Limpieza HTML, URLs, whitespace
+│   ├── chunker.py                   # Segmentacion textos largos
+│   └── entity_extractor.py          # Extraccion tickers, empresas, montos
+├── analyzers/                       # Analizadores especializados
+│   ├── news_analyzer.py             # Analisis titulo + contenido
+│   └── transcript_analyzer.py       # Analisis por seccion, Q&A delta
+├── calculators/                     # Calculadores (patron existente)
+│   ├── news_sentiment_calc.py       # news_history -> nlp_sentiment_news
+│   ├── transcript_sentiment_calc.py # transcripts -> nlp_sentiment_transcript
+│   └── aggregate_sentiment_calc.py  # Features diarias agregadas
+├── services/                        # Servicios singleton
+│   ├── sentiment_service.py         # Servicio principal con fallback
+│   └── embedding_service.py         # Generacion de embeddings
+├── storage/                         # Capa de almacenamiento escalable
+│   ├── base.py                      # Interfaz abstracta
+│   ├── postgres.py                  # PostgreSQL + pgvector
+│   ├── vector_store.py              # ChromaDB / pgvector
+│   └── cache.py                     # Redis / memoria
+└── pipelines/                       # Pipelines de procesamiento
+    ├── batch_processor.py           # Procesamiento masivo
+    └── incremental_processor.py     # Actualizaciones tiempo real
+
+scripts/nlp/
+├── create_tables.sql                # Schema SQL (tablas particionadas)
+├── run_batch_processing.py          # CLI batch processing
+└── benchmark_models.py              # Benchmark de rendimiento
+
+tests/nlp/
+├── test_models.py                   # Tests unitarios
+└── test_integration.py              # Tests de integracion
+```
+
+### Tablas SQL preparadas (sin ejecutar)
+
+| Tabla | Descripcion |
+|-------|-------------|
+| nlp_sentiment_news | Sentiment por articulo (particionada por ano) |
+| nlp_sentiment_transcript | Sentiment de earnings calls con Q&A delta |
+| features_sentiment_daily | Features agregadas por simbolo/dia |
+| nlp_embeddings | Embeddings con pgvector (768 dims) |
+
+### Dependencias anadidas a requirements.txt
+
+```
+transformers>=4.36.0
+torch>=2.1.0
+accelerate>=0.25.0
+pgvector>=0.2.0
+redis>=5.0.0
+```
+
+### Fases de implementacion NLP
+
+| Fase | Estado | Descripcion |
+|------|--------|-------------|
+| Fase 1: Infraestructura | ✅ Completa | Estructura, config, SQL, BaseSentimentModel |
+| Fase 2: Modelos | ✅ Completa | FinBERT, RoBERTa, Ensemble, SentimentService |
+| Fase 3: Procesadores | ✅ Completa | TextCleaner, Chunker, Analyzers |
+| Fase 4: Calculadores | ✅ Completa | News, Transcript, Aggregate calculators |
+| Fase 5: Integracion | ⏸️ PAUSADA | Integrar con ai_assistant, portfolio_rag, scheduler |
+
+### Cuando activar (futuro)
+
+1. Ejecutar: `psql -U fmp -d fmp_data -f scripts/nlp/create_tables.sql`
+2. Instalar: `pip install transformers torch accelerate`
+3. Procesar historico: `python -m scripts.nlp.run_batch_processing`
+4. Integrar con ai_assistant.py, portfolio_rag.py, scheduler.py
+
+### Hoja de ruta escalabilidad
+
+```
+FASE 1-2 (ACTUAL):  35 GB   - SQLite + PostgreSQL FMP
+FASE 3 (+NLP):      50-100 GB - Activar modulo NLP, pgvector
+FASE 4 (+ML):       100-300 GB - Embeddings, features ML, tick data
+FASE 5 (+DL):       300-500 GB - TimescaleDB, modelos DL
+FASE 6 (Enterprise): 500 GB-1 TB - Cluster PostgreSQL distribuido
+```
+
+---
+
 ## TAREAS INMEDIATAS AL INICIAR SESION (hacer sin preguntar)
 
 1. Ejecutar `docker-compose up --build` (levantar dashboard local en localhost:8502)
