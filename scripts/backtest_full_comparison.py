@@ -301,11 +301,14 @@ def run_backtest(formula_name, formula_func, max_changes, use_transcripts=False)
 
     # Calcular CAGR por trade (anualizado por duración)
     # CAGR_trade = ((1 + return%) ^ (365/días)) - 1
+    # Mínimo 30 días para evitar CAGRs absurdos en trades cortos
     cagr_per_trade = []
     for t in closed_trades:
-        if t['duration'] > 0:
-            ret_decimal = t['pct'] / 100
-            annualized = ((1 + ret_decimal) ** (365 / t['duration']) - 1) * 100
+        duration = max(t['duration'], 30)  # Mínimo 30 días
+        ret_decimal = t['pct'] / 100
+        # Limitar retorno extremo para evitar overflow
+        if abs(ret_decimal) < 5:  # Máximo 500% por trade
+            annualized = ((1 + ret_decimal) ** (365 / duration) - 1) * 100
             cagr_per_trade.append(annualized)
 
     avg_cagr = sum(cagr_per_trade) / len(cagr_per_trade) if cagr_per_trade else 0
@@ -386,8 +389,8 @@ def print_results_table(results, title):
     print(title)
     print('='*160)
 
-    # Ordenar por CAGR
-    results_sorted = sorted(results, key=lambda x: x['cagr'], reverse=True)
+    # Ordenar por CAGR del portfolio
+    results_sorted = sorted(results, key=lambda x: x['portfolio_cagr'], reverse=True)
 
     # Obtener todos los años
     all_years = set()
@@ -397,12 +400,12 @@ def print_results_table(results, title):
 
     # Header con años (PnL en $)
     year_cols = ''.join([f'{y:>12}' for y in years_sorted])
-    print(f'\n{"#":<2} {"ESTRATEGIA":<16} {"CAGR/TR":>8} {"PORT CAGR":>10} {"TOTAL PNL":>12} {year_cols} {"MAXDD":>7} {"SQN":>6} {"WIN%":>6}')
-    print('-'*180)
+    print(f'\n{"#":<2} {"ESTRATEGIA":<16} {"CAGR":>7} {"TOTAL PNL":>12} {year_cols} {"MAXDD":>7} {"SQN":>6} {"PnL/TR":>8} {"WIN%":>6}')
+    print('-'*170)
 
     for i, r in enumerate(results_sorted):
         year_vals = ''.join([f'${r["yearly_pnl"].get(y, 0):>10,.0f}' for y in years_sorted])
-        print(f'{i+1:<2} {r["formula"]:<16} {r["cagr"]:>7.1f}% {r["portfolio_cagr"]:>9.1f}% ${r["total_pnl"]:>10,.0f} {year_vals} {r["max_drawdown"]:>6.1f}% {r["sqn"]:>6.2f} {r["win_rate"]:>5.1f}%')
+        print(f'{i+1:<2} {r["formula"]:<16} {r["portfolio_cagr"]:>6.1f}% ${r["total_pnl"]:>10,.0f} {year_vals} {r["max_drawdown"]:>6.1f}% {r["sqn"]:>6.2f} ${r["pnl_per_trade"]:>6,.0f} {r["win_rate"]:>5.1f}%')
 
     # Resumen
     print('\n' + '-'*160)
@@ -410,12 +413,12 @@ def print_results_table(results, title):
 
     # Mejor por cada métrica
     print('\nMEJOR POR METRICA:')
-    best_cagr = max(results, key=lambda x: x['cagr'])
+    best_cagr = max(results, key=lambda x: x['portfolio_cagr'])
     best_pnl = max(results, key=lambda x: x['total_pnl'])
     best_sqn = max(results, key=lambda x: x['sqn'])
     best_dd = min(results, key=lambda x: x['max_drawdown'])
 
-    print(f'  CAGR/Trade:    {best_cagr["formula"]} ({best_cagr["cagr"]:.1f}%)')
+    print(f'  CAGR:          {best_cagr["formula"]} ({best_cagr["portfolio_cagr"]:.1f}%)')
     print(f'  Total PnL:     {best_pnl["formula"]} (${best_pnl["total_pnl"]:,.0f})')
     print(f'  SQN:           {best_sqn["formula"]} ({best_sqn["sqn"]:.2f})')
     print(f'  Min Drawdown:  {best_dd["formula"]} ({best_dd["max_drawdown"]:.1f}%)')
@@ -440,7 +443,7 @@ for mode, results in [('2 cambios/semana', results_2changes), ('Sin limite', res
         print('-'*75)
 
         metrics = [
-            ('CAGR %', orig['cagr'], orig_ts['cagr'], True),
+            ('CAGR %', orig['portfolio_cagr'], orig_ts['portfolio_cagr'], True),
             ('Trades', orig['trades'], orig_ts['trades'], False),
             ('Win Rate %', orig['win_rate'], orig_ts['win_rate'], True),
             ('PnL/Trade $', orig['pnl_per_trade'], orig_ts['pnl_per_trade'], True),

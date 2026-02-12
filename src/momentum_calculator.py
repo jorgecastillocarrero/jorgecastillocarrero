@@ -33,7 +33,7 @@ class MomentumCalculator:
         return psycopg2.connect(self.db_url)
 
     def get_market_returns(self) -> pd.Series:
-        """Get SPY returns as market benchmark (cached)."""
+        """Get S&P 500 index returns as market benchmark (cached)."""
         if self._market_returns is not None:
             return self._market_returns
 
@@ -41,15 +41,11 @@ class MomentumCalculator:
         try:
             query = """
                 SELECT date, close
-                FROM fmp_price_history
-                WHERE symbol = 'SPY'
+                FROM price_history_index
+                WHERE symbol = '^GSPC'
                 ORDER BY date
             """
             df = pd.read_sql(query, conn, params=())
-            if df.empty:
-                logger.warning("SPY data not found, using ^GSPC")
-                query = query.replace("'SPY'", "'^GSPC'")
-                df = pd.read_sql(query, conn, params=())
 
             if not df.empty:
                 df['date'] = pd.to_datetime(df['date'])
@@ -175,6 +171,65 @@ class MomentumCalculator:
         # Reindex to original stock index
         return beta.reindex(stock_returns.index)
 
+    def calculate_upside_beta(self, stock_returns: pd.Series, market_returns: pd.Series,
+                                window: int) -> pd.Series:
+        """
+        Calculate rolling upside beta (only when market is up).
+        Beta calculado solo en días que el mercado sube.
+        """
+        aligned = pd.DataFrame({
+            'stock': stock_returns,
+            'market': market_returns
+        }).dropna()
+
+        if len(aligned) < window:
+            return pd.Series(index=stock_returns.index, dtype=float)
+
+        # Mask for positive market days
+        upside_mask = aligned['market'] > 0
+
+        def calc_upside_beta(window_data):
+            up_days = window_data[window_data['market'] > 0]
+            if len(up_days) < window // 4:  # Need at least 25% of window
+                return np.nan
+            cov = up_days['stock'].cov(up_days['market'])
+            var = up_days['market'].var()
+            return cov / var if var > 0 else np.nan
+
+        beta = aligned.rolling(window=window, min_periods=window).apply(
+            lambda x: calc_upside_beta(aligned.loc[x.index]), raw=False
+        )['stock']
+
+        return beta.reindex(stock_returns.index)
+
+    def calculate_downside_beta(self, stock_returns: pd.Series, market_returns: pd.Series,
+                                  window: int) -> pd.Series:
+        """
+        Calculate rolling downside beta (only when market is down).
+        Beta calculado solo en días que el mercado baja.
+        """
+        aligned = pd.DataFrame({
+            'stock': stock_returns,
+            'market': market_returns
+        }).dropna()
+
+        if len(aligned) < window:
+            return pd.Series(index=stock_returns.index, dtype=float)
+
+        def calc_downside_beta(window_data):
+            down_days = window_data[window_data['market'] < 0]
+            if len(down_days) < window // 4:  # Need at least 25% of window
+                return np.nan
+            cov = down_days['stock'].cov(down_days['market'])
+            var = down_days['market'].var()
+            return cov / var if var > 0 else np.nan
+
+        beta = aligned.rolling(window=window, min_periods=window).apply(
+            lambda x: calc_downside_beta(aligned.loc[x.index]), raw=False
+        )['stock']
+
+        return beta.reindex(stock_returns.index)
+
     def classify_beta_zone(self, beta: pd.Series) -> pd.Series:
         """Classify beta into zones."""
         conditions = [
@@ -225,14 +280,19 @@ class MomentumCalculator:
             f['ret_20d'], f['ret_60d'], f['ret_252d'], f['vol_20d']
         )
 
-        # Rolling Betas vs SPY
+        # Rolling Betas vs S&P 500
         market_returns = self.get_market_returns()
         if not market_returns.empty:
+            # Standard betas (different durations)
             f['beta_20d'] = self.calculate_rolling_beta(returns, market_returns, 20)
             f['beta_60d'] = self.calculate_rolling_beta(returns, market_returns, 60)
             f['beta_120d'] = self.calculate_rolling_beta(returns, market_returns, 120)
             f['beta_252d'] = self.calculate_rolling_beta(returns, market_returns, 252)
-            f['beta_zone'] = self.classify_beta_zone(f['beta_60d'])  # Use 60d as default zone
+            f['beta_zone'] = self.classify_beta_zone(f['beta_60d'])
+
+            # Upside/Downside betas (60d window)
+            f['beta_upside_60d'] = self.calculate_upside_beta(returns, market_returns, 60)
+            f['beta_downside_60d'] = self.calculate_downside_beta(returns, market_returns, 60)
         else:
             logger.warning("No market data available for beta calculation")
             f['beta_20d'] = None
@@ -240,6 +300,8 @@ class MomentumCalculator:
             f['beta_120d'] = None
             f['beta_252d'] = None
             f['beta_zone'] = None
+            f['beta_upside_60d'] = None
+            f['beta_downside_60d'] = None
 
         return f
 
