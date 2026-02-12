@@ -16,9 +16,12 @@ Architecture:
 import os
 import json
 import re
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -173,6 +176,7 @@ CAPACIDADES:
 8. Optimizacion de portfolio: pesos optimos para maximizar Sharpe o minimizar volatilidad
 9. Validacion de datos: detectar outliers, datos faltantes, problemas de consistencia
 10. Datos externos: indicadores economicos (Fed), noticias, eventos historicos de mercado
+11. Busqueda semantica: 42K+ earnings transcripts y 92K+ perfiles de empresas (RAG con pgvector)
 
 ESTRATEGIAS DE BACKTEST DISPONIBLES:
 - sma_crossover / sma_20_50 / sma_50_200: Cruce de medias moviles
@@ -262,6 +266,16 @@ IMPORTANTE:
                 stats = self.rag.get_stats()
                 if stats.get('total_documents', 0) == 0:
                     self.rag.index_all()
+        except ImportError:
+            pass
+
+        # Financial RAG (transcripts + profiles + portfolio unified)
+        self.financial_rag = None
+        try:
+            from src.financial_rag import get_financial_rag
+            self.financial_rag = get_financial_rag()
+            if self.financial_rag.is_available():
+                logger.info("Financial RAG initialized (transcripts + profiles)")
         except ImportError:
             pass
 
@@ -699,9 +713,12 @@ IMPORTANTE:
             # Run database analysis
             analysis = self._run_analysis(query)
 
-            # Get RAG context for portfolio-related queries
+            # Get RAG context from unified Financial RAG (transcripts + profiles + portfolio)
             rag_context = ""
-            if use_rag and self.rag and self.rag.is_available():
+            if use_rag and self.financial_rag and self.financial_rag.is_available():
+                rag_context = self.financial_rag.get_context_for_query(query)
+            # Fallback to portfolio RAG only
+            elif use_rag and self.rag and self.rag.is_available():
                 rag_context = self.rag.get_context_for_query(query)
 
             # Build prompt
@@ -850,6 +867,7 @@ Responde de forma clara y concisa basandote en los datos proporcionados."""
             'external_data': self.external is not None,
             'news_manager': self.news is not None,
             'portfolio_rag': self.rag is not None and self.rag.is_available(),
+            'financial_rag': self.financial_rag is not None and self.financial_rag.is_available(),
             'ai_backend': self.active_backend is not None
         }
 
@@ -900,6 +918,56 @@ Responde de forma clara y concisa basandote en los datos proporcionados."""
             return self.news.stats_summary()
         except Exception as e:
             return f"Error: {str(e)}"
+
+    def search_transcripts(self, query: str, symbol: str = None, year: int = None, limit: int = 5) -> str:
+        """Search earnings call transcripts"""
+        if not self.financial_rag or not self.financial_rag.is_available():
+            return "Financial RAG not available"
+        try:
+            results = self.financial_rag.search_transcripts(query, symbol=symbol, year=year, limit=limit)
+            if not results:
+                return f"No transcripts found for: {query}"
+
+            lines = [f"=== EARNINGS TRANSCRIPTS: {query} ===\n"]
+            for r in results:
+                lines.append(f"[{r['symbol']} Q{r.get('quarter', '?')} {r.get('year', '?')}] (score: {r['score']:.2f})")
+                lines.append(f"{r['text'][:300]}...\n")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def search_companies(self, query: str, sector: str = None, limit: int = 5) -> str:
+        """Search company profiles"""
+        if not self.financial_rag or not self.financial_rag.is_available():
+            return "Financial RAG not available"
+        try:
+            results = self.financial_rag.search_companies(query, sector=sector, limit=limit)
+            if not results:
+                return f"No companies found for: {query}"
+
+            lines = [f"=== COMPANY PROFILES: {query} ===\n"]
+            for r in results:
+                lines.append(f"[{r['symbol']}] {r.get('sector', 'N/A')} (score: {r['score']:.2f})")
+                lines.append(f"{r['text'][:300]}...\n")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def ask_financial_rag(self, question: str) -> str:
+        """Ask a question using the Financial RAG system"""
+        if not self.financial_rag or not self.financial_rag.is_available():
+            return "Financial RAG not available"
+        try:
+            result = self.financial_rag.ask(question)
+            return result.get('answer', 'No answer generated')
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def get_financial_rag_stats(self) -> Dict[str, Any]:
+        """Get Financial RAG statistics"""
+        if not self.financial_rag:
+            return {'available': False}
+        return self.financial_rag.get_stats()
 
 
 # =============================================================================

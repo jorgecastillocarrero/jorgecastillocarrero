@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   fmp-postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: fmp_database
     environment:
       POSTGRES_DB: fmp_data

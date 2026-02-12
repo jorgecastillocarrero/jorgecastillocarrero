@@ -18,11 +18,12 @@ class NLPSettings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         env_prefix="NLP_",
+        extra="ignore",
     )
 
     # Database Configuration
     database_url: str = Field(
-        default="postgresql://fmp:fmp123@localhost:5433/fmp_data",
+        default="postgresql://fmp:fmp123@127.0.0.1:5433/fmp_data",
         description="PostgreSQL connection URL for NLP data"
     )
 
@@ -60,7 +61,7 @@ class NLPSettings(BaseSettings):
 
     # Vector Store Configuration
     vector_store_type: str = Field(
-        default="chromadb",
+        default="pgvector",
         description="Vector store: chromadb, pgvector, pinecone"
     )
     chromadb_path: str = Field(

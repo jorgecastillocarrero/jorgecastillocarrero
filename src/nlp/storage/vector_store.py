@@ -240,6 +240,122 @@ class VectorStore:
             where=where
         )
 
+    def search_hybrid(
+        self,
+        text: str,
+        n_results: int = 10,
+        source_type: Optional[str] = None,
+        symbol: Optional[str] = None,
+        year: Optional[int] = None,
+        quarter: Optional[str] = None,
+        section: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Hybrid search combining semantic search with SQL filters.
+
+        Args:
+            text: Query text
+            n_results: Number of results
+            source_type: Filter by source ('transcript', 'profile')
+            symbol: Filter by stock symbol
+            year: Filter by year
+            quarter: Filter by quarter
+            section: Filter by section
+
+        Returns:
+            Dict with results including text_content and metadata
+        """
+        if self.store_type != 'pgvector':
+            # Fall back to standard search for non-pgvector stores
+            where = {}
+            if source_type:
+                where['source_type'] = source_type
+            if symbol:
+                where['symbol'] = symbol
+            return self.search_text(text, n_results, where)
+
+        from ..services.embedding_service import get_embedding_service
+
+        service = get_embedding_service()
+        embedding = service.embed(text)
+
+        if embedding is None:
+            return {'results': [], 'total': 0}
+
+        if not self._ensure_initialized():
+            return {'results': [], 'total': 0}
+
+        try:
+            conn = self._client.get_connection()
+            cur = conn.cursor()
+
+            # Build hybrid query
+            sql = """
+                SELECT
+                    e.id,
+                    e.source_type,
+                    e.symbol,
+                    e.text_content,
+                    e.year,
+                    e.quarter,
+                    e.section,
+                    e.metadata,
+                    1 - (e.embedding <=> %s::vector) as similarity
+                FROM nlp_embeddings e
+                WHERE 1=1
+            """
+            params = [embedding.tolist()]
+
+            if source_type:
+                sql += " AND e.source_type = %s"
+                params.append(source_type)
+
+            if symbol:
+                sql += " AND e.symbol = %s"
+                params.append(symbol.upper())
+
+            if year:
+                sql += " AND e.year = %s"
+                params.append(year)
+
+            if quarter:
+                sql += " AND e.quarter = %s"
+                params.append(quarter)
+
+            if section:
+                sql += " AND e.section = %s"
+                params.append(section)
+
+            sql += " ORDER BY e.embedding <=> %s::vector LIMIT %s"
+            params.extend([embedding.tolist(), n_results])
+
+            cur.execute(sql, params)
+
+            results = []
+            for row in cur.fetchall():
+                results.append({
+                    'id': row[0],
+                    'source_type': row[1],
+                    'symbol': row[2],
+                    'text_content': row[3],
+                    'year': row[4],
+                    'quarter': row[5],
+                    'section': row[6],
+                    'metadata': row[7] if row[7] else {},
+                    'similarity': float(row[8]) if row[8] else 0
+                })
+
+            conn.close()
+
+            return {
+                'results': results,
+                'total': len(results)
+            }
+
+        except Exception as e:
+            logger.error(f"Hybrid search error: {e}")
+            return {'results': [], 'total': 0}
+
     def count(self) -> int:
         """Get number of embeddings in store."""
         if not self._ensure_initialized():

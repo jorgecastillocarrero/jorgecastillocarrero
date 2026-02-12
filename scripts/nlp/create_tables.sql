@@ -153,26 +153,45 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
         CREATE TABLE IF NOT EXISTS nlp_embeddings (
             id BIGSERIAL PRIMARY KEY,
-            source_type VARCHAR(20),  -- 'news', 'transcript', 'filing'
+            source_type VARCHAR(20),  -- 'news', 'transcript', 'profile'
             source_id BIGINT,
             symbol VARCHAR(20),
+
+            -- Text content for retrieval
+            text_content TEXT,
+            chunk_index INTEGER DEFAULT 0,
 
             -- Vector embedding (768 dimensions)
             embedding VECTOR(768),
 
-            -- Metadata
+            -- Additional metadata for filtering
+            year INTEGER,
+            quarter VARCHAR(10),
+            section VARCHAR(50),  -- 'prepared_remarks', 'qa', 'guidance', etc.
+
+            -- Flexible metadata
+            metadata JSONB,
+
+            -- Model info
             model_name VARCHAR(100),
             created_at TIMESTAMP DEFAULT NOW()
         );
 
-        -- Indexes
+        -- Indexes for filtering
         CREATE INDEX IF NOT EXISTS idx_embeddings_source ON nlp_embeddings(source_type, source_id);
         CREATE INDEX IF NOT EXISTS idx_embeddings_symbol ON nlp_embeddings(symbol);
+        CREATE INDEX IF NOT EXISTS idx_embeddings_source_type ON nlp_embeddings(source_type);
+        CREATE INDEX IF NOT EXISTS idx_embeddings_year ON nlp_embeddings(year);
+        CREATE INDEX IF NOT EXISTS idx_embeddings_symbol_year ON nlp_embeddings(symbol, year);
+
+        -- GIN index for metadata JSONB queries
+        CREATE INDEX IF NOT EXISTS idx_embeddings_metadata ON nlp_embeddings USING GIN (metadata);
 
         -- IVFFlat index for fast similarity search
-        -- Note: Requires some data before creating
-        -- CREATE INDEX idx_embeddings_vector ON nlp_embeddings
-        --     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+        -- Note: Create AFTER loading data. Lists = sqrt(n_vectors)
+        -- For 700K vectors: lists = 850
+        -- CREATE INDEX CONCURRENTLY idx_embeddings_vector_ivfflat
+        --     ON nlp_embeddings USING ivfflat (embedding vector_cosine_ops) WITH (lists = 850);
 
         RAISE NOTICE 'Created nlp_embeddings table with pgvector support';
     ELSE
