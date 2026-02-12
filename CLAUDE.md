@@ -109,7 +109,18 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 - .dockerignore corregido: excluye data/ para evitar contexto de 3GB+
 - Acceso directo Desktop renombrado: PatrimonioSmart.bat
 - Secuencia download_logs_id_seq corregida (estaba desincronizada tras migracion)
-- Datos actualizados hasta 04/02/2026 (5877 registros, posicion: 4,111,180 EUR)
+
+### Actualizacion 12/02/2026
+- Precios actualizados hasta 11/02/2026 (5,729 simbolos con cobertura 98.6%)
+- Config.py: anadido `extra="ignore"` en Settings para ignorar vars NLP mientras modulo pausado
+- Holding_diario IB actualizado con datos reales del extracto:
+  - TLT: 17.424 shares (vendieron 6,555 el 02/02)
+  - ESH6: -1 contrato futuro (short S&P 500)
+  - Cash: 690,596 EUR + 17,703 USD
+  - Total IB: ~707,000 EUR
+- Registradas operaciones IB 02-11/02: 19 compras + 18 ventas (ETFs y Futuros)
+- Registradas operaciones RCO951 12/02: 15 compras + 11 ventas (Quant)
+- Posiciones Quant nuevas en RCO951: LC, SPOT, NBN, HOOD, PEGA, MC, LYFT, HUBS, HFWA, GE, DIOD, CURB, ROAD, AMD, AEIS
 
 ### Descarga masiva FMP (09/02/2026)
 - Base de datos FMP local en Docker (localhost:5433) con 101.4M registros, 25 GB
@@ -132,9 +143,9 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 
 ### Pendiente / En progreso
 - Dashboard local lento por latencia a Railway PostgreSQL (cada query ~200ms vs <1ms en produccion)
-- Holding_diario de IB solo hasta 30/01/2026 (falta actualizar)
 - Metricas tecnicas no se calculan (requieren 200+ registros, PostgreSQL tiene ~191 por simbolo)
-- Verificar que el scheduler de Railway ejecuta correctamente a las 00:01 ET diario
+- Scheduler Railway no ejecuto el 12/02 a las 00:01 ET (verificar logs y reiniciar si es necesario)
+- Actualizar holding_diario para fechas intermedias 02-10/02 con datos correctos de IB
 
 ### Servicios Railway
 | Servicio | Funcion | Estado |
