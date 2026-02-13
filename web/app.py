@@ -2320,6 +2320,7 @@ elif page == "Acciones":
             # =====================================================
             # CALCULAR POSICIONES CERRADAS PARA ESTADÍSTICAS
             # (Consolidado por fecha/cuenta/símbolo)
+            # Excluir Futuros y ETFs (solo acciones)
             # =====================================================
             with db.get_session() as session:
                 ventas_result = session.execute(text("""
@@ -2332,6 +2333,8 @@ elif page == "Acciones":
                            AVG(precio_31_12) as precio_31_12,
                            AVG(rent_periodo) as rent_periodo
                     FROM ventas
+                    WHERE symbol NOT IN ('TLT', 'EMB', 'GLD', 'SLV', 'QQQ', 'SPY', 'IWM', 'DIA', 'VTI', 'VOO')
+                    AND symbol NOT SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
                     GROUP BY fecha, account_code, symbol, currency
                     ORDER BY fecha DESC
                 """))
@@ -2355,14 +2358,12 @@ elif page == "Acciones":
             for venta in ventas_rows:
                 fecha_venta, cuenta, symbol, shares, precio_venta, importe_venta, currency, pnl_db, precio_31_12_db, rent_periodo_db = venta
 
-                # Precio base para periodo (31/12 o de la BD)
-                precio_periodo = precio_31_12_db if precio_31_12_db else portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
-                if precio_periodo is None:
-                    precio_periodo = precio_venta * 0.95
-
-                # Rentabilidad del periodo
-                rent_periodo = rent_periodo_db if rent_periodo_db else ((precio_venta / precio_periodo - 1) * 100 if precio_periodo > 0 else 0)
-                pnl_periodo = (precio_venta - precio_periodo) * shares
+                # Obtener precio de compra real PRIMERO (necesario para decidir base del periodo)
+                compra_info = precios_compra.get(symbol, {})
+                precio_compra_real = compra_info.get('precio')
+                fecha_compra = compra_info.get('fecha')
+                if isinstance(fecha_compra, datetime):
+                    fecha_compra = fecha_compra.date()
 
                 # Determinar símbolo de moneda y conversión
                 if currency == 'USD':
@@ -2378,18 +2379,25 @@ elif page == "Acciones":
                     fx_rate = 1.0
                     currency_symbol = currency
 
+                # Precio base para periodo: 31/12 si existía antes, o compra si fue después
+                fecha_corte = date(2025, 12, 31)
+                if fecha_compra and fecha_compra > fecha_corte and precio_compra_real:
+                    # Compra en 2026: usar precio de compra como base
+                    precio_periodo = precio_compra_real
+                    rent_periodo = ((precio_venta / precio_compra_real) - 1) * 100 if precio_compra_real > 0 else 0
+                else:
+                    # Existía a 31/12: usar precio 31/12
+                    precio_periodo = precio_31_12_db if precio_31_12_db else portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
+                    if precio_periodo is None:
+                        precio_periodo = precio_compra_real if precio_compra_real else precio_venta
+                    rent_periodo = rent_periodo_db if rent_periodo_db else ((precio_venta / precio_periodo - 1) * 100 if precio_periodo > 0 else 0)
+
+                pnl_periodo = (precio_venta - precio_periodo) * shares
                 pnl_eur = pnl_periodo / fx_rate if fx_rate != 1.0 else pnl_periodo
                 valor_venta_eur = importe_venta / fx_rate if fx_rate != 1.0 else importe_venta
 
                 total_closed_pnl_eur += pnl_eur
                 total_closed_valor_eur += valor_venta_eur
-
-                # Obtener precio de compra real
-                compra_info = precios_compra.get(symbol, {})
-                precio_compra_real = compra_info.get('precio')
-                fecha_compra = compra_info.get('fecha')
-                if isinstance(fecha_compra, datetime):
-                    fecha_compra = fecha_compra.date()
 
                 # Calcular rentabilidad histórica (desde compra)
                 if precio_compra_real and precio_compra_real > 0:
