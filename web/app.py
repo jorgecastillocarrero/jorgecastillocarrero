@@ -2429,7 +2429,7 @@ elif page == "Acciones":
                     'Ticker': symbol,
                     'Cuenta': cuenta,
                     'Titulos': int(shares),
-                    'Precio Compra': f"{currency_symbol}{precio_periodo:.2f}",
+                    'Precio Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else f"{currency_symbol}0.00",
                     'Precio Venta': f"{currency_symbol}{precio_venta:.2f}",
                     'Rent. %': rent_periodo,
                     'Rent. EUR': pnl_eur,
