@@ -2,7 +2,7 @@
 Module for calculating portfolio positions (valor actual).
 
 Logic:
-1. Validate that >= 98% of symbols have prices for the date
+1. Validate that >= 97% of symbols have prices for the date
 2. Calculate holding_diario = yesterday + compras - ventas
 3. Get prices only for exact date (no lookback)
 4. Valor actual = sum(holdings * price) + cash
@@ -16,7 +16,7 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 # Minimum percentage of symbols required to consider a date valid
-MIN_PRICE_COVERAGE = 0.98  # 98%
+MIN_PRICE_COVERAGE = 0.97  # 97%
 
 
 class ValorActualCalculator:
