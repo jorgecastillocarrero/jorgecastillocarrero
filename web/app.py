@@ -1850,7 +1850,8 @@ elif page == "Composición":
     bolsa = (strategy_values.get('Quant', 0) +
              strategy_values.get('Value', 0) +
              strategy_values.get('Alpha Picks', 0) +
-             strategy_values.get('Mensual', 0))
+             strategy_values.get('Mensual', 0) +
+             strategy_values.get('Stock', 0))
     oro = strategy_values.get('Oro/Mineras', 0)
     liquidez = strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0)
 
