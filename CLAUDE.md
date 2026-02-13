@@ -110,6 +110,19 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 - Acceso directo Desktop renombrado: PatrimonioSmart.bat
 - Secuencia download_logs_id_seq corregida (estaba desincronizada tras migracion)
 
+### Actualizacion 13/02/2026
+- Registradas 3 compras RCO951 del 04/02 que faltaban:
+  - TAL: 1,707 acciones @ 11.649 USD = 19,897.84 USD
+  - PLTR: 145 acciones @ 137.777 USD = 19,990.67 USD
+  - GLDD: 1,328 acciones @ 14.877 USD = 19,769.66 USD
+- Corregido cash_diario RCO951 desde 04/02 al 12/02:
+  - 04-11/02: USD -156,146.31 (refleja las 3 compras del 04/02)
+  - 12/02: USD -261,609.75 (tras operaciones del 12/02)
+- Corregido holding_diario: TAL, PLTR, GLDD añadidos al 10, 11, 12/02
+- Recalculadas posiciones RCO951 con cash y holding correctos
+- Posicion global verificada dia a dia (02-12/02/2026)
+- Total cartera 12/02/2026: 4,149,533.53 EUR
+
 ### Actualizacion 12/02/2026
 - Precios actualizados hasta 11/02/2026 (5,729 simbolos con cobertura 98.6%)
 - Config.py: anadido `extra="ignore"` en Settings para ignorar vars NLP mientras modulo pausado
