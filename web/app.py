@@ -2275,7 +2275,7 @@ elif page == "Acciones":
                     precio_actual_display = f"{currency_symbol}{precio_actual:.2f}"
 
                     asset_returns.append({
-                        'F.Compra': fecha_compra.strftime('%d/%m/%y') if fecha_compra else None,
+                        'F.Compra': fecha_compra,  # Mantener como date para ordenamiento correcto
                         'Ticker': holding['ticker_full'],
                         'Tipo': holding['tipo'],
                         'Cuenta': holding['cuenta'],
@@ -2568,17 +2568,18 @@ elif page == "Acciones":
             display_df = asset_returns_df.copy()
             display_df = display_df.drop(columns=['Valor_Inicial_EUR'])
 
-            # Convertir fecha a formato español (dd/mm/yyyy)
-            def to_spanish_date(date_str):
-                if not date_str or date_str == '-':
-                    return '-'
+            # Función para convertir fecha a formato español (para uso posterior)
+            def to_spanish_date(date_val):
+                if not date_val or date_val == '-':
+                    return None
                 try:
+                    if isinstance(date_val, (date, datetime)):
+                        return date_val
                     from datetime import datetime as dt
-                    d = dt.strptime(str(date_str)[:10], '%Y-%m-%d')
-                    return d.strftime('%d/%m/%Y')
+                    d = dt.strptime(str(date_val)[:10], '%Y-%m-%d')
+                    return d.date()
                 except:
-                    return date_str
-            display_df['F.Compra'] = display_df['F.Compra'].apply(to_spanish_date)
+                    return None
 
             # Reorder columns: F.Compra, precios, rentabilidades en EUR
             display_df = display_df[['F.Compra', 'Ticker', 'Tipo', 'Cuenta', 'Títulos', 'P.Compra', 'Últ.Precio', 'Valor EUR', 'Rent.Compra %', 'Rent.Periodo %', 'Rent.Periodo EUR']]
@@ -2589,7 +2590,7 @@ elif page == "Acciones":
                 hide_index=True,
                 height=600,
                 column_config={
-                    'F.Compra': st.column_config.TextColumn('F.Compra', width='small'),
+                    'F.Compra': st.column_config.DateColumn('F.Compra', width='small', format='DD/MM/YYYY'),
                     'Ticker': st.column_config.TextColumn('Ticker', width='small'),
                     'Tipo': st.column_config.TextColumn('Tipo', width='small'),
                     'Cuenta': st.column_config.TextColumn('Cuenta', width='small'),
@@ -2650,8 +2651,8 @@ elif page == "Acciones":
                 periodo_df['Rent.Periodo EUR'] = pd.to_numeric(periodo_df['Rent.Periodo EUR'], errors='coerce').fillna(0)
                 periodo_df['Rent.Histórica EUR'] = pd.to_numeric(periodo_df['Rent.Histórica EUR'], errors='coerce').fillna(0)
 
-                # Convertir fecha a formato español
-                periodo_df['Fecha'] = periodo_df['Fecha'].apply(to_spanish_date)
+                # Convertir fecha a objeto date para ordenamiento correcto
+                periodo_df['Fecha'] = pd.to_datetime(periodo_df['Fecha']).dt.date
 
                 total_periodo_eur = periodo_df['Rent.Periodo EUR'].sum()
                 total_historica_eur_display = periodo_df['Rent.Histórica EUR'].sum()
@@ -2669,7 +2670,7 @@ elif page == "Acciones":
                     hide_index=True,
                     height=400,
                     column_config={
-                        'Fecha': st.column_config.TextColumn('Fecha', width='small'),
+                        'Fecha': st.column_config.DateColumn('Fecha', width='small', format='DD/MM/YYYY'),
                         'Títulos': st.column_config.NumberColumn('Títulos', width='small', format='%d'),
                         'Rent.Periodo %': st.column_config.TextColumn('Rent.Periodo %', width='small'),
                         'Rent.Histórica %': st.column_config.TextColumn('Rent.Histórica %', width='small'),
