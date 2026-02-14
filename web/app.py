@@ -751,7 +751,7 @@ TRADING_DATES = [
     date(2026, 1, 26), date(2026, 1, 27),
 ]
 
-ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
+ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']
 
 
 def _get_price_or_previous(session, sym_id, target_date, max_lookback=5):
@@ -1284,11 +1284,15 @@ if page == "Posición":
         prev_totals = calculate_portfolio_by_type(day_prev)
         last_totals = calculate_portfolio_by_type(day_last)
 
+        # Combine ETFs with Cash
+        prev_totals['Cash/ETFs'] = prev_totals.pop('Cash', 0) + prev_totals.pop('ETFs', 0)
+        last_totals['Cash/ETFs'] = last_totals.pop('Cash', 0) + last_totals.pop('ETFs', 0)
+
         # Build comparison table - get all types dynamically from data
         comparison_data = []
         all_tipos = set(prev_totals.keys()) | set(last_totals.keys())
         # Order: known types first, then others
-        tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
+        tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']
         tipos = [t for t in tipo_order if t in all_tipos] + [t for t in sorted(all_tipos) if t not in tipo_order]
         total_prev = 0
         total_last = 0
@@ -1853,7 +1857,7 @@ elif page == "Composición":
              strategy_values.get('Mensual', 0) +
              strategy_values.get('Stock', 0))
     oro = strategy_values.get('Oro/Mineras', 0)
-    liquidez = strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0)
+    liquidez = strategy_values.get('Cash/ETFs', 0) or (strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0))
 
     diversificacion_data = {
         'Bolsa': bolsa,
