@@ -142,6 +142,60 @@ s.add('TEXTCOLOR', (1, 3), (1, 4), GREEN)
 s.add('FONTNAME', (0, 3), (1, 4), 'Helvetica-Bold')
 t.setStyle(s)
 elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 2.3 Variacion Diaria por Tipo de Activo
+elements.append(Paragraph("2.3 Variacion Diaria por Tipo de Activo", section_style))
+elements.append(Paragraph(
+    "Comparativa del valor de la cartera por tipo de activo entre dos dias consecutivos.",
+    description_style
+))
+variacion_data = [
+    ['Tipo', '12/02', '13/02', 'Diferencia', 'Var %'],
+    ['Mensual', '415.581', '416.727', '+1.146', '+0,28%'],
+    ['Quant', '1.487.173', '1.477.718', '-9.455', '-0,64%'],
+    ['Value', '379.754', '247.932', '-131.822', '-34,71%'],
+    ['Alpha Picks', '369.132', '369.040', '-92', '-0,03%'],
+    ['Oro/Mineras', '783.802', '808.331', '+24.529', '+3,13%'],
+    ['Cash/ETFs', '716.667', '876.867', '+160.199', '+22,35%'],
+    ['TOTAL', '4.152.110', '4.196.615', '+44.505', '+1,07%'],
+]
+t = Table(variacion_data, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2*cm])
+s = create_table_style()
+# Color para diferencias positivas/negativas
+s.add('TEXTCOLOR', (3, 1), (4, 1), GREEN)  # Mensual +
+s.add('TEXTCOLOR', (3, 2), (4, 2), RED)    # Quant -
+s.add('TEXTCOLOR', (3, 3), (4, 3), RED)    # Value -
+s.add('TEXTCOLOR', (3, 4), (4, 4), RED)    # Alpha Picks -
+s.add('TEXTCOLOR', (3, 5), (4, 5), GREEN)  # Oro/Mineras +
+s.add('TEXTCOLOR', (3, 6), (4, 6), GREEN)  # Cash/ETFs +
+s.add('TEXTCOLOR', (3, 7), (4, 7), GREEN)  # TOTAL +
+# Fila TOTAL en negrita
+s.add('FONTNAME', (0, 7), (-1, 7), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, 7), (-1, 7), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, 7), (2, 7), colors.white)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 2.4 Grafica de Rentabilidad vs Benchmark
+elements.append(Paragraph("2.4 Rentabilidad vs Benchmark", section_style))
+elements.append(Paragraph(
+    "Evolucion de la rentabilidad de la cartera comparada con SPY y QQQ desde 31/12/2025.",
+    description_style
+))
+# Insertar imagen del grafico
+chart_path = r'C:\Users\usuario\Downloads\rentabilidad_benchmark.png'
+try:
+    chart_img = Image(chart_path, width=16*cm, height=10*cm)
+    elements.append(chart_img)
+except:
+    elements.append(Paragraph("[Grafico no disponible - ejecutar generador de grafico primero]", normal_style))
+elements.append(Spacer(1, 0.3*cm))
+elements.append(Paragraph(
+    "La cartera supera significativamente a los indices de referencia con +6,77% vs SPY (-0,02%) y QQQ (-2,02%).",
+    description_style
+))
 
 elements.append(PageBreak())
 
