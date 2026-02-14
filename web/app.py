@@ -3311,14 +3311,32 @@ elif page == "Futuros":
         """)).fetchone()
         eur_usd_ib = fx[0] if fx else 1.04
 
-    # Mostrar resumen global
-    col1, col2, col3, col4 = st.columns(4)
-    sign = '+' if total_pnl >= 0 else ''
-    col1.metric("P&L Total USD", f"{sign}${total_pnl:,.2f}".replace(",", "."))
-    col2.metric("P&L Total EUR", f"{sign}{total_pnl/eur_usd_ib:,.2f} €".replace(",", "."))
-    col3.metric("Trades", f"{total_trades}")
+    # Tabla 1: Resultado Global
+    st.markdown("**📊 Resultado Global**")
+
+    comisiones = -539.60  # Comisiones del informe IB
+    pnl_neto = total_pnl + comisiones
+    total_contracts = sum(d.get('contracts', 0) for d in by_tipo.values())
     wr = total_wins / total_trades * 100 if total_trades > 0 else 0
-    col4.metric("Win Rate", f"{wr:.0f}%")
+    avg_pnl = total_pnl / total_trades if total_trades > 0 else 0
+    sign = '+' if total_pnl >= 0 else ''
+    sign_neto = '+' if pnl_neto >= 0 else ''
+    sign_avg = '+' if avg_pnl >= 0 else ''
+
+    resultado_data = [
+        {'Métrica': 'P&L Total', 'Valor': f"{sign}${total_pnl:,.2f} USD".replace(",", ".")},
+        {'Métrica': 'P&L Total', 'Valor': f"{sign}{total_pnl/eur_usd_ib:,.2f} EUR".replace(",", ".")},
+        {'Métrica': 'Comisiones', 'Valor': f"${comisiones:,.2f} USD".replace(",", ".")},
+        {'Métrica': 'P&L Neto', 'Valor': f"{sign_neto}${pnl_neto:,.2f} USD".replace(",", ".")},
+        {'Métrica': 'Trades', 'Valor': f"{total_trades}"},
+        {'Métrica': 'Contratos', 'Valor': f"{total_contracts}"},
+        {'Métrica': 'Win Rate', 'Valor': f"{wr:.0f}%"},
+        {'Métrica': 'P&L Promedio', 'Valor': f"{sign_avg}${avg_pnl:,.2f} USD/trade".replace(",", ".")},
+    ]
+
+    col_res, col_space = st.columns([1, 2])
+    with col_res:
+        st.dataframe(pd.DataFrame(resultado_data), use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
