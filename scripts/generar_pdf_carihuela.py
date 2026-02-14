@@ -249,14 +249,14 @@ elements.append(Paragraph(
 elements.append(Paragraph("6.1 Operaciones Cerradas", section_style))
 etf_data = [
     ['ETF', 'Nombre', 'Tipo', 'Acciones', 'F. Entrada', 'F. Cierre', 'P. Entrada', 'P. Cierre', 'P&L USD'],
-    ['TLT', 'iShares 20+ Year Treasury Bond', 'LONG', '8.042', '20-21/01', '30/01-02/02', '$86,87', '$87,08', '+1.291,44'],
+    ['TLT', 'iShares 20+ Year\nTreasury Bond', 'LONG', '8.042', '20-21/01', '30/01\n02/02', '$86,87', '$87,08', '+1.291,44'],
     ['AMLP', 'Alerian MLP ETF', 'SHORT', '8.036', '30/01', '02/02', '$49,97', '$49,62', '+2.810,27'],
-    ['EMB', 'iShares JPM USD EM Bond', 'SHORT', '8.277', '30/01', '02/02', '$96,64', '$96,16', '+3.863,27'],
-    ['EMLC', 'VanEck JPM EM Local Currency', 'SHORT', '30.394', '30/01', '02/02', '$26,30', '$26,22', '+2.333,50'],
-    ['XLB', 'Materials Select Sector SPDR', 'SHORT', '4.288', '30/01', '02/02', '$49,28', '$49,67', '-1.726,35'],
-    ['TLT', 'iShares 20+ Year Treasury Bond', 'LONG', '17', '06/02', '12/02', '$87,40', '$88,72', '+21,75'],
+    ['EMB', 'iShares JPM USD\nEM Bond', 'SHORT', '8.277', '30/01', '02/02', '$96,64', '$96,16', '+3.863,27'],
+    ['EMLC', 'VanEck JPM EM\nLocal Currency', 'SHORT', '30.394', '30/01', '02/02', '$26,30', '$26,22', '+2.333,50'],
+    ['XLB', 'Materials Select\nSector SPDR', 'SHORT', '4.288', '30/01', '02/02', '$49,28', '$49,67', '-1.726,35'],
+    ['TLT', 'iShares 20+ Year\nTreasury Bond', 'LONG', '17', '06/02', '12/02', '$87,40', '$88,72', '+21,75'],
 ]
-t = Table(etf_data, colWidths=[1.2*cm, 4*cm, 1.3*cm, 1.4*cm, 2*cm, 2.2*cm, 1.6*cm, 1.6*cm, 1.8*cm])
+t = Table(etf_data, colWidths=[1.2*cm, 3.2*cm, 1.3*cm, 1.5*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm])
 s = create_table_style()
 s.add('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#d4edda'))
 s.add('BACKGROUND', (2, 2), (2, 5), colors.HexColor('#f8d7da'))
@@ -573,150 +573,6 @@ t = Table(tbl, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
 s = create_table_style()
 for i in range(1, 6):
     s.add('TEXTCOLOR', (4, i), (4, i), RED)
-t.setStyle(s)
-elements.append(t)
-
-elements.append(PageBreak())
-
-# =============================================================================
-# 8. ETFs
-# =============================================================================
-elements.append(Paragraph("8. ETFs", subtitle_style))
-elements.append(Paragraph(
-    "Operaciones de ETFs en Interactive Brokers. Periodo: 01/01/2026 - 13/02/2026. "
-    "Incluye posiciones largas y cortas ejecutadas.",
-    description_style
-))
-
-# 8.1 Resultado Global ETFs
-elements.append(Paragraph("8.1 Resultado Global", section_style))
-elements.append(Paragraph(
-    "Resumen de rendimiento de todas las operaciones de ETFs cerradas en el periodo.",
-    description_style
-))
-
-etf_pnl_bruto = 8869.76
-etf_comisiones = -242.93
-etf_pnl_neto = etf_pnl_bruto + etf_comisiones
-etf_trades = 5
-etf_wins = 4
-etf_wr = etf_wins / etf_trades * 100
-
-tbl = [
-    ['Metrica', 'Valor'],
-    ['P&L Bruto USD', f'+${fmt(etf_pnl_bruto)}'],
-    ['P&L Bruto EUR', f'+{fmt(etf_pnl_bruto/eur_usd)} EUR'],
-    ['Comisiones IB', f'${fmt(etf_comisiones)}'],
-    ['P&L Neto USD', f'+${fmt(etf_pnl_neto)}'],
-    ['Trades Cerrados', str(etf_trades)],
-    ['Win Rate', f'{etf_wr:.0f}%'],
-    ['P&L Promedio', f'+${fmt(etf_pnl_neto/etf_trades)} USD/trade'],
-]
-t = Table(tbl, colWidths=[7*cm, 5*cm])
-s = create_table_style()
-s.add('TEXTCOLOR', (1, 1), (1, 2), GREEN)
-s.add('TEXTCOLOR', (1, 3), (1, 3), RED)
-s.add('TEXTCOLOR', (1, 4), (1, 5), GREEN)
-t.setStyle(s)
-elements.append(t)
-elements.append(Spacer(1, 0.5*cm))
-
-# 8.2 Por ETF
-elements.append(Paragraph("8.2 Por ETF", section_style))
-elements.append(Paragraph(
-    "Desglose de P&L por cada ETF operado. La mayoria fueron posiciones cortas (SHORT) "
-    "apostando a la bajada de bonos y mercados emergentes.",
-    description_style
-))
-
-tbl = [
-    ['ETF', 'Tipo', 'Acciones', 'P. Venta', 'P. Compra', 'P&L USD'],
-    ['AMLP', 'SHORT', '500', '$48,83', '$43,21', '+2.812,60'],
-    ['EMB', 'SHORT', '500', '$83,17', '$75,23', '+3.972,96'],
-    ['EMLC', 'SHORT', '1.000', '$21,50', '$19,07', '+2.431,52'],
-    ['TLT', 'LONG', '200', '$93,62', '$86,78', '+1.367,88'],
-    ['XLB', 'SHORT', '200', '$82,69', '$91,27', '-1.715,20'],
-]
-t = Table(tbl, colWidths=[1.8*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.8*cm])
-s = create_table_style()
-# Color SHORT cells
-s.add('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 2), (1, 2), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 3), (1, 3), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 4), (1, 4), colors.HexColor('#d4edda'))
-s.add('BACKGROUND', (1, 5), (1, 5), colors.HexColor('#f8d7da'))
-# Color P&L
-s.add('TEXTCOLOR', (5, 1), (5, 4), GREEN)
-s.add('TEXTCOLOR', (5, 5), (5, 5), RED)
-t.setStyle(s)
-elements.append(t)
-elements.append(Spacer(1, 0.5*cm))
-
-# 8.3 Por Tipo de Posicion
-elements.append(Paragraph("8.3 Por Tipo de Posicion", section_style))
-elements.append(Paragraph(
-    "Comparativa entre posiciones largas (apuesta alcista) y cortas (apuesta bajista).",
-    description_style
-))
-
-tbl = [
-    ['Posicion', 'Trades', 'Acciones', 'Win%', 'P&L USD'],
-    ['LONG', '1', '200', '100%', '+1.367,88'],
-    ['SHORT', '4', '2.200', '75%', '+7.501,88'],
-]
-t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
-s = create_table_style()
-s.add('TEXTCOLOR', (4, 1), (4, 2), GREEN)
-s.add('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#d4edda'))
-s.add('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f8d7da'))
-t.setStyle(s)
-elements.append(t)
-elements.append(Spacer(1, 0.5*cm))
-
-# 8.4 Por Sector
-elements.append(Paragraph("8.4 Por Sector/Categoria", section_style))
-elements.append(Paragraph(
-    "Clasificacion de ETFs por tipo de activo subyacente.",
-    description_style
-))
-
-tbl = [
-    ['Sector', 'ETFs', 'P&L USD', 'Comentario'],
-    ['Bonos Emergentes', 'EMB, EMLC', '+6.404,48', 'Short en deuda EM - exitoso'],
-    ['Bonos USA', 'TLT', '+1.367,88', 'Long en treasuries - exitoso'],
-    ['Energia', 'AMLP', '+2.812,60', 'Short MLPs - exitoso'],
-    ['Materiales', 'XLB', '-1.715,20', 'Short fallido - loss'],
-]
-t = Table(tbl, colWidths=[3.5*cm, 2.5*cm, 2.5*cm, 5*cm])
-s = create_table_style()
-s.add('TEXTCOLOR', (2, 1), (2, 3), GREEN)
-s.add('TEXTCOLOR', (2, 4), (2, 4), RED)
-t.setStyle(s)
-elements.append(t)
-elements.append(Spacer(1, 0.5*cm))
-
-# 8.5 Posiciones Abiertas
-elements.append(Paragraph("8.5 Posiciones Abiertas Actuales", section_style))
-elements.append(Paragraph(
-    "ETFs actualmente en cartera con posiciones abiertas.",
-    description_style
-))
-
-tbl = [
-    ['ETF', 'Tipo', 'Acciones', 'P. Entrada', 'Valor USD', 'P&L Latente'],
-    ['AMLP', 'SHORT', '500', '$48,83', '$24.415', 'Pendiente'],
-    ['EMB', 'SHORT', '1.500', '$82,50', '$123.750', 'Pendiente'],
-    ['EMLC', 'SHORT', '2.000', '$21,20', '$42.400', 'Pendiente'],
-    ['TLT', 'LONG', '2.700', '$87,50', '$236.250', 'Pendiente'],
-    ['XLB', 'SHORT', '2.000', '$87,00', '$174.000', 'Pendiente'],
-]
-t = Table(tbl, colWidths=[1.8*cm, 2*cm, 2*cm, 2.5*cm, 2.5*cm, 2.5*cm])
-s = create_table_style()
-s.add('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 2), (1, 2), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 3), (1, 3), colors.HexColor('#f8d7da'))
-s.add('BACKGROUND', (1, 4), (1, 4), colors.HexColor('#d4edda'))
-s.add('BACKGROUND', (1, 5), (1, 5), colors.HexColor('#f8d7da'))
 t.setStyle(s)
 elements.append(t)
 

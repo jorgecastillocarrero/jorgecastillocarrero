@@ -1808,13 +1808,27 @@ if page == "Posición":
 
     pdf_bytes = generate_posicion_pdf(pdf_data)
 
-    st.download_button(
-        label="Descargar PDF",
-        data=pdf_bytes,
-        file_name=f"posicion_global_{latest_date.strftime('%Y%m%d') if latest_date else 'hoy'}.pdf",
-        mime="application/pdf",
-        key="download_pdf_posicion"
-    )
+    col_pdf1, col_pdf2 = st.columns(2)
+    with col_pdf1:
+        st.download_button(
+            label="📄 Descargar PDF Posición",
+            data=pdf_bytes,
+            file_name=f"posicion_global_{latest_date.strftime('%Y%m%d') if latest_date else 'hoy'}.pdf",
+            mime="application/pdf",
+            key="download_pdf_posicion"
+        )
+    with col_pdf2:
+        # Botón para generar PDF Cartera completo
+        if st.button("📊 Generar PDF Cartera", key="btn_pdf_cartera"):
+            import subprocess
+            result = subprocess.run(
+                ['py', '-3', 'scripts/generar_pdf_cartera.py'],
+                capture_output=True, text=True, cwd='.'
+            )
+            if result.returncode == 0:
+                st.success("PDF Cartera generado en Downloads")
+            else:
+                st.error(f"Error: {result.stderr}")
 
 
 elif page == "Composición":
