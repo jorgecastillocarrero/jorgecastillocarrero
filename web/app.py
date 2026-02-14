@@ -2305,7 +2305,8 @@ elif page == "Acciones":
             asset_returns_df = all_returns_df
             missing_data_df = pd.DataFrame()
         if not asset_returns_df.empty:
-            asset_returns_df = asset_returns_df.sort_values('Rent.Periodo %', ascending=False)
+            # Ordenar por fecha de entrada (más antigua primero)
+            asset_returns_df = asset_returns_df.sort_values('F.Compra', ascending=True, na_position='last')
 
             # Calcular valor inicial para estadísticas
             asset_returns_df['Valor_Inicial_EUR'] = asset_returns_df['Valor EUR'] / (1 + asset_returns_df['Rent.Periodo %'] / 100)
