@@ -2411,26 +2411,27 @@ elif page == "Acciones":
 
                 total_historica_eur += pnl_historico_eur
 
-                # Solo añadir a periodo si tenia precio a 31/12
-                if precio_31_12_db:
-                    # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
-                    if fecha_compra and fecha_compra > date(2025, 12, 31):
-                        precio_31_12_display = '-'
-                    else:
-                        precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
+                # Añadir todas las ventas a closed_periodo (no solo las que tienen precio_31_12)
+                # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
+                if fecha_compra and fecha_compra > date(2025, 12, 31):
+                    precio_31_12_display = '-'
+                elif precio_31_12_db:
+                    precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
+                else:
+                    precio_31_12_display = '-'
 
-                    closed_periodo.append({
-                        'Fecha': fecha_venta,
-                        'Ticker': symbol,
-                        'Títulos': int(shares),
-                        'P.Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else '-',
-                        'P.31/12': precio_31_12_display,
-                        'P.Venta': f"{currency_symbol}{precio_venta:.2f}",
-                        'Rent.Periodo %': rent_periodo,
-                        'Rent.Histórica %': rent_historica,
-                        'Rent.Periodo EUR': pnl_eur,
-                        'Rent.Histórica EUR': pnl_historico_eur,
-                    })
+                closed_periodo.append({
+                    'Fecha': fecha_venta,
+                    'Ticker': symbol,
+                    'Títulos': int(shares),
+                    'P.Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else '-',
+                    'P.31/12': precio_31_12_display,
+                    'P.Venta': f"{currency_symbol}{precio_venta:.2f}",
+                    'Rent.Periodo %': rent_periodo,
+                    'Rent.Histórica %': rent_historica,
+                    'Rent.Periodo EUR': pnl_eur,
+                    'Rent.Histórica EUR': pnl_historico_eur,
+                })
 
                 # closed_positions mantiene compatibilidad (incluye datos históricos)
                 closed_positions.append({
@@ -2519,37 +2520,95 @@ elif page == "Acciones":
             historica_rent_pct = (historica_total_eur / combined_inicial_eur * 100) if combined_inicial_eur > 0 else 0
 
             # =====================================================
-            # CABECERA 1: RENTABILIDAD ACUMULADA AÑO (periodo)
+            # RESUMEN RENTABILIDAD HISTÓRICA (desde compra)
+            # Beneficio Neto + Profit Factor
             # =====================================================
             loading_placeholder.empty()  # Limpiar mensaje de carga
-            st.subheader(f"📊 Rentabilidad Acumulada Año {date.today().year}")
+
+            # Calcular P&L en EUR para posiciones abiertas
+            open_pnl_eur_list = []
+            for _, row in asset_returns_df.iterrows():
+                # Calcular valor inicial y P&L
+                valor_actual = row['Valor EUR']
+                rent_compra = row['Rent.Compra %']
+                if rent_compra != -100:
+                    valor_inicial = valor_actual / (1 + rent_compra / 100)
+                    pnl = valor_actual - valor_inicial
+                else:
+                    pnl = 0
+                open_pnl_eur_list.append(pnl)
+
+            open_pnl_total = sum(open_pnl_eur_list)
+            open_gains = sum(p for p in open_pnl_eur_list if p > 0)
+            open_losses = abs(sum(p for p in open_pnl_eur_list if p < 0))
+            open_pf = open_gains / open_losses if open_losses > 0 else float('inf')
+            open_positivas = sum(1 for p in open_pnl_eur_list if p > 0)
+            open_negativas = sum(1 for p in open_pnl_eur_list if p < 0)
+
+            # Calcular P&L en EUR para posiciones cerradas
+            closed_pnl_eur_list = [c['Rent.Histórica EUR'] for c in closed_positions]
+            closed_pnl_total = sum(closed_pnl_eur_list)
+            closed_gains = sum(p for p in closed_pnl_eur_list if p > 0)
+            closed_losses = abs(sum(p for p in closed_pnl_eur_list if p < 0))
+            closed_pf = closed_gains / closed_losses if closed_losses > 0 else float('inf')
+            closed_positivas = sum(1 for p in closed_pnl_eur_list if p > 0)
+            closed_negativas = sum(1 for p in closed_pnl_eur_list if p < 0)
+
+            # Totales consolidados
+            total_pnl = open_pnl_total + closed_pnl_total
+            total_gains = open_gains + closed_gains
+            total_losses = open_losses + closed_losses
+            total_pf = total_gains / total_losses if total_losses > 0 else float('inf')
+            total_count = len(asset_returns_df) + len(closed_positions)
+            total_positivas = open_positivas + closed_positivas
+            total_negativas = open_negativas + closed_negativas
+
+            st.subheader("📊 Resumen Rentabilidad Histórica")
+
+            # Fila 1: Totales consolidados
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total EUR", f"{combined_rent_eur:+,.0f} €".replace(",", "."))
-            col2.metric("Mejor", f"{periodo_max:+.2f}%")
-            col3.metric("Peor", f"{periodo_min:+.2f}%")
-            col4.metric("Profit Factor", f"{periodo_profit_factor:.2f}" if periodo_profit_factor != float('inf') else "∞")
+            col1.metric("Beneficio Neto Total", f"{total_pnl:+,.0f} €".replace(",", "."))
+            col2.metric("Profit Factor", f"{total_pf:.2f}" if total_pf != float('inf') else "∞")
+            col3.metric("Positivas", f"{total_positivas} ({total_positivas/total_count*100:.1f}%)" if total_count > 0 else "0")
+            col4.metric("Negativas", f"{total_negativas} ({total_negativas/total_count*100:.1f}%)" if total_count > 0 else "0")
 
+            # Fila 2: Abiertas vs Cerradas
             col5, col6, col7, col8 = st.columns(4)
-            col5.metric("Positivos", f"{periodo_positive}")
-            col6.metric("Negativos", f"{periodo_negative}")
-            col7.metric("% Positivos", f"{periodo_positive_pct:.1f}%")
-            col8.metric("Rentabilidad %", f"{combined_rent_pct:+.2f}%")
+            col5.metric(f"Abiertas ({len(asset_returns_df)})", f"{open_pnl_total:+,.0f} €".replace(",", "."))
+            col6.metric("PF Abiertas", f"{open_pf:.2f}" if open_pf != float('inf') else "∞")
+            col7.metric(f"Cerradas ({len(closed_positions)})", f"{closed_pnl_total:+,.0f} €".replace(",", "."))
+            col8.metric("PF Cerradas", f"{closed_pf:.2f}" if closed_pf != float('inf') else "∞")
 
-            # =====================================================
-            # CABECERA 2: RENTABILIDAD HISTÓRICA (desde compra)
-            # =====================================================
-            st.subheader("📈 Rentabilidad Histórica")
-            col1h, col2h, col3h, col4h = st.columns(4)
-            col1h.metric("Total EUR", f"{historica_total_eur:+,.0f} €".replace(",", "."))
-            col2h.metric("Mejor", f"{historica_max:+.2f}%")
-            col3h.metric("Peor", f"{historica_min:+.2f}%")
-            col4h.metric("Profit Factor", f"{historica_profit_factor:.2f}" if historica_profit_factor != float('inf') else "∞")
+            # TOP 5 Mejores y Peores por rentabilidad %
+            # Combinar abiertas y cerradas con su rentabilidad histórica
+            all_positions_pct = []
+            for _, row in asset_returns_df.iterrows():
+                all_positions_pct.append({
+                    'Ticker': row['Ticker'],
+                    'Rent %': row['Rent.Compra %'],
+                    'Estado': 'abierta'
+                })
+            for c in closed_positions:
+                all_positions_pct.append({
+                    'Ticker': c['Ticker'],
+                    'Rent %': c['Rent.Histórica %'],
+                    'Estado': 'cerrada'
+                })
 
-            col5h, col6h, col7h, col8h = st.columns(4)
-            col5h.metric("Positivos", f"{historica_positive}")
-            col6h.metric("Negativos", f"{historica_negative}")
-            col7h.metric("% Positivos", f"{historica_positive_pct:.1f}%")
-            col8h.metric("Rentabilidad %", f"{historica_rent_pct:+.2f}%")
+            all_pct_df = pd.DataFrame(all_positions_pct)
+            top5_best = all_pct_df.nlargest(5, 'Rent %')
+            top5_worst = all_pct_df.nsmallest(5, 'Rent %')
+
+            col_best, col_worst = st.columns(2)
+            with col_best:
+                st.markdown("**🏆 TOP 5 Mejores**")
+                for _, row in top5_best.iterrows():
+                    st.markdown(f"• **{row['Ticker']}**: {row['Rent %']:+.2f}% [{row['Estado']}]")
+
+            with col_worst:
+                st.markdown("**📉 TOP 5 Peores**")
+                for _, row in top5_worst.iterrows():
+                    st.markdown(f"• **{row['Ticker']}**: {row['Rent %']:+.2f}% [{row['Estado']}]")
 
             st.markdown("---")
 
