@@ -3208,6 +3208,305 @@ elif page == "Futuros":
         unsafe_allow_html=True
     )
 
+    # ==========================================================================
+    # ANÁLISIS FUTUROS IB (01/01 - 13/02/2026)
+    # ==========================================================================
+    st.markdown("---")
+    st.subheader("📊 Análisis Futuros IB (01/01 - 13/02/2026)")
+
+    # Obtener datos de ventas de futuros
+    with db.get_session() as session:
+        from sqlalchemy import text
+
+        # Obtener todos los trades de futuros desde ventas
+        result = session.execute(text("""
+            SELECT fecha, symbol, shares, pnl, importe_total
+            FROM ventas
+            WHERE symbol SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
+            ORDER BY fecha
+        """))
+        futures_ventas = result.fetchall()
+
+        # Calcular estadísticas
+        CATEGORIES = {'GC': 'Oro', 'CL': 'Petróleo', 'ES': 'Índices', 'NQ': 'Índices', 'HE': 'Ganado'}
+        DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+        MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+        # Inicializar estructuras
+        by_tipo = {}
+        by_mes = {}
+        by_dia = {}
+        by_franja = {'00:01-08:00': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0},
+                     '08:01-15:00': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0},
+                     '15:01-23:59': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}}
+
+        total_pnl = 0
+        total_trades = 0
+        total_wins = 0
+        total_losses = 0
+
+        for fecha, symbol, shares, pnl, importe in futures_ventas:
+            if pnl is None:
+                pnl = 0
+            if importe is None:
+                importe = 0
+
+            # Por tipo
+            prefix = ''.join([c for c in symbol if c.isalpha()])[:2]
+            tipo = CATEGORIES.get(prefix, 'Otros')
+            if tipo not in by_tipo:
+                by_tipo[tipo] = {'trades': 0, 'contracts': 0, 'pnl': 0, 'wins': 0, 'losses': 0, 'importe': 0}
+            by_tipo[tipo]['trades'] += 1
+            by_tipo[tipo]['contracts'] += int(shares)
+            by_tipo[tipo]['pnl'] += pnl
+            by_tipo[tipo]['importe'] += importe
+            if pnl > 0:
+                by_tipo[tipo]['wins'] += 1
+            elif pnl < 0:
+                by_tipo[tipo]['losses'] += 1
+
+            # Por mes
+            if hasattr(fecha, 'month'):
+                mes = MESES[fecha.month - 1]
+            else:
+                mes = 'Desconocido'
+            if mes not in by_mes:
+                by_mes[mes] = {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}
+            by_mes[mes]['trades'] += 1
+            by_mes[mes]['pnl'] += pnl
+            if pnl > 0:
+                by_mes[mes]['wins'] += 1
+            elif pnl < 0:
+                by_mes[mes]['losses'] += 1
+
+            # Por día de la semana
+            if hasattr(fecha, 'weekday'):
+                dia = DIAS[fecha.weekday()]
+            else:
+                dia = 'Desconocido'
+            if dia not in by_dia:
+                by_dia[dia] = {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}
+            by_dia[dia]['trades'] += 1
+            by_dia[dia]['pnl'] += pnl
+            if pnl > 0:
+                by_dia[dia]['wins'] += 1
+            elif pnl < 0:
+                by_dia[dia]['losses'] += 1
+
+            # Totales
+            total_pnl += pnl
+            total_trades += 1
+            if pnl > 0:
+                total_wins += 1
+            elif pnl < 0:
+                total_losses += 1
+
+        # Obtener EUR/USD
+        fx = session.execute(text("""
+            SELECT ph.close FROM price_history ph
+            JOIN symbols s ON ph.symbol_id = s.id
+            WHERE s.code = 'EURUSD=X'
+            ORDER BY ph.date DESC LIMIT 1
+        """)).fetchone()
+        eur_usd_ib = fx[0] if fx else 1.04
+
+    # Mostrar resumen global
+    col1, col2, col3, col4 = st.columns(4)
+    sign = '+' if total_pnl >= 0 else ''
+    col1.metric("P&L Total USD", f"{sign}${total_pnl:,.2f}".replace(",", "."))
+    col2.metric("P&L Total EUR", f"{sign}{total_pnl/eur_usd_ib:,.2f} €".replace(",", "."))
+    col3.metric("Trades", f"{total_trades}")
+    wr = total_wins / total_trades * 100 if total_trades > 0 else 0
+    col4.metric("Win Rate", f"{wr:.0f}%")
+
+    st.markdown("---")
+
+    # Tabla 2: Por Tipo de Activo
+    col_tipo, col_mes = st.columns(2)
+
+    with col_tipo:
+        st.markdown("**📈 Por Tipo de Activo**")
+        tipo_data = []
+        for tipo in ['Oro', 'Índices', 'Ganado', 'Petróleo']:
+            if tipo in by_tipo:
+                d = by_tipo[tipo]
+                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
+                pct = d['pnl'] / total_pnl * 100 if total_pnl != 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                tipo_data.append({
+                    'Tipo': tipo,
+                    'Trades': d['trades'],
+                    'Contr.': d['contracts'],
+                    'Importe': f"${d.get('importe', 0):,.0f}".replace(",", "."),
+                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", "."),
+                    '%Total': f"{pct:+.1f}%"
+                })
+        if tipo_data:
+            st.dataframe(pd.DataFrame(tipo_data), use_container_width=True, hide_index=True)
+
+    # Tabla 3: Por Mes
+    with col_mes:
+        st.markdown("**📅 Por Mes**")
+        mes_data = []
+        for mes in ['Enero', 'Febrero']:
+            if mes in by_mes:
+                d = by_mes[mes]
+                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                mes_data.append({
+                    'Mes': mes,
+                    'Trades': d['trades'],
+                    'W/L': f"{d['wins']}/{d['losses']}",
+                    'Win%': f"{wr:.0f}%",
+                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", ".")
+                })
+        if mes_data:
+            st.dataframe(pd.DataFrame(mes_data), use_container_width=True, hide_index=True)
+
+    # Tabla 4: Por Día de la Semana (ordenado)
+    col_dia2, col_franja = st.columns(2)
+
+    with col_dia2:
+        st.markdown("**📆 Por Día de la Semana**")
+        dia_data = []
+        for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']:
+            if dia in by_dia:
+                d = by_dia[dia]
+                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                dia_data.append({
+                    'Día': dia,
+                    'Trades': d['trades'],
+                    'W/L': f"{d['wins']}/{d['losses']}",
+                    'Win%': f"{wr:.0f}%",
+                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", ".")
+                })
+        if dia_data:
+            st.dataframe(pd.DataFrame(dia_data), use_container_width=True, hide_index=True)
+
+    # Tabla 5: Por Franja Horaria (datos estáticos del análisis)
+    with col_franja:
+        st.markdown("**🕐 Por Franja Horaria**")
+        franja_data = [
+            {'Franja': '15:01-23:59 (US)', 'Trades': 12, 'W/L': '7/5', 'Win%': '58%', 'P&L USD': '+16.441,74'},
+            {'Franja': '00:01-08:00 (Asia)', 'Trades': 14, 'W/L': '9/5', 'Win%': '64%', 'P&L USD': '+8.710,84'},
+            {'Franja': '08:01-15:00 (EU)', 'Trades': 10, 'W/L': '1/9', 'Win%': '10%', 'P&L USD': '-4.862,18'},
+        ]
+        st.dataframe(pd.DataFrame(franja_data), use_container_width=True, hide_index=True)
+
+    # Tabla 6 y 7: Por Tipo de Posición y Por Duración
+    col_pos, col_dur = st.columns(2)
+
+    with col_pos:
+        st.markdown("**📊 Por Tipo de Posición**")
+        pos_data = [
+            {'Posición': 'LONG', 'Trades': 21, 'Contr.': 31, 'Win%': '62%', 'P&L USD': '+12.439,26'},
+            {'Posición': 'SHORT', 'Trades': 15, 'Contr.': 71, 'Win%': '27%', 'P&L USD': '+7.851,14'},
+        ]
+        st.dataframe(pd.DataFrame(pos_data), use_container_width=True, hide_index=True)
+
+    with col_dur:
+        st.markdown("**⏱️ Por Duración**")
+        dur_data = [
+            {'Duración': '< 2 horas', 'Trades': 23, 'Win%': '57%', 'P&L USD': '-10.029,56', 'Nota': 'Stops'},
+            {'Duración': '2-6 horas', 'Trades': 59, 'Win%': '54%', 'P&L USD': '+21.342,54', 'Nota': 'Óptimo'},
+            {'Duración': '6+ horas', 'Trades': 20, 'Win%': '30%', 'P&L USD': '+8.977,42', 'Nota': 'Swing'},
+        ]
+        st.dataframe(pd.DataFrame(dur_data), use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # Tabla 8: Relación de Trades por Fecha
+    st.markdown("**📋 Relación de Trades por Fecha**")
+
+    # Datos de trades del informe IB (ordenados por fecha de entrada)
+    trades_list = [
+        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+3.315,06'},
+        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+3.335,06'},
+        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.515,06'},
+        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.375,06'},
+        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.365,06'},
+        {'Fecha': '21/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+4.445,06'},
+        {'Fecha': '21/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+4.445,06'},
+        {'Fecha': '23/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-684,94'},
+        {'Fecha': '23/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-694,94'},
+        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-1.254,94'},
+        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-1.314,94'},
+        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+915,06'},
+        {'Fecha': '26/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-4.054,94'},
+        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+325,06'},
+        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+205,06'},
+        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+5.515,06'},
+        {'Fecha': '28/01', 'Symbol': 'CLH6', 'Tipo': 'SHORT', 'Contr.': 13, 'P&L USD': '+248,38'},
+        {'Fecha': '30/01', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-724,50'},
+        {'Fecha': '02/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-392,00'},
+        {'Fecha': '02/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-599,50'},
+        {'Fecha': '03/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '+3.720,50'},
+        {'Fecha': '06/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-344,50'},
+        {'Fecha': '06/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-689,50'},
+        {'Fecha': '09/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+345,06'},
+        {'Fecha': '09/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+385,06'},
+        {'Fecha': '10/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-242,00'},
+        {'Fecha': '10/02', 'Symbol': 'HEJ6', 'Tipo': 'SHORT', 'Contr.': 23, 'P&L USD': '+4.183,38'},
+        {'Fecha': '11/02', 'Symbol': 'CLH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-394,74'},
+        {'Fecha': '11/02', 'Symbol': 'CLH6', 'Tipo': 'LONG', 'Contr.': 11, 'P&L USD': '-4.592,14'},
+        {'Fecha': '11/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-5.054,94'},
+        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-509,50'},
+        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-739,50'},
+        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-644,50'},
+        {'Fecha': '12/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '+6.370,50'},
+        {'Fecha': '12/02', 'Symbol': 'HEJ6', 'Tipo': 'SHORT', 'Contr.': 23, 'P&L USD': '-1.206,62'},
+        {'Fecha': '12/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-579,50'},
+    ]
+    trades_df = pd.DataFrame(trades_list)
+
+    # Colorear según P&L
+    def color_pnl(val):
+        if isinstance(val, str):
+            if val.startswith('+'):
+                return 'color: #00cc00; font-weight: bold'
+            elif val.startswith('-'):
+                return 'color: #ff4444; font-weight: bold'
+        return ''
+
+    def color_tipo(val):
+        if val == 'LONG':
+            return 'background-color: #1a472a; color: white'
+        elif val == 'SHORT':
+            return 'background-color: #4a1a1a; color: white'
+        return ''
+
+    styled_trades = trades_df.style.applymap(color_pnl, subset=['P&L USD']).applymap(color_tipo, subset=['Tipo'])
+    st.dataframe(styled_trades, use_container_width=True, hide_index=True, height=400)
+
+    st.markdown("---")
+
+    # Tabla 9: Top Mejores y Peores
+    col_best, col_worst = st.columns(2)
+
+    with col_best:
+        st.markdown("**🏆 Top 5 Mejores**")
+        best_trades = [
+            {'#': 1, 'Symbol': 'ESH6', 'Fecha': '10-12/02', 'Duración': '2.3 días', 'P&L USD': '+6.370,50'},
+            {'#': 2, 'Symbol': 'GCJ6', 'Fecha': '27/01', 'Duración': '2.9 hrs', 'P&L USD': '+5.515,06'},
+            {'#': 3, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
+            {'#': 4, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
+            {'#': 5, 'Symbol': 'HEJ6', 'Fecha': '10/02', 'Duración': '3.0 hrs', 'P&L USD': '+4.183,38'},
+        ]
+        st.dataframe(pd.DataFrame(best_trades), use_container_width=True, hide_index=True)
+
+    with col_worst:
+        st.markdown("**💔 Top 5 Peores**")
+        worst_trades = [
+            {'#': 1, 'Symbol': 'GCJ6', 'Fecha': '11/02', 'Duración': '1.2 hrs', 'P&L USD': '-5.054,94'},
+            {'#': 2, 'Symbol': 'CLH6', 'Fecha': '11/02', 'Duración': '8.0 hrs', 'P&L USD': '-4.592,14'},
+            {'#': 3, 'Symbol': 'GCJ6', 'Fecha': '26/01', 'Duración': '9.1 hrs', 'P&L USD': '-4.054,94'},
+            {'#': 4, 'Symbol': 'GCH6', 'Fecha': '25-26/01', 'Duración': '3.3 hrs', 'P&L USD': '-1.314,94'},
+            {'#': 5, 'Symbol': 'GCH6', 'Fecha': '25-26/01', 'Duración': '3.3 hrs', 'P&L USD': '-1.254,94'},
+        ]
+        st.dataframe(pd.DataFrame(worst_trades), use_container_width=True, hide_index=True)
+
 
 elif page == "ETFs":
     st.title("ETFs")
