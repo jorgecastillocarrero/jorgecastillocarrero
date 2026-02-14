@@ -4,161 +4,24 @@ Run with: streamlit run web/app.py
 """
 
 import sys
-from pathlib import Path
-
-# Add project root to path BEFORE any other imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import streamlit as st
-
-# Page configuration - MUST be first Streamlit command
-st.set_page_config(
-    page_title="PatrimonioSmart",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-# =====================================================
-# AUTHENTICATION CHECK - Must be FIRST before any content
-# =====================================================
-from src.config import get_settings
-settings = get_settings()
-
-def check_authentication():
-    """Check if user is authenticated when auth is enabled."""
-    if not settings.dashboard_auth_enabled:
-        return True
-
-    if not settings.dashboard_password:
-        return True
-
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if st.session_state.authenticated:
-        return True
-
-    # Cargar imagen de fondo como base64
-    import base64
-    import os
-
-    bg_paths = [
-        "web/static/login_bg.png",
-        os.path.join(os.path.dirname(__file__), "static/login_bg.png"),
-        "/app/web/static/login_bg.png",
-    ]
-
-    bg_base64 = ""
-    for bg_path in bg_paths:
-        if os.path.exists(bg_path):
-            try:
-                with open(bg_path, "rb") as img_file:
-                    bg_base64 = base64.b64encode(img_file.read()).decode()
-                break
-            except Exception:
-                continue
-
-    # Página de login con imagen de fondo a pantalla completa
-    st.markdown(f"""
-    <style>
-        [data-testid="stSidebar"] {{display: none;}}
-        [data-testid="stHeader"] {{display: none;}}
-        .stApp {{
-            background-image: url("data:image/png;base64,{bg_base64}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-            background-repeat: no-repeat;
-        }}
-        .stApp::before {{
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.3);
-            z-index: 0;
-        }}
-        .stApp > * {{
-            position: relative;
-            z-index: 1;
-        }}
-    </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns([1, 1.5, 1])
-
-    with col2:
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 3rem; font-weight: 700; color: #ffffff; letter-spacing: -1px;">
-                Patrimonio<span style="color: #3a6a90;">Smart</span>
-            </div>
-            <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7); margin-top: 5px; letter-spacing: 2px;">
-                GESTIÓN PATRIMONIAL INTELIGENTE
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
-            Acceso Privado
-        </h2>
-        """, unsafe_allow_html=True)
-
-        with st.form("login_form"):
-            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
-            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            submit = st.form_submit_button("Entrar", use_container_width=True)
-
-            if submit:
-                valid_user = username.lower() == "carihuela"
-                valid_pass = password == settings.dashboard_password
-
-                if valid_user and valid_pass:
-                    st.session_state.authenticated = True
-                    st.session_state.username = username
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
-
-        st.markdown("""
-        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
-            <small>PatrimonioSmart 2026</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-    return False
-
-# Check auth immediately
-if not check_authentication():
-    st.stop()
-
-# =====================================================
-# AUTHENTICATED - Load the rest of the app
-# =====================================================
 import logging
+from pathlib import Path
 import importlib
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from datetime import datetime, timedelta, date
-from fpdf import FPDF
-import io
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Force reload of portfolio_data to pick up changes
 import src.portfolio_data
 importlib.reload(src.portfolio_data)
 
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime, timedelta, date
+
+from src.config import get_settings
 from src.database import (
     get_db_manager, Symbol, Exchange, PriceHistory, DownloadLog,
     Fundamental, Portfolio, PortfolioHolding, DailyMetrics,
@@ -173,180 +36,13 @@ from src.portfolio_data import (
     ASSET_TYPE_MAP, CURRENCY_MAP, CURRENCY_SYMBOL_MAP,
 )
 
-def parse_db_date(date_value, default=None):
-    """Parse date from database - handles both PostgreSQL (date obj) and SQLite (string)."""
-    if date_value is None:
-        return default
-    if isinstance(date_value, datetime):
-        return date_value.date()
-    if isinstance(date_value, date):
-        return date_value
-    return datetime.strptime(str(date_value)[:10], '%Y-%m-%d').date()
-
-
-def sanitize_text_for_pdf(text: str) -> str:
-    """Remove special characters that fpdf can't handle."""
-    if not isinstance(text, str):
-        text = str(text)
-    # Replace accented characters
-    replacements = {
-        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-        'Á': 'A', 'É': 'E', 'Í': 'I', 'Ó': 'O', 'Ú': 'U',
-        'ñ': 'n', 'Ñ': 'N', 'ü': 'u', 'Ü': 'U',
-        '€': 'EUR', '£': 'GBP', '¥': 'JPY',
-        '–': '-', '—': '-', ''': "'", ''': "'", '"': '"', '"': '"',
-    }
-    for old, new in replacements.items():
-        text = text.replace(old, new)
-    # Remove any remaining non-ASCII characters
-    return text.encode('ascii', 'ignore').decode('ascii')
-
-
-def generate_posicion_pdf(data: dict) -> bytes:
-    """Generate PDF report for Posición page."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Helper to sanitize all text
-    def s(text):
-        return sanitize_text_for_pdf(text)
-
-    # Title
-    pdf.set_font('Helvetica', 'B', 20)
-    pdf.set_text_color(36, 82, 122)  # #24527a
-    pdf.cell(0, 15, 'POSICION GLOBAL', ln=True, align='C')
-    pdf.set_text_color(0, 0, 0)
-
-    # Date
-    pdf.set_font('Helvetica', '', 10)
-    pdf.cell(0, 8, s(f"Fecha: {data.get('fecha', '')}"), ln=True, align='R')
-    pdf.ln(5)
-
-    # Resumen de Cartera
-    pdf.set_font('Helvetica', 'B', 14)
-    pdf.cell(0, 10, 'Resumen de Cartera', ln=True)
-    pdf.set_font('Helvetica', '', 11)
-
-    # Summary table
-    col_widths = [50, 45, 45, 50]
-    headers = ['Concepto', 'EUR', 'USD', '']
-
-    pdf.set_fill_color(36, 82, 122)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font('Helvetica', 'B', 10)
-    for i, h in enumerate(headers):
-        pdf.cell(col_widths[i], 8, h, 1, 0, 'C', fill=True)
-    pdf.ln()
-
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font('Helvetica', '', 10)
-
-    rows = [
-        ('Valor Inicial 31/12', data.get('valor_inicial_eur', ''), data.get('valor_inicial_usd', ''), ''),
-        ('Valor Actual', data.get('valor_actual_eur', ''), data.get('valor_actual_usd', ''), ''),
-        ('Ganancia Acumulada', data.get('ganancia_eur', ''), data.get('ganancia_usd', ''), ''),
-        ('Rentabilidad Acumulada', data.get('rent_eur', ''), data.get('rent_usd', ''), ''),
-        ('SPY Acumulado', '', '', data.get('spy_return', '')),
-        ('QQQ Acumulado', '', '', data.get('qqq_return', '')),
-    ]
-
-    for row in rows:
-        for i, val in enumerate(row):
-            # Color for gains/losses
-            if 'Ganancia' in row[0] or 'Rentabilidad' in row[0]:
-                if '+' in str(val):
-                    pdf.set_text_color(0, 150, 0)
-                elif '-' in str(val):
-                    pdf.set_text_color(200, 0, 0)
-            pdf.cell(col_widths[i], 7, s(str(val)), 1, 0, 'C')
-            pdf.set_text_color(0, 0, 0)
-        pdf.ln()
-
-    pdf.ln(8)
-
-    # Variación Diaria por Tipo de Activo
-    if 'variacion_diaria' in data and data['variacion_diaria']:
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.cell(0, 10, 'Variacion Diaria por Tipo de Activo', ln=True)
-        pdf.set_font('Helvetica', '', 10)
-
-        var_cols = [40, 35, 35, 35, 30]
-        var_headers = ['Tipo', data.get('fecha_prev', ''), data.get('fecha_last', ''), 'Diferencia', 'Var %']
-
-        pdf.set_fill_color(36, 82, 122)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 9)
-        for i, h in enumerate(var_headers):
-            pdf.cell(var_cols[i], 7, s(h), 1, 0, 'C', fill=True)
-        pdf.ln()
-
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', '', 9)
-
-        for row in data['variacion_diaria']:
-            is_total = row.get('Tipo') == 'TOTAL'
-            if is_total:
-                pdf.set_font('Helvetica', 'B', 9)
-                pdf.set_fill_color(180, 180, 180)
-
-            for i, key in enumerate(['Tipo', 'prev', 'last', 'diff', 'var_pct']):
-                val = str(row.get(key, ''))
-                if key in ['diff', 'var_pct']:
-                    if '+' in val:
-                        pdf.set_text_color(0, 150, 0)
-                    elif '-' in val:
-                        pdf.set_text_color(200, 0, 0)
-                pdf.cell(var_cols[i], 6, s(val), 1, 0, 'C', fill=is_total)
-                pdf.set_text_color(0, 0, 0)
-            pdf.ln()
-
-            if is_total:
-                pdf.set_font('Helvetica', '', 9)
-
-    pdf.ln(8)
-
-    # Rentabilidad Mensual
-    if 'rentabilidad_mensual' in data and data['rentabilidad_mensual']:
-        pdf.set_font('Helvetica', 'B', 14)
-        pdf.cell(0, 10, 'Rentabilidad Mensual', ln=True)
-        pdf.set_font('Helvetica', '', 9)
-
-        # Monthly table
-        months = ['Activo', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'TOTAL']
-        month_cols = [20] + [12] * 13
-
-        pdf.set_fill_color(36, 82, 122)
-        pdf.set_text_color(255, 255, 255)
-        pdf.set_font('Helvetica', 'B', 7)
-        for i, m in enumerate(months):
-            pdf.cell(month_cols[i], 6, m, 1, 0, 'C', fill=True)
-        pdf.ln()
-
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_font('Helvetica', '', 7)
-
-        for row in data['rentabilidad_mensual']:
-            for i, m in enumerate(months):
-                val = str(row.get(m, ''))
-                if m != 'Activo' and val:
-                    if '+' in val:
-                        pdf.set_text_color(0, 150, 0)
-                    elif '-' in val:
-                        pdf.set_text_color(200, 0, 0)
-                pdf.cell(month_cols[i], 5, s(val), 1, 0, 'C')
-                pdf.set_text_color(0, 0, 0)
-            pdf.ln()
-
-    # Footer
-    pdf.ln(10)
-    pdf.set_font('Helvetica', 'I', 8)
-    pdf.set_text_color(128, 128, 128)
-    pdf.cell(0, 5, s(f"Generado por PatrimonioSmart - {datetime.now().strftime('%d/%m/%Y %H:%M')}"), ln=True, align='C')
-
-    return bytes(pdf.output())
-
+# Page configuration
+st.set_page_config(
+    page_title="Financial Data Dashboard",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # Custom CSS for soft blue sidebar + responsive mobile
 st.markdown("""
@@ -469,263 +165,127 @@ st.markdown("""
             padding: 1rem !important;
         }
     }
-
-    /* Remove Streamlit default top padding and header */
-    .stApp > header {
-        display: none !important;
-    }
-
-    .main .block-container {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-
-    /* Hide first element top margin */
-    .main .block-container > div:first-child {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Navigation wrapper - full width, no gaps */
-    .nav-wrapper {
-        background: #24527a;
-        margin-left: calc(-50vw + 50%);
-        margin-right: calc(-50vw + 50%);
-        margin-top: -120px;
-        padding: 160px calc(50vw - 50% + 1rem) 30px;
-        min-height: 150px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(36, 82, 122, 0.3);
-    }
-
-    /* GLOBAL: Remove ALL borders from ALL selectboxes */
-    .stSelectbox,
-    .stSelectbox *,
-    .stSelectbox div,
-    .stSelectbox input,
-    .stSelectbox [data-baseweb],
-    .stSelectbox [data-baseweb] * {
-        border: none !important;
-        border-width: 0 !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        border-left: none !important;
-        border-right: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        background-image: none !important;
-    }
-
-    /* Hide BaseWeb animated underline */
-    .stSelectbox [data-baseweb="select"]::after,
-    .stSelectbox [data-baseweb="select"]::before,
-    .stSelectbox [data-baseweb="select"] div::after,
-    .stSelectbox [data-baseweb="select"] div::before {
-        display: none !important;
-        content: none !important;
-        height: 0 !important;
-        border: none !important;
-        background: none !important;
-        transform: none !important;
-    }
-
-    /* Ensure app starts at very top */
-    .stApp {
-        margin-top: 0 !important;
-        padding-top: 0 !important;
-    }
-
-    /* Remove any top spacing from main container */
-    [data-testid="stAppViewContainer"] {
-        padding-top: 0 !important;
-    }
-
-    [data-testid="stVerticalBlock"] > div:first-child {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-
-    /* Remove any borders/lines from navigation area */
-    [data-testid="stHorizontalBlock"]:first-of-type,
-    [data-testid="stHorizontalBlock"]:first-of-type *,
-    [data-testid="stHorizontalBlock"]:first-of-type div,
-    [data-testid="stHorizontalBlock"]:first-of-type span,
-    [data-testid="stHorizontalBlock"]:first-of-type input {
-        border: none !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        border-color: #24527a !important;
-        box-shadow: none !important;
-        outline: none !important;
-        text-decoration: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type::before,
-    [data-testid="stHorizontalBlock"]:first-of-type::after,
-    [data-testid="stHorizontalBlock"]:first-of-type *::before,
-    [data-testid="stHorizontalBlock"]:first-of-type *::after {
-        display: none !important;
-        border: none !important;
-    }
-
-    /* Hide any hr elements */
-    .nav-wrapper hr,
-    [data-testid="stHorizontalBlock"]:first-of-type hr {
-        display: none !important;
-    }
-
-    /* Remove bottom border from selectbox input */
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"],
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] * {
-        border: none !important;
-        border-color: #24527a !important;
-        box-shadow: none !important;
-    }
-
-    /* Force hide underline on selectbox - BaseWeb component */
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div,
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div {
-        border-bottom: none !important;
-        border-bottom-width: 0 !important;
-        background-color: transparent !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div::after,
-    [data-testid="stHorizontalBlock"]:first-of-type [data-baseweb="select"] > div > div::after {
-        display: none !important;
-        background: none !important;
-        border: none !important;
-        height: 0 !important;
-    }
-
-    /* Target the specific underline element */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="indicatorContainer"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="borderBottom"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="underline"],
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox [class*="Underline"] {
-        display: none !important;
-        border: none !important;
-        background: none !important;
-    }
-
-    /* Override BaseWeb control border */
-    [data-testid="stHorizontalBlock"]:first-of-type [class*="control"] {
-        border: none !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
-    }
-
-    /* Title (POSICIÓN GLOBAL) - subir hacia arriba */
-    .main h1 {
-        margin-top: -90px !important;
-    }
-
-    /* Style selectboxes - positioned with margin-top */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox {
-        margin-top: -135px;
-        position: relative;
-    }
-
-    /* Cover the line above selectbox with background color */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox::before {
-        content: "";
-        position: absolute;
-        top: -30px;
-        left: -20px;
-        right: -20px;
-        height: 35px;
-        background-color: #24527a;
-        z-index: 9999;
-    }
-
-    /* Force remove ALL borders and lines from selectbox */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox div[data-baseweb] div {
-        border: 0 !important;
-        border-width: 0 !important;
-        border-style: none !important;
-        border-color: transparent !important;
-        background-image: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox input {
-        border: 0 !important;
-        border-bottom: 0 !important;
-        background: transparent !important;
-        caret-color: transparent !important;
-        color: transparent !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox,
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox * {
-        border: none !important;
-        border-top: none !important;
-        border-bottom: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div {
-        background-color: transparent !important;
-        border: none !important;
-        border-radius: 0 !important;
-        min-height: 20px !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div:hover {
-        background-color: transparent !important;
-    }
-
-    /* Text color white in selectboxes */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox > div > div > div {
-        color: white !important;
-        font-weight: 500 !important;
-    }
-
-    /* Arrow color white */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox svg {
-        fill: white !important;
-    }
-
-    /* Hide selectbox labels */
-    [data-testid="stHorizontalBlock"]:first-of-type .stSelectbox label {
-        display: none !important;
-    }
-
-    /* Logo in nav */
-    [data-testid="stHorizontalBlock"]:first-of-type .stImage img {
-        margin-top: -140px;
-    }
-
-    /* Logout button style */
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton {
-        margin-top: -120px;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button {
-        background-color: transparent !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 0 !important;
-        min-height: 20px !important;
-        font-weight: 500 !important;
-    }
-
-    [data-testid="stHorizontalBlock"]:first-of-type .stButton > button:hover {
-        background-color: transparent !important;
-    }
-
-    /* Hide sidebar */
-    [data-testid="stSidebar"] {
-        display: none !important;
-    }
 </style>
 """, unsafe_allow_html=True)
 
+# Logo en el sidebar
+with st.sidebar:
+    st.image("web/static/logo_carihuela.png", use_container_width=True)
+
 # Initialize components
+settings = get_settings()
 db = get_db_manager()
 analyzer = AIAnalyzer()
+
+
+def check_authentication():
+    """Check if user is authenticated when auth is enabled."""
+    if not settings.dashboard_auth_enabled:
+        return True
+
+    if not settings.dashboard_password:
+        st.warning("⚠️ Autenticación habilitada pero no hay contraseña configurada. Establece DASHBOARD_PASSWORD en .env")
+        return True
+
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    # Cargar imagen de fondo como base64
+    import base64
+    with open("web/static/financial_bg.jpg", "rb") as img_file:
+        bg_base64 = base64.b64encode(img_file.read()).decode()
+
+    # Página de login con imagen de fondo a pantalla completa
+    st.markdown(f"""
+    <style>
+        [data-testid="stSidebar"] {{display: none;}}
+        [data-testid="stHeader"] {{display: none;}}
+        .stApp {{
+            background-image: url("data:image/jpeg;base64,{bg_base64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+        }}
+        /* Overlay oscuro para legibilidad */
+        .stApp::before {{
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 0;
+        }}
+        /* Ocultar elementos de Streamlit innecesarios */
+        footer {{display: none;}}
+        #MainMenu {{display: none;}}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Contenedor centrado para el login
+    st.markdown("<div style='height: 10vh;'></div>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+
+    with col2:
+        # Caja de login con fondo semitransparente
+        st.markdown("""
+        <div style="background: rgba(0, 20, 40, 0.85); border-radius: 20px; padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255,255,255,0.1);">
+        """, unsafe_allow_html=True)
+
+        # Logo
+        st.image("web/static/logo_carihuela.png", use_container_width=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Título
+        st.markdown("""
+        <h2 style="color: #ffffff; text-align: center; margin-bottom: 30px; font-weight: 300;">
+            Acceso al Portal
+        </h2>
+        """, unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Usuario", placeholder="Introduce tu usuario")
+            password = st.text_input("Contraseña", type="password", placeholder="Introduce tu contraseña")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submit = st.form_submit_button("Entrar", use_container_width=True)
+
+            if submit:
+                # Verificar credenciales
+                valid_user = username.lower() in ["admin", "carihuela", "inversiones"]
+                valid_pass = password == settings.dashboard_password
+
+                if valid_user and valid_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.username = username
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="text-align: center; margin-top: 30px; color: rgba(255,255,255,0.6);">
+            <small>La Carihuela Inversiones © 2026</small>
+        </div>
+        """, unsafe_allow_html=True)
+
+    return False
+
+
+# Check authentication before showing any content
+if not check_authentication():
+    st.stop()
 technical = TechnicalAnalyzer()
 yahoo_client = YahooFinanceClient()
 metrics_calc = MetricsCalculator()
@@ -751,7 +311,7 @@ TRADING_DATES = [
     date(2026, 1, 26), date(2026, 1, 27),
 ]
 
-ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']
+ASSET_TYPES_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
 
 
 def _get_price_or_previous(session, sym_id, target_date, max_lookback=5):
@@ -800,12 +360,10 @@ def calculate_all_trading_days():
             ORDER BY fecha
         """), {'today': today.isoformat()})
         for row in rows.fetchall():
-            # Convert to date object (PostgreSQL may return datetime)
+            # Convert string date to date object if needed
             fecha = row[0]
             if isinstance(fecha, str):
                 fecha = datetime.strptime(fecha, '%Y-%m-%d').date()
-            elif isinstance(fecha, datetime):
-                fecha = fecha.date()
             result[fecha] = row[1]
     return result
 
@@ -995,135 +553,53 @@ def create_indicator_chart(df: pd.DataFrame, indicator: str) -> go.Figure:
 
 
 # =============================================================================
-# Elegant Horizontal Navigation with Logo
+# Sidebar
 # =============================================================================
 
-# Define page groups for dropdown menus
-page_groups = {
-    "Cartera": ["Posición", "Composición", "Acciones", "ETFs", "Futuros"],
-    "Estacionalidad": ["Carih Mensual", "Screener", "Symbol Analysis"],
-    "Gráficos": ["Data Management", "Download Status", "BBDD", "Pantalla"],
-    "Indicadores": ["Indicadores"],
-    "Mercado": ["VIX"],
-    "Asistente IA": ["Asistente IA"],
-    "Noticias": ["Noticias"]
-}
+st.sidebar.title("Financial Data Dashboard")
 
-# Initialize session state for navigation
-if "current_page" not in st.session_state:
-    st.session_state.current_page = "Posición"
-if "current_group" not in st.session_state:
-    st.session_state.current_group = "Cartera"
+# Logout button when auth is enabled
+if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
+    if st.sidebar.button("🚪 Cerrar sesión"):
+        st.session_state.authenticated = False
+        st.rerun()
 
-# Navigation bar HTML wrapper
-st.markdown('<div class="nav-wrapper">', unsafe_allow_html=True)
+st.sidebar.markdown("---")
 
-# Create columns: Logo + 7 menus + spacer
-logo_col, m1, m2, m3, m4, m5, m6, m7, spacer = st.columns([1.3, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6, 2.6])
+st.sidebar.markdown("**Data Source:** Yahoo Finance")
 
-# Logo
-with logo_col:
-    import os
-    logo_paths = [
-        "web/static/logo_carihuela_final.jpg",
-        os.path.join(os.path.dirname(__file__), "static/logo_carihuela_final.jpg"),
-        "/app/web/static/logo_carihuela_final.jpg",
-    ]
-    for logo_path in logo_paths:
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=320)
-            break
+# Navegación unificada
+all_pages = [
+    "Posición", "Composición", "Acciones", "Futuros y ETF",
+    "Asistente IA", "Backtesting", "Screener",
+    "Symbol Analysis", "Data Management", "Download Status",
+    "---",  # Separador visual
+    "BBDD", "Pantalla"
+]
 
-# Menu dropdowns
-with m1:
-    sel = st.selectbox("Cartera", ["Cartera"] + page_groups["Cartera"],
-        index=0 if st.session_state.current_group != "Cartera" else page_groups["Cartera"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Cartera"] else 0,
-        key="nav_cartera", label_visibility="collapsed")
-    if sel and sel not in ["Cartera"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Cartera"
+# Filtrar separador para el radio
+page_options = [p for p in all_pages if p != "---"]
 
-with m2:
-    sel = st.selectbox("Estacionalidad", ["Estacionalidad"] + page_groups["Estacionalidad"],
-        index=0 if st.session_state.current_group != "Estacionalidad" else page_groups["Estacionalidad"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Estacionalidad"] else 0,
-        key="nav_estacionalidad", label_visibility="collapsed")
-    if sel and sel not in ["Estacionalidad"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Estacionalidad"
+page = st.sidebar.radio(
+    "Navigation",
+    page_options,
+    label_visibility="collapsed"
+)
 
-with m3:
-    sel = st.selectbox("Gráficos", ["Gráficos"] + page_groups["Gráficos"],
-        index=0 if st.session_state.current_group != "Gráficos" else page_groups["Gráficos"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Gráficos"] else 0,
-        key="nav_graficos", label_visibility="collapsed")
-    if sel and sel not in ["Gráficos"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Gráficos"
-
-with m4:
-    sel = st.selectbox("Indicadores", ["Indicadores"] + page_groups["Indicadores"],
-        index=0 if st.session_state.current_group != "Indicadores" else page_groups["Indicadores"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Indicadores"] else 0,
-        key="nav_indicadores", label_visibility="collapsed")
-    if sel and sel not in ["Indicadores"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Indicadores"
-
-with m5:
-    sel = st.selectbox("Mercado", ["Mercado"] + page_groups["Mercado"],
-        index=0 if st.session_state.current_group != "Mercado" else page_groups["Mercado"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Mercado"] else 0,
-        key="nav_mercado", label_visibility="collapsed")
-    if sel and sel not in ["Mercado"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Mercado"
-
-with m6:
-    sel = st.selectbox("Asistente IA", ["Asistente IA"] + page_groups["Asistente IA"],
-        index=0 if st.session_state.current_group != "Asistente IA" else page_groups["Asistente IA"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Asistente IA"] else 0,
-        key="nav_ia", label_visibility="collapsed")
-    if sel and sel not in ["Asistente IA"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Asistente IA"
-
-with m7:
-    sel = st.selectbox("Noticias", ["Noticias"] + page_groups["Noticias"],
-        index=0 if st.session_state.current_group != "Noticias" else page_groups["Noticias"].index(st.session_state.current_page) + 1 if st.session_state.current_page in page_groups["Noticias"] else 0,
-        key="nav_noticias", label_visibility="collapsed")
-    if sel and sel not in ["Noticias"]:
-        st.session_state.current_page = sel
-        st.session_state.current_group = "Noticias"
-
-# Logout button aligned with menus
-with spacer:
-    spacer_left, spacer_right = st.columns([5, 1])
-    with spacer_right:
-        if settings.dashboard_auth_enabled and st.session_state.get("authenticated", False):
-            if st.button("Cerrar Sesión", key="logout_nav"):
-                st.session_state.authenticated = False
-                st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Get current page
-page = st.session_state.current_page
-
-# Submenú for Backtesting
-backtesting_option = None
-if page == "Carih Mensual":
-    bt_col1, bt_col2, bt_col3 = st.columns([1, 2, 3])
-    with bt_col1:
-        backtesting_option = st.selectbox(
-            "Tipo de análisis",
-            ["Estrategia Mensual", "Portfolio Backtest"],
-            key="backtesting_type"
-        )
-
-st.markdown("---")
+# Submenú para Backtesting
+if page == "Backtesting":
+    backtesting_option = st.sidebar.radio(
+        "Tipo de Backtesting",
+        ["Estrategia Mensual", "Portfolio Backtest"],
+        label_visibility="visible"
+    )
 
 # =============================================================================
 # Main Content
 # =============================================================================
 
 if page == "Posición":
-    st.title("POSICIÓN GLOBAL")
+    st.title("CARTERA LA CARIHUELA")
 
     # =========================================================================
     # OBTENER VALORES DESDE TABLA POSICION (BD)
@@ -1137,17 +613,17 @@ if page == "Posición":
 
         # Obtener última fecha disponible en posicion (día anterior = último con datos)
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, date(2026, 1, 28))
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date(2026, 1, 28)
 
         # Obtener fecha anterior para comparación diaria
         result = session.execute(text("""
             SELECT MAX(fecha) FROM posicion WHERE fecha < :latest
-        """), {'latest': latest_date})
-        prev_date_val = result.fetchone()[0]
-        prev_date = parse_db_date(prev_date_val, latest_date)
+        """), {'latest': latest_date_str})
+        prev_date_str = result.fetchone()[0]
+        prev_date = datetime.strptime(prev_date_str, '%Y-%m-%d').date() if prev_date_str else latest_date
 
         # Valor inicial 31/12/2025 desde tabla posicion
         result = session.execute(text("""
@@ -1232,9 +708,7 @@ if page == "Posición":
         .usd-value {{ font-size: 20px; display: block; }}
         .fx-rate {{ font-size: 11px; color: #808080; }}
         .green {{ color: #00cc00; }}
-        .red {{ color: #ff4444; }}
-        .benchmark-green {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
-        .benchmark-red {{ font-size: 22px; font-weight: bold; color: #ff4444; }}
+        .benchmark {{ font-size: 22px; font-weight: bold; color: #00cc00; }}
     </style>
     <table class="portfolio-table">
         <tr>
@@ -1257,15 +731,15 @@ if page == "Posición":
                 <span class="fx-rate">(EUR/USD {eur_usd_current})</span>
             </td>
             <td>
-                <span class="eur-value {'green' if return_eur >= 0 else 'red'}">{format_eur(return_eur, show_sign=True)}</span>
-                <span class="usd-value {'green' if return_usd >= 0 else 'red'}">{format_usd(return_usd, show_sign=True)}</span>
+                <span class="eur-value green">{format_eur(return_eur, show_sign=True)}</span>
+                <span class="usd-value green">{format_usd(return_usd, show_sign=True)}</span>
             </td>
             <td>
-                <span class="eur-value {'green' if return_pct >= 0 else 'red'}">{format_pct(return_pct)}</span>
-                <span class="usd-value {'green' if return_pct_usd >= 0 else 'red'}">{format_pct(return_pct_usd)}</span>
+                <span class="eur-value green">{format_pct(return_pct)}</span>
+                <span class="usd-value green">{format_pct(return_pct_usd)}</span>
             </td>
-            <td><span class="{'benchmark-green' if spy_return >= 0 else 'benchmark-red'}">{format_pct(spy_return)}</span></td>
-            <td><span class="{'benchmark-green' if qqq_return >= 0 else 'benchmark-red'}">{format_pct(qqq_return)}</span></td>
+            <td><span class="benchmark">{format_pct(spy_return)}</span></td>
+            <td><span class="benchmark">{format_pct(qqq_return)}</span></td>
         </tr>
     </table>
     """, unsafe_allow_html=True)
@@ -1284,15 +758,11 @@ if page == "Posición":
         prev_totals = calculate_portfolio_by_type(day_prev)
         last_totals = calculate_portfolio_by_type(day_last)
 
-        # Combine ETFs with Cash
-        prev_totals['Cash/ETFs'] = prev_totals.pop('Cash', 0) + prev_totals.pop('ETFs', 0)
-        last_totals['Cash/ETFs'] = last_totals.pop('Cash', 0) + last_totals.pop('ETFs', 0)
-
         # Build comparison table - get all types dynamically from data
         comparison_data = []
         all_tipos = set(prev_totals.keys()) | set(last_totals.keys())
         # Order: known types first, then others
-        tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']
+        tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
         tipos = [t for t in tipo_order if t in all_tipos] + [t for t in sorted(all_tipos) if t not in tipo_order]
         total_prev = 0
         total_last = 0
@@ -1599,225 +1069,6 @@ if page == "Posición":
     # Display table
     st.dataframe(styled_df, use_container_width=True, hide_index=True, height=700)
 
-    # =========================================================================
-    # RENTABILIDAD MENSUAL
-    # =========================================================================
-    st.markdown("---")
-    st.subheader("Rentabilidad Mensual")
-
-    # Calculate monthly returns for Portfolio, SPY, and QQQ
-    months_data = {}
-    current_year = date.today().year
-    current_month = date.today().month
-
-    # Get first day value for each month (for monthly returns calculation)
-    for month in range(1, 13):
-        month_name = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-                      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][month - 1]
-
-        # Skip future months (after current month)
-        if month > current_month:
-            continue
-
-        # Find first and last trading day of the month
-        month_dates = [d for d in trading_dates_from_db
-                       if d.year == current_year and d.month == month and d not in excluded_dates]
-
-        if not month_dates:
-            continue
-
-        first_day = min(month_dates)
-        # For current month: use latest available date (current position)
-        # For past months: use last day of that month
-        last_day = max(month_dates)
-
-        # Get values at start and end of month
-        if month == 1:
-            # January: compare to Dec 31
-            start_val = all_day_totals.get(date(2025, 12, 31), 0)
-        else:
-            # Other months: get last day of previous month
-            prev_month_dates = [d for d in trading_dates_from_db
-                               if d.year == current_year and d.month == month - 1 and d not in excluded_dates]
-            if prev_month_dates:
-                start_val = all_day_totals.get(max(prev_month_dates), 0)
-            else:
-                start_val = all_day_totals.get(date(2025, 12, 31), 0)
-
-        end_val = all_day_totals.get(last_day, 0)
-
-        # Portfolio monthly return
-        if start_val > 0:
-            port_monthly_ret = ((end_val / start_val) - 1) * 100
-        else:
-            port_monthly_ret = 0
-
-        # SPY monthly return
-        spy_monthly_ret = 0
-        if not spy_prices.empty:
-            spy_month = spy_prices[spy_prices.index.month == month]
-            if not spy_month.empty:
-                if month == 1:
-                    spy_start = spy_prices['close'].iloc[0]
-                else:
-                    spy_prev = spy_prices[spy_prices.index.month == month - 1]
-                    spy_start = spy_prev['close'].iloc[-1] if not spy_prev.empty else spy_prices['close'].iloc[0]
-                spy_end = spy_month['close'].iloc[-1]
-                if spy_start > 0:
-                    spy_monthly_ret = ((spy_end / spy_start) - 1) * 100
-
-        # QQQ monthly return
-        qqq_monthly_ret = 0
-        if not qqq_prices.empty:
-            qqq_month = qqq_prices[qqq_prices.index.month == month]
-            if not qqq_month.empty:
-                if month == 1:
-                    qqq_start = qqq_prices['close'].iloc[0]
-                else:
-                    qqq_prev = qqq_prices[qqq_prices.index.month == month - 1]
-                    qqq_start = qqq_prev['close'].iloc[-1] if not qqq_prev.empty else qqq_prices['close'].iloc[0]
-                qqq_end = qqq_month['close'].iloc[-1]
-                if qqq_start > 0:
-                    qqq_monthly_ret = ((qqq_end / qqq_start) - 1) * 100
-
-        months_data[month_name] = {
-            'Cartera': port_monthly_ret,
-            'SPY': spy_monthly_ret,
-            'QQQ': qqq_monthly_ret
-        }
-
-    # Build monthly returns table (vertical: assets as rows, months as columns)
-    all_months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
-
-    # Build table with Activo as first column, then all months, then TOTAL
-    monthly_table = {'Activo': ['Cartera', 'SPY', 'QQQ']}
-
-    for month_name in all_months:
-        if month_name in months_data:
-            monthly_table[month_name] = [
-                months_data[month_name]['Cartera'],
-                months_data[month_name]['SPY'],
-                months_data[month_name]['QQQ']
-            ]
-        else:
-            # Month without data yet
-            monthly_table[month_name] = [None, None, None]
-
-    # Add TOTAL column
-    monthly_table['TOTAL'] = [return_pct, spy_return, qqq_return]
-
-    monthly_df = pd.DataFrame(monthly_table)
-
-    # Replace None/NaN with empty string for display
-    pct_columns = [col for col in monthly_df.columns if col != 'Activo']
-    for col in pct_columns:
-        monthly_df[col] = monthly_df[col].apply(
-            lambda x: '' if x is None or (isinstance(x, float) and pd.isna(x)) else x
-        )
-
-    # Style the table
-    def color_monthly_pct(val):
-        if val != '' and isinstance(val, (int, float)):
-            if val > 0:
-                return 'background-color: #2E7D32; color: white'
-            elif val < 0:
-                return 'background-color: #C62828; color: white'
-        return ''
-
-    def format_pct_monthly(val):
-        if val == '' or val is None:
-            return ''
-        try:
-            return f'{float(val):+.2f}%'
-        except (ValueError, TypeError):
-            return ''
-
-    format_dict = {col: format_pct_monthly for col in pct_columns}
-
-    styled_monthly = monthly_df.style.map(color_monthly_pct, subset=pct_columns).format(format_dict)
-
-    st.dataframe(styled_monthly, use_container_width=True, hide_index=True)
-
-    # =========================================================================
-    # PDF EXPORT BUTTON
-    # =========================================================================
-    st.markdown("---")
-
-    # Prepare data for PDF
-    def format_eur_pdf(value, show_sign=False):
-        if show_sign:
-            sign = "+" if value >= 0 else ""
-            return f"{sign}{value:,.0f} EUR".replace(",", ".")
-        return f"{value:,.0f} EUR".replace(",", ".")
-
-    def format_usd_pdf(value, show_sign=False):
-        if show_sign:
-            sign = "+" if value >= 0 else ""
-            return f"{sign}{value:,.0f} USD".replace(",", ".")
-        return f"{value:,.0f} USD".replace(",", ".")
-
-    def format_pct_pdf(value):
-        sign = "+" if value >= 0 else ""
-        return f"{sign}{value:.2f}%"
-
-    # Collect variación diaria data
-    variacion_data = []
-    if 'comparison_data' in dir() and comparison_data:
-        for row in comparison_data:
-            variacion_data.append({
-                'Tipo': row.get('Tipo', ''),
-                'prev': row.get(f'{day_prev.strftime("%d/%m")}', ''),
-                'last': row.get(f'{day_last.strftime("%d/%m")}', ''),
-                'diff': row.get('Diferencia', ''),
-                'var_pct': row.get('Var %', '')
-            })
-
-    # Collect monthly returns data
-    monthly_data = []
-    for _, row in monthly_df.iterrows():
-        row_dict = {'Activo': row.get('Activo', '')}
-        for col in monthly_df.columns:
-            if col != 'Activo':
-                val = row.get(col)
-                if pd.notna(val) and val is not None:
-                    try:
-                        row_dict[col] = f"{float(val):+.2f}%"
-                    except:
-                        row_dict[col] = ''
-                else:
-                    row_dict[col] = ''
-        monthly_data.append(row_dict)
-
-    pdf_data = {
-        'fecha': latest_date.strftime('%d/%m/%Y') if latest_date else '',
-        'fecha_prev': day_prev.strftime('%d/%m') if 'day_prev' in dir() and day_prev else '',
-        'fecha_last': day_last.strftime('%d/%m') if 'day_last' in dir() and day_last else '',
-        'valor_inicial_eur': format_eur_pdf(initial_value),
-        'valor_inicial_usd': format_usd_pdf(initial_value * eur_usd_31dic),
-        'valor_actual_eur': format_eur_pdf(current_value),
-        'valor_actual_usd': format_usd_pdf(current_value * eur_usd_current),
-        'ganancia_eur': format_eur_pdf(return_eur, show_sign=True),
-        'ganancia_usd': format_usd_pdf(return_usd, show_sign=True),
-        'rent_eur': format_pct_pdf(return_pct),
-        'rent_usd': format_pct_pdf(return_pct_usd),
-        'spy_return': format_pct_pdf(spy_return),
-        'qqq_return': format_pct_pdf(qqq_return),
-        'variacion_diaria': variacion_data,
-        'rentabilidad_mensual': monthly_data
-    }
-
-    # Botón para generar PDF Cartera
-    if st.button("📊 Generar PDF Cartera", key="btn_pdf_cartera"):
-        import subprocess
-        result = subprocess.run(
-            ['py', '-3', 'scripts/generar_pdf_cartera.py'],
-            capture_output=True, text=True, cwd='.'
-        )
-        if result.returncode == 0:
-            st.success("PDF Cartera generado en Downloads")
-        else:
-            st.error(f"Error: {result.stderr}")
-
 
 elif page == "Composición":
     st.title("COMPOSICIÓN DE CARTERA")
@@ -1826,10 +1077,10 @@ elif page == "Composición":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, date.today())
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
 
     # Get account totals calculated dynamically from holding_diario + prices
     account_totals = get_account_totals_from_db(latest_date)
@@ -1856,10 +1107,9 @@ elif page == "Composición":
     bolsa = (strategy_values.get('Quant', 0) +
              strategy_values.get('Value', 0) +
              strategy_values.get('Alpha Picks', 0) +
-             strategy_values.get('Mensual', 0) +
-             strategy_values.get('Stock', 0))
+             strategy_values.get('Mensual', 0))
     oro = strategy_values.get('Oro/Mineras', 0)
-    liquidez = strategy_values.get('Cash/ETFs', 0) or (strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0))
+    liquidez = strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0)
 
     diversificacion_data = {
         'Bolsa': bolsa,
@@ -2114,8 +1364,6 @@ elif page == "Composición":
 
 elif page == "Acciones":
     st.title("ACCIONES")
-    loading_placeholder = st.empty()
-    loading_placeholder.info("Cargando datos...")
 
     # Using centralized ASSET_TYPE_MAP and CURRENCY_SYMBOL_MAP from portfolio_data
 
@@ -2127,10 +1375,10 @@ elif page == "Acciones":
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM posicion WHERE fecha < CURRENT_DATE
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        latest_date_val = result.fetchone()[0]
-        latest_date = parse_db_date(latest_date_val, today)
+        latest_date_str = result.fetchone()[0]
+        latest_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else today
 
     # EUR/USD exchange rates from service
     eur_usd_31dic = portfolio_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
@@ -2147,7 +1395,6 @@ elif page == "Acciones":
 
     with db.get_session() as session:
         # Get holdings with fecha_compra and precio_compra from compras table (datos reales)
-        # Excluir ETFs y Futuros (solo mostrar acciones)
         holdings_result = session.execute(text("""
             SELECT h.account_code, h.symbol, h.shares, h.currency, h.asset_type,
                    c.fecha as fecha_compra, c.precio as precio_compra
@@ -2162,7 +1409,6 @@ elif page == "Acciones":
                 GROUP BY account_code, symbol
             ) c ON h.account_code = c.account_code AND h.symbol = c.symbol
             WHERE h.fecha = :fecha
-            AND (h.asset_type IS NULL OR h.asset_type NOT IN ('ETF', 'ETFs', 'Future', 'Futures'))
             ORDER BY h.account_code, h.symbol
         """), {'fecha': latest_date})
 
@@ -2195,8 +1441,6 @@ elif page == "Acciones":
 
             if isinstance(fecha_compra, str):
                 fecha_compra = datetime.strptime(fecha_compra, '%Y-%m-%d').date()
-            elif isinstance(fecha_compra, datetime):
-                fecha_compra = fecha_compra.date()
 
             # Get symbol for price lookup
             if '.' in ticker_full:
@@ -2281,7 +1525,7 @@ elif page == "Acciones":
                     precio_actual_display = f"{currency_symbol}{precio_actual:.2f}"
 
                     asset_returns.append({
-                        'F.Compra': fecha_compra,  # Mantener como date para ordenamiento correcto
+                        'F.Compra': fecha_compra.strftime('%d/%m/%y') if fecha_compra else None,
                         'Ticker': holding['ticker_full'],
                         'Tipo': holding['tipo'],
                         'Cuenta': holding['cuenta'],
@@ -2311,8 +1555,7 @@ elif page == "Acciones":
             asset_returns_df = all_returns_df
             missing_data_df = pd.DataFrame()
         if not asset_returns_df.empty:
-            # Ordenar por fecha de entrada (más antigua primero)
-            asset_returns_df = asset_returns_df.sort_values('F.Compra', ascending=True, na_position='last')
+            asset_returns_df = asset_returns_df.sort_values('Rent.Periodo %', ascending=False)
 
             # Calcular valor inicial para estadísticas
             asset_returns_df['Valor_Inicial_EUR'] = asset_returns_df['Valor EUR'] / (1 + asset_returns_df['Rent.Periodo %'] / 100)
@@ -2327,7 +1570,6 @@ elif page == "Acciones":
             # =====================================================
             # CALCULAR POSICIONES CERRADAS PARA ESTADÍSTICAS
             # (Consolidado por fecha/cuenta/símbolo)
-            # Excluir Futuros y ETFs (solo acciones)
             # =====================================================
             with db.get_session() as session:
                 ventas_result = session.execute(text("""
@@ -2340,8 +1582,6 @@ elif page == "Acciones":
                            AVG(precio_31_12) as precio_31_12,
                            AVG(rent_periodo) as rent_periodo
                     FROM ventas
-                    WHERE symbol NOT IN ('TLT', 'EMB', 'GLD', 'SLV', 'QQQ', 'SPY', 'IWM', 'DIA', 'VTI', 'VOO')
-                    AND symbol NOT SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
                     GROUP BY fecha, account_code, symbol, currency
                     ORDER BY fecha DESC
                 """))
@@ -2365,12 +1605,14 @@ elif page == "Acciones":
             for venta in ventas_rows:
                 fecha_venta, cuenta, symbol, shares, precio_venta, importe_venta, currency, pnl_db, precio_31_12_db, rent_periodo_db = venta
 
-                # Obtener precio de compra real PRIMERO (necesario para decidir base del periodo)
-                compra_info = precios_compra.get(symbol, {})
-                precio_compra_real = compra_info.get('precio')
-                fecha_compra = compra_info.get('fecha')
-                if isinstance(fecha_compra, datetime):
-                    fecha_compra = fecha_compra.date()
+                # Precio base para periodo (31/12 o de la BD)
+                precio_periodo = precio_31_12_db if precio_31_12_db else portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
+                if precio_periodo is None:
+                    precio_periodo = precio_venta * 0.95
+
+                # Rentabilidad del periodo
+                rent_periodo = rent_periodo_db if rent_periodo_db else ((precio_venta / precio_periodo - 1) * 100 if precio_periodo > 0 else 0)
+                pnl_periodo = (precio_venta - precio_periodo) * shares
 
                 # Determinar símbolo de moneda y conversión
                 if currency == 'USD':
@@ -2386,25 +1628,16 @@ elif page == "Acciones":
                     fx_rate = 1.0
                     currency_symbol = currency
 
-                # Precio base para periodo: 31/12 si existía antes, o compra si fue después
-                fecha_corte = date(2025, 12, 31)
-                if fecha_compra and fecha_compra > fecha_corte and precio_compra_real:
-                    # Compra en 2026: usar precio de compra como base
-                    precio_periodo = precio_compra_real
-                    rent_periodo = ((precio_venta / precio_compra_real) - 1) * 100 if precio_compra_real > 0 else 0
-                else:
-                    # Existía a 31/12: usar precio 31/12
-                    precio_periodo = precio_31_12_db if precio_31_12_db else portfolio_service.get_symbol_price(symbol, date(2025, 12, 31))
-                    if precio_periodo is None:
-                        precio_periodo = precio_compra_real if precio_compra_real else precio_venta
-                    rent_periodo = rent_periodo_db if rent_periodo_db else ((precio_venta / precio_periodo - 1) * 100 if precio_periodo > 0 else 0)
-
-                pnl_periodo = (precio_venta - precio_periodo) * shares
                 pnl_eur = pnl_periodo / fx_rate if fx_rate != 1.0 else pnl_periodo
                 valor_venta_eur = importe_venta / fx_rate if fx_rate != 1.0 else importe_venta
 
                 total_closed_pnl_eur += pnl_eur
                 total_closed_valor_eur += valor_venta_eur
+
+                # Obtener precio de compra real
+                compra_info = precios_compra.get(symbol, {})
+                precio_compra_real = compra_info.get('precio')
+                fecha_compra = compra_info.get('fecha')
 
                 # Calcular rentabilidad histórica (desde compra)
                 if precio_compra_real and precio_compra_real > 0:
@@ -2417,27 +1650,26 @@ elif page == "Acciones":
 
                 total_historica_eur += pnl_historico_eur
 
-                # Añadir todas las ventas a closed_periodo (no solo las que tienen precio_31_12)
-                # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
-                if fecha_compra and fecha_compra > date(2025, 12, 31):
-                    precio_31_12_display = '-'
-                elif precio_31_12_db:
-                    precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
-                else:
-                    precio_31_12_display = '-'
+                # Solo añadir a periodo si tenia precio a 31/12
+                if precio_31_12_db:
+                    # Determinar precio base para periodo: 31/12 si existía antes, o compra si fue después
+                    if fecha_compra and fecha_compra > '2025-12-31':
+                        precio_31_12_display = '-'
+                    else:
+                        precio_31_12_display = f"{currency_symbol}{precio_periodo:.2f}"
 
-                closed_periodo.append({
-                    'Fecha': fecha_venta,
-                    'Ticker': symbol,
-                    'Títulos': int(shares),
-                    'P.Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else '-',
-                    'P.31/12': precio_31_12_display,
-                    'P.Venta': f"{currency_symbol}{precio_venta:.2f}",
-                    'Rent.Periodo %': rent_periodo,
-                    'Rent.Histórica %': rent_historica,
-                    'Rent.Periodo EUR': pnl_eur,
-                    'Rent.Histórica EUR': pnl_historico_eur,
-                })
+                    closed_periodo.append({
+                        'Fecha': fecha_venta,
+                        'Ticker': symbol,
+                        'Títulos': int(shares),
+                        'P.Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else '-',
+                        'P.31/12': precio_31_12_display,
+                        'P.Venta': f"{currency_symbol}{precio_venta:.2f}",
+                        'Rent.Periodo %': rent_periodo,
+                        'Rent.Histórica %': rent_historica,
+                        'Rent.Periodo EUR': pnl_eur,
+                        'Rent.Histórica EUR': pnl_historico_eur,
+                    })
 
                 # closed_positions mantiene compatibilidad (incluye datos históricos)
                 closed_positions.append({
@@ -2445,7 +1677,7 @@ elif page == "Acciones":
                     'Ticker': symbol,
                     'Cuenta': cuenta,
                     'Titulos': int(shares),
-                    'Precio Compra': f"{currency_symbol}{precio_compra_real:.2f}" if precio_compra_real else f"{currency_symbol}0.00",
+                    'Precio Compra': f"{currency_symbol}{precio_periodo:.2f}",
                     'Precio Venta': f"{currency_symbol}{precio_venta:.2f}",
                     'Rent. %': rent_periodo,
                     'Rent. EUR': pnl_eur,
@@ -2526,95 +1758,36 @@ elif page == "Acciones":
             historica_rent_pct = (historica_total_eur / combined_inicial_eur * 100) if combined_inicial_eur > 0 else 0
 
             # =====================================================
-            # RESUMEN RENTABILIDAD HISTÓRICA (desde compra)
-            # Beneficio Neto + Profit Factor
+            # CABECERA 1: RENTABILIDAD ACUMULADA AÑO (periodo)
             # =====================================================
-            loading_placeholder.empty()  # Limpiar mensaje de carga
-
-            # Calcular P&L en EUR para posiciones abiertas
-            open_pnl_eur_list = []
-            for _, row in asset_returns_df.iterrows():
-                # Calcular valor inicial y P&L
-                valor_actual = row['Valor EUR']
-                rent_compra = row['Rent.Compra %']
-                if rent_compra != -100:
-                    valor_inicial = valor_actual / (1 + rent_compra / 100)
-                    pnl = valor_actual - valor_inicial
-                else:
-                    pnl = 0
-                open_pnl_eur_list.append(pnl)
-
-            open_pnl_total = sum(open_pnl_eur_list)
-            open_gains = sum(p for p in open_pnl_eur_list if p > 0)
-            open_losses = abs(sum(p for p in open_pnl_eur_list if p < 0))
-            open_pf = open_gains / open_losses if open_losses > 0 else float('inf')
-            open_positivas = sum(1 for p in open_pnl_eur_list if p > 0)
-            open_negativas = sum(1 for p in open_pnl_eur_list if p < 0)
-
-            # Calcular P&L en EUR para posiciones cerradas
-            closed_pnl_eur_list = [c['Rent.Histórica EUR'] for c in closed_positions]
-            closed_pnl_total = sum(closed_pnl_eur_list)
-            closed_gains = sum(p for p in closed_pnl_eur_list if p > 0)
-            closed_losses = abs(sum(p for p in closed_pnl_eur_list if p < 0))
-            closed_pf = closed_gains / closed_losses if closed_losses > 0 else float('inf')
-            closed_positivas = sum(1 for p in closed_pnl_eur_list if p > 0)
-            closed_negativas = sum(1 for p in closed_pnl_eur_list if p < 0)
-
-            # Totales consolidados
-            total_pnl = open_pnl_total + closed_pnl_total
-            total_gains = open_gains + closed_gains
-            total_losses = open_losses + closed_losses
-            total_pf = total_gains / total_losses if total_losses > 0 else float('inf')
-            total_count = len(asset_returns_df) + len(closed_positions)
-            total_positivas = open_positivas + closed_positivas
-            total_negativas = open_negativas + closed_negativas
-
-            st.subheader("📊 Resumen Rentabilidad Histórica")
-
-            # Fila 1: Totales consolidados
+            st.subheader(f"📊 Rentabilidad Acumulada Año {date.today().year}")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Beneficio Neto Total", f"{total_pnl:+,.0f} €".replace(",", "."))
-            col2.metric("Profit Factor", f"{total_pf:.2f}" if total_pf != float('inf') else "∞")
-            col3.metric("Positivas", f"{total_positivas} ({total_positivas/total_count*100:.1f}%)" if total_count > 0 else "0")
-            col4.metric("Negativas", f"{total_negativas} ({total_negativas/total_count*100:.1f}%)" if total_count > 0 else "0")
+            col1.metric("Total EUR", f"{combined_rent_eur:+,.0f} €".replace(",", "."))
+            col2.metric("Mejor", f"{periodo_max:+.2f}%")
+            col3.metric("Peor", f"{periodo_min:+.2f}%")
+            col4.metric("Profit Factor", f"{periodo_profit_factor:.2f}" if periodo_profit_factor != float('inf') else "∞")
 
-            # Fila 2: Abiertas vs Cerradas
             col5, col6, col7, col8 = st.columns(4)
-            col5.metric(f"Abiertas ({len(asset_returns_df)})", f"{open_pnl_total:+,.0f} €".replace(",", "."))
-            col6.metric("PF Abiertas", f"{open_pf:.2f}" if open_pf != float('inf') else "∞")
-            col7.metric(f"Cerradas ({len(closed_positions)})", f"{closed_pnl_total:+,.0f} €".replace(",", "."))
-            col8.metric("PF Cerradas", f"{closed_pf:.2f}" if closed_pf != float('inf') else "∞")
+            col5.metric("Positivos", f"{periodo_positive}")
+            col6.metric("Negativos", f"{periodo_negative}")
+            col7.metric("% Positivos", f"{periodo_positive_pct:.1f}%")
+            col8.metric("Rentabilidad %", f"{combined_rent_pct:+.2f}%")
 
-            # TOP 5 Mejores y Peores por rentabilidad %
-            # Combinar abiertas y cerradas con su rentabilidad histórica
-            all_positions_pct = []
-            for _, row in asset_returns_df.iterrows():
-                all_positions_pct.append({
-                    'Ticker': row['Ticker'],
-                    'Rent %': row['Rent.Compra %'],
-                    'Estado': 'abierta'
-                })
-            for c in closed_positions:
-                all_positions_pct.append({
-                    'Ticker': c['Ticker'],
-                    'Rent %': c['Rent.Histórica %'],
-                    'Estado': 'cerrada'
-                })
+            # =====================================================
+            # CABECERA 2: RENTABILIDAD HISTÓRICA (desde compra)
+            # =====================================================
+            st.subheader("📈 Rentabilidad Histórica")
+            col1h, col2h, col3h, col4h = st.columns(4)
+            col1h.metric("Total EUR", f"{historica_total_eur:+,.0f} €".replace(",", "."))
+            col2h.metric("Mejor", f"{historica_max:+.2f}%")
+            col3h.metric("Peor", f"{historica_min:+.2f}%")
+            col4h.metric("Profit Factor", f"{historica_profit_factor:.2f}" if historica_profit_factor != float('inf') else "∞")
 
-            all_pct_df = pd.DataFrame(all_positions_pct)
-            top5_best = all_pct_df.nlargest(5, 'Rent %')
-            top5_worst = all_pct_df.nsmallest(5, 'Rent %')
-
-            col_best, col_worst = st.columns(2)
-            with col_best:
-                st.markdown("**🏆 TOP 5 Mejores**")
-                for _, row in top5_best.iterrows():
-                    st.markdown(f"• **{row['Ticker']}**: {row['Rent %']:+.2f}% [{row['Estado']}]")
-
-            with col_worst:
-                st.markdown("**📉 TOP 5 Peores**")
-                for _, row in top5_worst.iterrows():
-                    st.markdown(f"• **{row['Ticker']}**: {row['Rent %']:+.2f}% [{row['Estado']}]")
+            col5h, col6h, col7h, col8h = st.columns(4)
+            col5h.metric("Positivos", f"{historica_positive}")
+            col6h.metric("Negativos", f"{historica_negative}")
+            col7h.metric("% Positivos", f"{historica_positive_pct:.1f}%")
+            col8h.metric("Rentabilidad %", f"{historica_rent_pct:+.2f}%")
 
             st.markdown("---")
 
@@ -2633,18 +1806,17 @@ elif page == "Acciones":
             display_df = asset_returns_df.copy()
             display_df = display_df.drop(columns=['Valor_Inicial_EUR'])
 
-            # Función para convertir fecha a formato español (para uso posterior)
-            def to_spanish_date(date_val):
-                if not date_val or date_val == '-':
-                    return None
+            # Convertir fecha a formato español (dd/mm/yyyy)
+            def to_spanish_date(date_str):
+                if not date_str or date_str == '-':
+                    return '-'
                 try:
-                    if isinstance(date_val, (date, datetime)):
-                        return date_val
                     from datetime import datetime as dt
-                    d = dt.strptime(str(date_val)[:10], '%Y-%m-%d')
-                    return d.date()
+                    d = dt.strptime(str(date_str)[:10], '%Y-%m-%d')
+                    return d.strftime('%d/%m/%Y')
                 except:
-                    return None
+                    return date_str
+            display_df['F.Compra'] = display_df['F.Compra'].apply(to_spanish_date)
 
             # Reorder columns: F.Compra, precios, rentabilidades en EUR
             display_df = display_df[['F.Compra', 'Ticker', 'Tipo', 'Cuenta', 'Títulos', 'P.Compra', 'Últ.Precio', 'Valor EUR', 'Rent.Compra %', 'Rent.Periodo %', 'Rent.Periodo EUR']]
@@ -2655,7 +1827,7 @@ elif page == "Acciones":
                 hide_index=True,
                 height=600,
                 column_config={
-                    'F.Compra': st.column_config.DateColumn('F.Compra', width='small', format='DD/MM/YYYY'),
+                    'F.Compra': st.column_config.TextColumn('F.Compra', width='small'),
                     'Ticker': st.column_config.TextColumn('Ticker', width='small'),
                     'Tipo': st.column_config.TextColumn('Tipo', width='small'),
                     'Cuenta': st.column_config.TextColumn('Cuenta', width='small'),
@@ -2716,8 +1888,8 @@ elif page == "Acciones":
                 periodo_df['Rent.Periodo EUR'] = pd.to_numeric(periodo_df['Rent.Periodo EUR'], errors='coerce').fillna(0)
                 periodo_df['Rent.Histórica EUR'] = pd.to_numeric(periodo_df['Rent.Histórica EUR'], errors='coerce').fillna(0)
 
-                # Convertir fecha a objeto date para ordenamiento correcto
-                periodo_df['Fecha'] = pd.to_datetime(periodo_df['Fecha']).dt.date
+                # Convertir fecha a formato español
+                periodo_df['Fecha'] = periodo_df['Fecha'].apply(to_spanish_date)
 
                 total_periodo_eur = periodo_df['Rent.Periodo EUR'].sum()
                 total_historica_eur_display = periodo_df['Rent.Histórica EUR'].sum()
@@ -2735,7 +1907,7 @@ elif page == "Acciones":
                     hide_index=True,
                     height=400,
                     column_config={
-                        'Fecha': st.column_config.DateColumn('Fecha', width='small', format='DD/MM/YYYY'),
+                        'Fecha': st.column_config.TextColumn('Fecha', width='small'),
                         'Títulos': st.column_config.NumberColumn('Títulos', width='small', format='%d'),
                         'Rent.Periodo %': st.column_config.TextColumn('Rent.Periodo %', width='small'),
                         'Rent.Histórica %': st.column_config.TextColumn('Rent.Histórica %', width='small'),
@@ -2758,880 +1930,124 @@ elif page == "Acciones":
             else:
                 st.info("No hay posiciones cerradas")
 
-            # =====================================================
-            # RENTABILIDAD POR MARKET CAP
-            # =====================================================
-            st.markdown("---")
-            st.subheader("📊 Rentabilidad por Market Cap")
 
-            # Obtener market cap de fundamentals para cada símbolo
-            with db.get_session() as session:
-                # Consultar market cap desde fundamentals
-                mcap_result = session.execute(text("""
-                    SELECT s.code, f.market_cap
-                    FROM fundamentals f
-                    JOIN symbols s ON f.symbol_id = s.id
-                    WHERE f.market_cap IS NOT NULL AND f.market_cap > 0
-                """))
-                mcap_data = {row[0]: row[1] for row in mcap_result.fetchall()}
+elif page == "Futuros y ETF":
+    st.title("FUTUROS Y ETF")
 
-            # Categorizar por market cap (en millones)
-            def get_mcap_category(mcap_value):
-                if mcap_value is None:
-                    return 'Sin datos'
-                mcap_millions = mcap_value / 1_000_000  # Convertir a millones
-                if mcap_millions < 5000:
-                    return '<5.000M'
-                elif mcap_millions < 10000:
-                    return '5.000-10.000M'
-                elif mcap_millions < 50000:
-                    return '10.000-50.000M'
+    # Obtener datos de futuros desde la base de datos
+    futures_summary = portfolio_service.get_futures_summary()
+    futures_open_position = futures_summary['open_position']
+    futures_total_usd = futures_summary['total_realized_usd']
+    futures_total_eur = futures_summary['total_realized_eur']
+
+    all_trades = portfolio_service.get_futures_trades_df()
+    # Ordenar por fecha más reciente primero
+    all_trades = all_trades.iloc[::-1].reset_index(drop=True)
+
+    # Calcular estadísticas de operaciones cerradas
+    trades_cerradas = all_trades[all_trades['Estado'] == 'Cerrada'] if not all_trades.empty else all_trades
+    total_ops = len(trades_cerradas)
+
+    # Contar ganadoras/perdedoras y calcular P&L numérico
+    ops_ganadoras = 0
+    ops_perdedoras = 0
+    pnl_values = []
+    total_gains = 0
+    total_losses = 0
+
+    for _, row in trades_cerradas.iterrows():
+        pnl_str = row['P&G']
+        if isinstance(pnl_str, str) and pnl_str != '-':
+            pnl_clean = pnl_str.replace('$', '').replace(',', '').replace('+', '')
+            try:
+                pnl_val = float(pnl_clean)
+                pnl_values.append(pnl_val)
+                if pnl_val >= 0:
+                    ops_ganadoras += 1
+                    total_gains += pnl_val
                 else:
-                    return '>50.000M'
+                    ops_perdedoras += 1
+                    total_losses += abs(pnl_val)
+            except (ValueError, TypeError) as e:
+                logging.debug(f"Could not parse P&L value '{pnl_clean}': {e}")
 
-            # Calcular rentabilidad por categoría (combinando abiertas y cerradas)
-            mcap_stats = {
-                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-            }
+    pct_ganadoras = (ops_ganadoras / total_ops * 100) if total_ops > 0 else 0
+    profit_factor = total_gains / total_losses if total_losses > 0 else float('inf')
+    ganancia_media_usd = sum(pnl_values) / len(pnl_values) if pnl_values else 0
+    eur_usd_rate = portfolio_service.get_eur_usd_rate(date.today())
+    ganancia_media_eur = ganancia_media_usd / eur_usd_rate
 
-            # Procesar posiciones abiertas
-            for _, row in asset_returns_df.iterrows():
-                ticker = row['Ticker'].split('.')[0] if '.' in row['Ticker'] else row['Ticker']
-                mcap = mcap_data.get(ticker) or mcap_data.get(row['Ticker'])
-                category = get_mcap_category(mcap)
-                mcap_stats[category]['count'] += 1
-                mcap_stats[category]['rent_sum'] += row['Rent.Periodo %']
-                mcap_stats[category]['rent_eur_sum'] += row['Rent.Periodo EUR']
-                mcap_stats[category]['tickers'].append(ticker)
-                mcap_stats[category]['rents'].append(row['Rent.Periodo %'])
+    import numpy as np
+    if len(pnl_values) > 1:
+        avg_pnl = np.mean(pnl_values)
+        std_pnl = np.std(pnl_values)
+        sqn = (np.sqrt(len(pnl_values)) * avg_pnl / std_pnl) if std_pnl > 0 else 0
+    else:
+        sqn = 0
 
-            # Procesar posiciones cerradas
-            for pos in closed_positions:
-                ticker = pos['Ticker'].split('.')[0] if '.' in pos['Ticker'] else pos['Ticker']
-                mcap = mcap_data.get(ticker) or mcap_data.get(pos['Ticker'])
-                category = get_mcap_category(mcap)
-                mcap_stats[category]['count'] += 1
-                mcap_stats[category]['rent_sum'] += pos['Rent. %']
-                mcap_stats[category]['rent_eur_sum'] += pos['Rent. EUR']
-                mcap_stats[category]['tickers'].append(ticker)
-                mcap_stats[category]['rents'].append(pos['Rent. %'])
+    # Estadísticas (debajo del título)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Ops. Positivas", f"{ops_ganadoras} ({pct_ganadoras:.1f}%)")
+    col2.metric("Ops. Negativas", f"{ops_perdedoras} ({100-pct_ganadoras:.1f}%)")
+    col3.metric("Total Operaciones", f"{total_ops}")
+    col4.metric("Profit Factor", f"{profit_factor:.2f}")
 
-            # Crear tabla de resumen
-            mcap_table_data = []
-            order = ['<5.000M', '5.000-10.000M', '10.000-50.000M', '>50.000M']
-            for cat in order:
-                stats = mcap_stats[cat]
-                if stats['count'] > 0:
-                    avg_rent = stats['rent_sum'] / stats['count']
-                    max_rent = max(stats['rents'])
-                    min_rent = min(stats['rents'])
-                    mcap_table_data.append({
-                        'Market Cap': cat,
-                        'Operaciones': stats['count'],
-                        'Rent. Media %': avg_rent,
-                        'Máx %': max_rent,
-                        'Mín %': min_rent,
-                        'Rent. Total EUR': stats['rent_eur_sum'],
-                        'Tickers': ', '.join(set(stats['tickers'][:5])) + ('...' if len(set(stats['tickers'])) > 5 else '')
-                    })
-
-            if mcap_table_data:
-                mcap_df = pd.DataFrame(mcap_table_data)
-                st.dataframe(
-                    mcap_df,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        'Market Cap': st.column_config.TextColumn('Market Cap', width='medium'),
-                        'Operaciones': st.column_config.NumberColumn('Operaciones', width='small', format='%d'),
-                        'Rent. Media %': st.column_config.NumberColumn('Rent. Media %', width='small', format='%.2f %%'),
-                        'Máx %': st.column_config.NumberColumn('Máx %', width='small', format='%.2f %%'),
-                        'Mín %': st.column_config.NumberColumn('Mín %', width='small', format='%.2f %%'),
-                        'Rent. Total EUR': st.column_config.NumberColumn('Rent. Total EUR', width='medium', format='%.0f €'),
-                        'Tickers': st.column_config.TextColumn('Tickers', width='large'),
-                    }
-                )
-
-                # Mostrar si hay posiciones sin datos de market cap
-                if mcap_stats['Sin datos']['count'] > 0:
-                    sin_datos_tickers = ', '.join(set(mcap_stats['Sin datos']['tickers']))
-                    st.caption(f"⚠️ {mcap_stats['Sin datos']['count']} posiciones sin datos de market cap: {sin_datos_tickers}")
-            else:
-                st.info("No hay datos de market cap disponibles")
-        else:
-            loading_placeholder.empty()
-            st.warning("No se encontraron datos de acciones para mostrar")
-
-
-elif page == "Futuros":
-    st.title("FUTUROS")
-
-    # Función para generar PDF
-    def generar_pdf_futuros(data):
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-        from reportlab.lib.enums import TA_CENTER
-        from io import BytesIO
-
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
-
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, alignment=TA_CENTER, spaceAfter=20)
-        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Heading2'], fontSize=14, spaceAfter=10, spaceBefore=15)
-        desc_style = ParagraphStyle('Desc', parent=styles['Normal'], fontSize=9, textColor=colors.grey, spaceAfter=12)
-
-        elements = []
-        GREEN = colors.HexColor('#006600')
-        RED = colors.HexColor('#cc0000')
-
-        def table_style():
-            return TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a365d')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#e8f4f8')]),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ])
-
-        def fmt(n):
-            return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-        def fmt_int(n):
-            return f"{n:,}".replace(",", ".")
-
-        # Titulo
-        elements.append(Paragraph("ANALISIS DE FUTUROS IB", title_style))
-        elements.append(Paragraph(f"Periodo: 01/01/2026 - 13/02/2026", ParagraphStyle('P', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, spaceAfter=5)))
-        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | EUR/USD: {data['eur_usd']:.4f}", ParagraphStyle('P2', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceAfter=20, textColor=colors.grey)))
-        elements.append(Spacer(1, 0.5*cm))
-
-        # 1. Resultado Global
-        elements.append(Paragraph("1. RESULTADO GLOBAL", subtitle_style))
-        sign = '+' if data['total_pnl'] >= 0 else ''
-        comisiones = -539.60
-        pnl_neto = data['total_pnl'] + comisiones
-        avg_pnl = data['total_pnl'] / data['total_trades'] if data['total_trades'] > 0 else 0
-        tbl = [
-            ['Metrica', 'Valor'],
-            ['P&L Total USD', f"{sign}${fmt(data['total_pnl'])}"],
-            ['P&L Total EUR', f"{sign}{fmt(data['total_pnl']/data['eur_usd'])} EUR"],
-            ['Comisiones IB', f"${fmt(comisiones)}"],
-            ['P&L Neto USD', f"{'+' if pnl_neto >= 0 else ''}${fmt(pnl_neto)}"],
-            ['Trades', f"{data['total_trades']}"],
-            ['Contratos', f"{data['total_contracts']}"],
-            ['Win Rate', f"{data['wr']:.0f}%"],
-            ['P&L Promedio', f"{'+' if avg_pnl >= 0 else ''}${fmt(avg_pnl)} USD/trade"],
-        ]
-        t = Table(tbl, colWidths=[8*cm, 6*cm])
-        s = table_style()
-        s.add('TEXTCOLOR', (1, 1), (1, 2), GREEN)
-        s.add('TEXTCOLOR', (1, 3), (1, 3), RED)
-        s.add('TEXTCOLOR', (1, 4), (1, 4), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 2. Por Tipo
-        elements.append(Paragraph("2. POR TIPO DE ACTIVO", subtitle_style))
-        tbl = [['Tipo', 'Trades', 'Contr.', 'Importe', 'P&L USD', '%Total']]
-        for tipo in ['Oro', 'Índices', 'Ganado', 'Petróleo']:
-            if tipo in data['by_tipo']:
-                d = data['by_tipo'][tipo]
-                pct = d['pnl'] / data['total_pnl'] * 100 if data['total_pnl'] != 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                tbl.append([tipo, str(d['trades']), str(d['contracts']), f"${fmt_int(int(d['importe']))}", f"{sign}{fmt(d['pnl'])}", f"{pct:+.1f}%"])
-        t = Table(tbl, colWidths=[2.5*cm, 2*cm, 2*cm, 3*cm, 3*cm, 2.5*cm])
-        s = table_style()
-        for i, row in enumerate(tbl[1:], start=1):
-            if row[4].startswith('+'):
-                s.add('TEXTCOLOR', (4, i), (5, i), GREEN)
-            else:
-                s.add('TEXTCOLOR', (4, i), (5, i), RED)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 3. Por Mes
-        elements.append(Paragraph("3. POR MES", subtitle_style))
-        tbl = [['Mes', 'Trades', 'W/L', 'Win%', 'P&L USD']]
-        for mes in ['Enero', 'Febrero']:
-            if mes in data['by_mes']:
-                d = data['by_mes'][mes]
-                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                tbl.append([mes, str(d['trades']), f"{d['wins']}/{d['losses']}", f"{wr:.0f}%", f"{sign}{fmt(d['pnl'])}"])
-        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
-        s = table_style()
-        for i, row in enumerate(tbl[1:], start=1):
-            s.add('TEXTCOLOR', (4, i), (4, i), GREEN if row[4].startswith('+') else RED)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 4. Por Día
-        elements.append(Paragraph("4. POR DIA DE LA SEMANA", subtitle_style))
-        tbl = [['Dia', 'Trades', 'W/L', 'Win%', 'P&L USD']]
-        for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']:
-            if dia in data['by_dia']:
-                d = data['by_dia'][dia]
-                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                tbl.append([dia, str(d['trades']), f"{d['wins']}/{d['losses']}", f"{wr:.0f}%", f"{sign}{fmt(d['pnl'])}"])
-        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
-        s = table_style()
-        for i, row in enumerate(tbl[1:], start=1):
-            s.add('TEXTCOLOR', (4, i), (4, i), GREEN if row[4].startswith('+') else RED)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 5. Por Franja
-        elements.append(Paragraph("5. POR FRANJA HORARIA", subtitle_style))
-        tbl = [
-            ['Franja Horaria', 'Trades', 'W/L', 'Win%', 'P&L USD'],
-            ['00:01-08:00 (Asia)', '14', '9/5', '64%', '+8.710,84'],
-            ['08:01-15:00 (EU)', '10', '1/9', '10%', '-4.862,18'],
-            ['15:01-23:59 (US)', '12', '7/5', '58%', '+16.441,74'],
-        ]
-        t = Table(tbl, colWidths=[4.5*cm, 2*cm, 2*cm, 2*cm, 4*cm])
-        s = table_style()
-        s.add('TEXTCOLOR', (4, 1), (4, 1), GREEN)
-        s.add('TEXTCOLOR', (4, 2), (4, 2), RED)
-        s.add('TEXTCOLOR', (4, 3), (4, 3), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-
-        elements.append(PageBreak())
-
-        # 6. Por Posición
-        elements.append(Paragraph("6. POR TIPO DE POSICION", subtitle_style))
-        tbl = [
-            ['Posicion', 'Trades', 'Contratos', 'Win%', 'P&L USD'],
-            ['LONG', '21', '31', '62%', '+12.439,26'],
-            ['SHORT', '15', '71', '27%', '+7.851,14'],
-        ]
-        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
-        s = table_style()
-        s.add('TEXTCOLOR', (4, 1), (4, 2), GREEN)
-        s.add('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#d4edda'))
-        s.add('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f8d7da'))
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 7. Por Duración
-        elements.append(Paragraph("7. POR DURACION DEL TRADE", subtitle_style))
-        tbl = [
-            ['Duracion', 'Trades', 'Win%', 'P&L USD', 'Nota'],
-            ['< 2 horas', '23', '57%', '-10.029,56', 'Stops ejecutados'],
-            ['2-6 horas', '59', '54%', '+21.342,54', 'Rango optimo'],
-            ['6+ horas', '20', '30%', '+8.977,42', 'Swing trading'],
-        ]
-        t = Table(tbl, colWidths=[2.5*cm, 2*cm, 2*cm, 3*cm, 4*cm])
-        s = table_style()
-        s.add('TEXTCOLOR', (3, 1), (3, 1), RED)
-        s.add('TEXTCOLOR', (3, 2), (3, 3), GREEN)
-        s.add('BACKGROUND', (4, 2), (4, 2), colors.HexColor('#d4edda'))
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.8*cm))
-
-        # 8. Lista de Trades
-        elements.append(Paragraph("8. RELACION DE TRADES POR FECHA", subtitle_style))
-        trades_list = [
-            ['Fecha', 'Symbol', 'Tipo', 'Contr.', 'P&L USD'],
-            ['20/01', 'GCH6', 'LONG', '1', '+3.315,06'],
-            ['20/01', 'GCH6', 'LONG', '1', '+3.335,06'],
-            ['20/01', 'GCH6', 'LONG', '1', '+2.515,06'],
-            ['20/01', 'GCH6', 'LONG', '1', '+2.375,06'],
-            ['20/01', 'GCH6', 'LONG', '1', '+2.365,06'],
-            ['21/01', 'GCH6', 'LONG', '1', '+4.445,06'],
-            ['21/01', 'GCH6', 'LONG', '1', '+4.445,06'],
-            ['23/01', 'GCH6', 'LONG', '1', '-684,94'],
-            ['23/01', 'GCH6', 'LONG', '1', '-694,94'],
-            ['26/01', 'GCH6', 'LONG', '1', '-1.254,94'],
-            ['26/01', 'GCH6', 'LONG', '1', '-1.314,94'],
-            ['26/01', 'GCH6', 'LONG', '1', '+915,06'],
-            ['26/01', 'GCJ6', 'LONG', '1', '-4.054,94'],
-            ['27/01', 'GCJ6', 'LONG', '1', '+325,06'],
-            ['27/01', 'GCJ6', 'LONG', '1', '+205,06'],
-            ['27/01', 'GCJ6', 'LONG', '1', '+5.515,06'],
-            ['28/01', 'CLH6', 'SHORT', '13', '+248,38'],
-            ['30/01', 'NQH6', 'SHORT', '1', '-724,50'],
-            ['02/02', 'ESH6', 'SHORT', '1', '-392,00'],
-            ['02/02', 'NQH6', 'SHORT', '1', '-599,50'],
-            ['03/02', 'ESH6', 'SHORT', '1', '+3.720,50'],
-            ['06/02', 'NQH6', 'SHORT', '1', '-344,50'],
-            ['06/02', 'NQH6', 'SHORT', '1', '-689,50'],
-            ['09/02', 'GCJ6', 'LONG', '1', '+345,06'],
-            ['09/02', 'GCJ6', 'LONG', '1', '+385,06'],
-            ['10/02', 'ESH6', 'SHORT', '1', '-242,00'],
-            ['10/02', 'HEJ6', 'SHORT', '23', '+4.183,38'],
-            ['11/02', 'CLH6', 'LONG', '1', '-394,74'],
-            ['11/02', 'CLH6', 'LONG', '11', '-4.592,14'],
-            ['11/02', 'GCJ6', 'LONG', '1', '-5.054,94'],
-            ['11/02', 'NQH6', 'SHORT', '1', '-509,50'],
-            ['11/02', 'NQH6', 'SHORT', '1', '-739,50'],
-            ['11/02', 'NQH6', 'SHORT', '1', '-644,50'],
-            ['12/02', 'ESH6', 'SHORT', '1', '+6.370,50'],
-            ['12/02', 'HEJ6', 'SHORT', '23', '-1.206,62'],
-            ['12/02', 'NQH6', 'SHORT', '1', '-579,50'],
-        ]
-        t = Table(trades_list, colWidths=[2*cm, 2.5*cm, 2*cm, 2*cm, 3.5*cm])
-        s = table_style()
-        for i, row in enumerate(trades_list[1:], start=1):
-            if row[4].startswith('+'):
-                s.add('TEXTCOLOR', (4, i), (4, i), GREEN)
-            else:
-                s.add('TEXTCOLOR', (4, i), (4, i), RED)
-        t.setStyle(s)
-        elements.append(t)
-
-        elements.append(PageBreak())
-
-        # 9. Top 5
-        elements.append(Paragraph("9. TOP 5 MEJORES Y PEORES TRADES", subtitle_style))
-        elements.append(Paragraph("TOP 5 MEJORES", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=8)))
-        best = [
-            ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
-            ['1', 'ESH6', '10-12/02', '2.3 dias', '+6.370,50'],
-            ['2', 'GCJ6', '27/01', '2.9 hrs', '+5.515,06'],
-            ['3', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
-            ['4', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
-            ['5', 'HEJ6', '10/02', '3.0 hrs', '+4.183,38'],
-        ]
-        t = Table(best, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
-        s = table_style()
-        for i in range(1, 6):
-            s.add('TEXTCOLOR', (4, i), (4, i), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.5*cm))
-
-        elements.append(Paragraph("TOP 5 PEORES", ParagraphStyle('Sub2', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=8)))
-        worst = [
-            ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
-            ['1', 'GCJ6', '11/02', '1.2 hrs', '-5.054,94'],
-            ['2', 'CLH6', '11/02', '8.0 hrs', '-4.592,14'],
-            ['3', 'GCJ6', '26/01', '9.1 hrs', '-4.054,94'],
-            ['4', 'GCH6', '25-26/01', '3.3 hrs', '-1.314,94'],
-            ['5', 'GCH6', '25-26/01', '3.3 hrs', '-1.254,94'],
-        ]
-        t = Table(worst, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
-        s = table_style()
-        for i in range(1, 6):
-            s.add('TEXTCOLOR', (4, i), (4, i), RED)
-        t.setStyle(s)
-        elements.append(t)
-
-        doc.build(elements)
-        buffer.seek(0)
-        return buffer.getvalue()
-
-    # ==========================================================================
-    # ANÁLISIS FUTUROS IB (01/01 - 13/02/2026)
-    # ==========================================================================
-    st.subheader("Análisis Futuros IB (01/01 - 13/02/2026)")
-
-    # Obtener datos de ventas de futuros
-    with db.get_session() as session:
-        from sqlalchemy import text
-
-        # Obtener todos los trades de futuros desde ventas
-        result = session.execute(text("""
-            SELECT fecha, symbol, shares, pnl, importe_total
-            FROM ventas
-            WHERE symbol SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
-            ORDER BY fecha
-        """))
-        futures_ventas = result.fetchall()
-
-        # Calcular estadísticas
-        CATEGORIES = {'GC': 'Oro', 'CL': 'Petróleo', 'ES': 'Índices', 'NQ': 'Índices', 'HE': 'Ganado'}
-        DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-        # Inicializar estructuras
-        by_tipo = {}
-        by_mes = {}
-        by_dia = {}
-        by_franja = {'00:01-08:00': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0},
-                     '08:01-15:00': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0},
-                     '15:01-23:59': {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}}
-
-        total_pnl = 0
-        total_trades = 0
-        total_wins = 0
-        total_losses = 0
-
-        for fecha, symbol, shares, pnl, importe in futures_ventas:
-            if pnl is None:
-                pnl = 0
-            if importe is None:
-                importe = 0
-
-            # Por tipo
-            prefix = ''.join([c for c in symbol if c.isalpha()])[:2]
-            tipo = CATEGORIES.get(prefix, 'Otros')
-            if tipo not in by_tipo:
-                by_tipo[tipo] = {'trades': 0, 'contracts': 0, 'pnl': 0, 'wins': 0, 'losses': 0, 'importe': 0}
-            by_tipo[tipo]['trades'] += 1
-            by_tipo[tipo]['contracts'] += int(shares)
-            by_tipo[tipo]['pnl'] += pnl
-            by_tipo[tipo]['importe'] += importe
-            if pnl > 0:
-                by_tipo[tipo]['wins'] += 1
-            elif pnl < 0:
-                by_tipo[tipo]['losses'] += 1
-
-            # Por mes
-            if hasattr(fecha, 'month'):
-                mes = MESES[fecha.month - 1]
-            else:
-                mes = 'Desconocido'
-            if mes not in by_mes:
-                by_mes[mes] = {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}
-            by_mes[mes]['trades'] += 1
-            by_mes[mes]['pnl'] += pnl
-            if pnl > 0:
-                by_mes[mes]['wins'] += 1
-            elif pnl < 0:
-                by_mes[mes]['losses'] += 1
-
-            # Por día de la semana
-            if hasattr(fecha, 'weekday'):
-                dia = DIAS[fecha.weekday()]
-            else:
-                dia = 'Desconocido'
-            if dia not in by_dia:
-                by_dia[dia] = {'trades': 0, 'pnl': 0, 'wins': 0, 'losses': 0}
-            by_dia[dia]['trades'] += 1
-            by_dia[dia]['pnl'] += pnl
-            if pnl > 0:
-                by_dia[dia]['wins'] += 1
-            elif pnl < 0:
-                by_dia[dia]['losses'] += 1
-
-            # Totales
-            total_pnl += pnl
-            total_trades += 1
-            if pnl > 0:
-                total_wins += 1
-            elif pnl < 0:
-                total_losses += 1
-
-        # Obtener EUR/USD
-        fx = session.execute(text("""
-            SELECT ph.close FROM price_history ph
-            JOIN symbols s ON ph.symbol_id = s.id
-            WHERE s.code = 'EURUSD=X'
-            ORDER BY ph.date DESC LIMIT 1
-        """)).fetchone()
-        eur_usd_ib = fx[0] if fx else 1.04
-
-    # Calcular totales para el PDF
-    total_contracts = sum(d.get('contracts', 0) for d in by_tipo.values())
-    wr = total_wins / total_trades * 100 if total_trades > 0 else 0
-
-    # Botón para descargar PDF
-    pdf_data = {
-        'total_pnl': total_pnl,
-        'total_trades': total_trades,
-        'total_contracts': total_contracts,
-        'total_wins': total_wins,
-        'total_losses': total_losses,
-        'wr': wr,
-        'eur_usd': eur_usd_ib,
-        'by_tipo': by_tipo,
-        'by_mes': by_mes,
-        'by_dia': by_dia,
-    }
-
-    col_title, col_btn = st.columns([3, 1])
-    with col_btn:
-        pdf_bytes = generar_pdf_futuros(pdf_data)
-        st.download_button(
-            label="📄 Descargar PDF",
-            data=pdf_bytes,
-            file_name=f"Analisis_Futuros_{datetime.now().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
-
-    # Tabla 1: Resultado Global
-    st.markdown("**📊 Resultado Global**")
-
-    comisiones = -539.60  # Comisiones del informe IB
-    pnl_neto = total_pnl + comisiones
-    avg_pnl = total_pnl / total_trades if total_trades > 0 else 0
-    sign = '+' if total_pnl >= 0 else ''
-    sign_neto = '+' if pnl_neto >= 0 else ''
-    sign_avg = '+' if avg_pnl >= 0 else ''
-
-    resultado_data = [
-        {'Métrica': 'P&L Total', 'Valor': f"{sign}${total_pnl:,.2f} USD".replace(",", ".")},
-        {'Métrica': 'P&L Total', 'Valor': f"{sign}{total_pnl/eur_usd_ib:,.2f} EUR".replace(",", ".")},
-        {'Métrica': 'Comisiones', 'Valor': f"${comisiones:,.2f} USD".replace(",", ".")},
-        {'Métrica': 'P&L Neto', 'Valor': f"{sign_neto}${pnl_neto:,.2f} USD".replace(",", ".")},
-        {'Métrica': 'Trades', 'Valor': f"{total_trades}"},
-        {'Métrica': 'Contratos', 'Valor': f"{total_contracts}"},
-        {'Métrica': 'Win Rate', 'Valor': f"{wr:.0f}%"},
-        {'Métrica': 'P&L Promedio', 'Valor': f"{sign_avg}${avg_pnl:,.2f} USD/trade".replace(",", ".")},
-    ]
-
-    col_res, col_space = st.columns([1, 2])
-    with col_res:
-        st.dataframe(pd.DataFrame(resultado_data), use_container_width=True, hide_index=True)
+    col5, col6, col7, col8 = st.columns(4)
+    col5.metric("Ganancia Media USD", f"${ganancia_media_usd:,.2f}".replace(",", "."))
+    col6.metric("Ganancia Media EUR", f"{ganancia_media_eur:,.2f} €".replace(",", "."))
+    col7.metric("SQN", f"{sqn:.2f}")
+    col8.metric("Posición Abierta", f"{futures_open_position['contracts']} contratos")
 
     st.markdown("---")
 
-    # Tabla 2: Por Tipo de Activo
-    col_tipo, col_mes = st.columns(2)
+    # Historial de Operaciones
+    st.subheader("Historial de Operaciones")
 
-    with col_tipo:
-        st.markdown("**📈 Por Tipo de Activo**")
-        tipo_data = []
-        for tipo in ['Oro', 'Índices', 'Ganado', 'Petróleo']:
-            if tipo in by_tipo:
-                d = by_tipo[tipo]
-                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
-                pct = d['pnl'] / total_pnl * 100 if total_pnl != 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                tipo_data.append({
-                    'Tipo': tipo,
-                    'Trades': d['trades'],
-                    'Contr.': d['contracts'],
-                    'Importe': f"${d.get('importe', 0):,.0f}".replace(",", "."),
-                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", "."),
-                    '%Total': f"{pct:+.1f}%"
-                })
-        if tipo_data:
-            st.dataframe(pd.DataFrame(tipo_data), use_container_width=True, hide_index=True)
-
-    # Tabla 3: Por Mes
-    with col_mes:
-        st.markdown("**📅 Por Mes**")
-        mes_data = []
-        for mes in ['Enero', 'Febrero']:
-            if mes in by_mes:
-                d = by_mes[mes]
-                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                mes_data.append({
-                    'Mes': mes,
-                    'Trades': d['trades'],
-                    'W/L': f"{d['wins']}/{d['losses']}",
-                    'Win%': f"{wr:.0f}%",
-                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", ".")
-                })
-        if mes_data:
-            st.dataframe(pd.DataFrame(mes_data), use_container_width=True, hide_index=True)
-
-    # Tabla 4: Por Día de la Semana (ordenado)
-    col_dia2, col_franja = st.columns(2)
-
-    with col_dia2:
-        st.markdown("**📆 Por Día de la Semana**")
-        dia_data = []
-        for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']:
-            if dia in by_dia:
-                d = by_dia[dia]
-                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
-                sign = '+' if d['pnl'] >= 0 else ''
-                dia_data.append({
-                    'Día': dia,
-                    'Trades': d['trades'],
-                    'W/L': f"{d['wins']}/{d['losses']}",
-                    'Win%': f"{wr:.0f}%",
-                    'P&L USD': f"{sign}{d['pnl']:,.2f}".replace(",", ".")
-                })
-        if dia_data:
-            st.dataframe(pd.DataFrame(dia_data), use_container_width=True, hide_index=True)
-
-    # Tabla 5: Por Franja Horaria (datos estáticos del análisis)
-    with col_franja:
-        st.markdown("**🕐 Por Franja Horaria**")
-        franja_data = [
-            {'Franja': '00:01-08:00 (Asia)', 'Trades': 14, 'W/L': '9/5', 'Win%': '64%', 'P&L USD': '+8.710,84'},
-            {'Franja': '08:01-15:00 (EU)', 'Trades': 10, 'W/L': '1/9', 'Win%': '10%', 'P&L USD': '-4.862,18'},
-            {'Franja': '15:01-23:59 (US)', 'Trades': 12, 'W/L': '7/5', 'Win%': '58%', 'P&L USD': '+16.441,74'},
-        ]
-        st.dataframe(pd.DataFrame(franja_data), use_container_width=True, hide_index=True)
-
-    # Tabla 6 y 7: Por Tipo de Posición y Por Duración
-    col_pos, col_dur = st.columns(2)
-
-    with col_pos:
-        st.markdown("**📊 Por Tipo de Posición**")
-        pos_data = [
-            {'Posición': 'LONG', 'Trades': 21, 'Contr.': 31, 'Win%': '62%', 'P&L USD': '+12.439,26'},
-            {'Posición': 'SHORT', 'Trades': 15, 'Contr.': 71, 'Win%': '27%', 'P&L USD': '+7.851,14'},
-        ]
-        st.dataframe(pd.DataFrame(pos_data), use_container_width=True, hide_index=True)
-
-    with col_dur:
-        st.markdown("**⏱️ Por Duración**")
-        dur_data = [
-            {'Duración': '< 2 horas', 'Trades': 23, 'Win%': '57%', 'P&L USD': '-10.029,56', 'Nota': 'Stops'},
-            {'Duración': '2-6 horas', 'Trades': 59, 'Win%': '54%', 'P&L USD': '+21.342,54', 'Nota': 'Óptimo'},
-            {'Duración': '6+ horas', 'Trades': 20, 'Win%': '30%', 'P&L USD': '+8.977,42', 'Nota': 'Swing'},
-        ]
-        st.dataframe(pd.DataFrame(dur_data), use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-
-    # Tabla 8: Relación de Trades por Fecha
-    st.markdown("**📋 Relación de Trades por Fecha**")
-
-    # Datos de trades del informe IB (ordenados por fecha de entrada)
-    trades_list = [
-        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+3.315,06'},
-        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+3.335,06'},
-        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.515,06'},
-        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.375,06'},
-        {'Fecha': '20/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.365,06'},
-        {'Fecha': '21/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+4.445,06'},
-        {'Fecha': '21/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+4.445,06'},
-        {'Fecha': '23/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-684,94'},
-        {'Fecha': '23/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-694,94'},
-        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-1.254,94'},
-        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-1.314,94'},
-        {'Fecha': '26/01', 'Symbol': 'GCH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+915,06'},
-        {'Fecha': '26/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-4.054,94'},
-        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+325,06'},
-        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+205,06'},
-        {'Fecha': '27/01', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+5.515,06'},
-        {'Fecha': '28/01', 'Symbol': 'CLH6', 'Tipo': 'SHORT', 'Contr.': 13, 'P&L USD': '+248,38'},
-        {'Fecha': '30/01', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-724,50'},
-        {'Fecha': '02/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-392,00'},
-        {'Fecha': '02/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-599,50'},
-        {'Fecha': '03/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '+3.720,50'},
-        {'Fecha': '06/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-344,50'},
-        {'Fecha': '06/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-689,50'},
-        {'Fecha': '09/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+345,06'},
-        {'Fecha': '09/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+385,06'},
-        {'Fecha': '10/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-242,00'},
-        {'Fecha': '10/02', 'Symbol': 'HEJ6', 'Tipo': 'SHORT', 'Contr.': 23, 'P&L USD': '+4.183,38'},
-        {'Fecha': '11/02', 'Symbol': 'CLH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-394,74'},
-        {'Fecha': '11/02', 'Symbol': 'CLH6', 'Tipo': 'LONG', 'Contr.': 11, 'P&L USD': '-4.592,14'},
-        {'Fecha': '11/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-5.054,94'},
-        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-509,50'},
-        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-739,50'},
-        {'Fecha': '11/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-644,50'},
-        {'Fecha': '12/02', 'Symbol': 'ESH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '+6.370,50'},
-        {'Fecha': '12/02', 'Symbol': 'HEJ6', 'Tipo': 'SHORT', 'Contr.': 23, 'P&L USD': '-1.206,62'},
-        {'Fecha': '12/02', 'Symbol': 'NQH6', 'Tipo': 'SHORT', 'Contr.': 1, 'P&L USD': '-579,50'},
-    ]
-    trades_df = pd.DataFrame(trades_list)
-
-    # Colorear según P&L
-    def color_pnl(val):
+    def color_trade_row(row):
+        styles = [''] * len(row)
+        pnl_idx = row.index.get_loc('P&G')
+        val = row['P&G']
         if isinstance(val, str):
             if val.startswith('+'):
-                return 'color: #00cc00; font-weight: bold'
-            elif val.startswith('-'):
-                return 'color: #ff4444; font-weight: bold'
-        return ''
+                styles[pnl_idx] = 'color: #00cc00; font-weight: bold'
+            elif val.startswith('-') and val != '-':
+                styles[pnl_idx] = 'color: #ff4444; font-weight: bold'
+        estado_idx = row.index.get_loc('Estado')
+        if row['Estado'] == 'ABIERTA':
+            styles[estado_idx] = 'background-color: #cccccc; color: #333333; font-weight: bold'
+        return styles
 
-    def color_tipo(val):
-        if val == 'LONG':
-            return 'background-color: #1a472a; color: white'
-        elif val == 'SHORT':
-            return 'background-color: #4a1a1a; color: white'
-        return ''
+    styled_trades = all_trades.style.apply(color_trade_row, axis=1)
+    st.dataframe(styled_trades, use_container_width=True, hide_index=True, height=500)
 
-    styled_trades = trades_df.style.applymap(color_pnl, subset=['P&L USD']).applymap(color_tipo, subset=['Tipo'])
-    st.dataframe(styled_trades, use_container_width=True, hide_index=True, height=400)
+    # Total row with black background
+    pnl_sign = '+' if futures_total_usd >= 0 else ''
+    st.markdown(
+        f"""
+        <div style="background-color: #1a1a1a; color: white; padding: 15px; border-radius: 5px; display: flex; justify-content: space-between; font-weight: bold; align-items: center;">
+            <span style="font-size: 1.2em;">TOTAL</span>
+            <span style="font-size: 1.4em;">P&G USD: {pnl_sign}${futures_total_usd:,.2f}</span>
+            <span style="font-size: 1.4em;">P&G EUR: {pnl_sign}{futures_total_eur:,.2f} €</span>
+        </div>
+        """.replace(",", "."),
+        unsafe_allow_html=True
+    )
 
     st.markdown("---")
-
-    # Tabla 9: Top Mejores y Peores
-    col_best, col_worst = st.columns(2)
-
-    with col_best:
-        st.markdown("**🏆 Top 5 Mejores**")
-        best_trades = [
-            {'#': 1, 'Symbol': 'ESH6', 'Fecha': '10-12/02', 'Duración': '2.3 días', 'P&L USD': '+6.370,50'},
-            {'#': 2, 'Symbol': 'GCJ6', 'Fecha': '27/01', 'Duración': '2.9 hrs', 'P&L USD': '+5.515,06'},
-            {'#': 3, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
-            {'#': 4, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
-            {'#': 5, 'Symbol': 'HEJ6', 'Fecha': '10/02', 'Duración': '3.0 hrs', 'P&L USD': '+4.183,38'},
-        ]
-        st.dataframe(pd.DataFrame(best_trades), use_container_width=True, hide_index=True)
-
-    with col_worst:
-        st.markdown("**💔 Top 5 Peores**")
-        worst_trades = [
-            {'#': 1, 'Symbol': 'GCJ6', 'Fecha': '11/02', 'Duración': '1.2 hrs', 'P&L USD': '-5.054,94'},
-            {'#': 2, 'Symbol': 'CLH6', 'Fecha': '11/02', 'Duración': '8.0 hrs', 'P&L USD': '-4.592,14'},
-            {'#': 3, 'Symbol': 'GCJ6', 'Fecha': '26/01', 'Duración': '9.1 hrs', 'P&L USD': '-4.054,94'},
-            {'#': 4, 'Symbol': 'GCH6', 'Fecha': '25-26/01', 'Duración': '3.3 hrs', 'P&L USD': '-1.314,94'},
-            {'#': 5, 'Symbol': 'GCH6', 'Fecha': '25-26/01', 'Duración': '3.3 hrs', 'P&L USD': '-1.254,94'},
-        ]
-        st.dataframe(pd.DataFrame(worst_trades), use_container_width=True, hide_index=True)
-
-
-elif page == "ETFs":
-    # Función para generar PDF de ETFs
-    def generar_pdf_etfs():
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import cm
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.enums import TA_CENTER
-        from io import BytesIO
-
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1*cm, leftMargin=1*cm, topMargin=1*cm, bottomMargin=1*cm)
-
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, alignment=TA_CENTER, spaceAfter=10, textColor=colors.HexColor('#1a365d'))
-        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Heading2'], fontSize=14, spaceAfter=8, spaceBefore=15, textColor=colors.HexColor('#1a365d'))
-
-        elements = []
-        GREEN = colors.HexColor('#006600')
-        RED = colors.HexColor('#cc0000')
-        HEADER_BG = colors.HexColor('#1a365d')
-        ROW_ALT = colors.HexColor('#e8f4f8')
-
-        def table_style():
-            return TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), HEADER_BG),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 9),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, ROW_ALT]),
-            ])
-
-        # Titulo
-        elements.append(Paragraph("ESTADISTICOS ETFs - INTERACTIVE BROKERS", title_style))
-        elements.append(Paragraph("Periodo: 01/01/2026 - 13/02/2026", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=11, alignment=TA_CENTER, textColor=colors.grey)))
-        elements.append(Spacer(1, 0.5*cm))
-
-        # Operaciones Cerradas
-        elements.append(Paragraph("OPERACIONES CERRADAS", subtitle_style))
-        data = [
-            ['ETF', 'Nombre', 'Tipo', 'Acciones', 'F. Entrada', 'F. Cierre', 'P. Entrada', 'P. Cierre', 'P&L USD'],
-            ['TLT', 'iShares 20+ Year Treasury Bond', 'LONG', '8.042', '20-21/01', '30/01-02/02', '$86,87', '$87,08', '+$1.291,44'],
-            ['AMLP', 'Alerian MLP ETF', 'SHORT', '8.036', '30/01', '02/02', '$49,97', '$49,62', '+$2.810,27'],
-            ['EMB', 'iShares JPM USD EM Bond', 'SHORT', '8.277', '30/01', '02/02', '$96,64', '$96,16', '+$3.863,27'],
-            ['EMLC', 'VanEck JPM EM Local Currency Bond', 'SHORT', '30.394', '30/01', '02/02', '$26,30', '$26,22', '+$2.333,50'],
-            ['XLB', 'Materials Select Sector SPDR', 'SHORT', '4.288', '30/01', '02/02', '$49,28', '$49,67', '-$1.726,35'],
-            ['TLT', 'iShares 20+ Year Treasury Bond', 'LONG', '17', '06/02', '12/02', '$87,40', '$88,72', '+$21,75'],
-        ]
-        t = Table(data, colWidths=[1.3*cm, 4.5*cm, 1.4*cm, 1.6*cm, 2.2*cm, 2.4*cm, 1.8*cm, 1.8*cm, 2*cm])
-        s = table_style()
-        s.add('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#d4edda'))
-        s.add('BACKGROUND', (2, 2), (2, 5), colors.HexColor('#f8d7da'))
-        s.add('BACKGROUND', (2, 6), (2, 6), colors.HexColor('#d4edda'))
-        s.add('TEXTCOLOR', (8, 1), (8, 4), GREEN)
-        s.add('TEXTCOLOR', (8, 5), (8, 5), RED)
-        s.add('TEXTCOLOR', (8, 6), (8, 6), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.5*cm))
-
-        # Resumen
-        elements.append(Paragraph("RESUMEN OPERACIONES CERRADAS", subtitle_style))
-        resumen = [
-            ['Metrica', 'Valor'],
-            ['P&L Bruto', '+$8.593,88'],
-            ['Trades', '6'],
-            ['Wins / Losses', '5 / 1'],
-            ['Win Rate', '83%'],
-        ]
-        t = Table(resumen, colWidths=[6*cm, 4*cm])
-        s = table_style()
-        s.add('TEXTCOLOR', (1, 1), (1, 1), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.5*cm))
-
-        # Posiciones Abiertas
-        elements.append(Paragraph("POSICIONES ABIERTAS", subtitle_style))
-        open_data = [
-            ['ETF', 'Nombre', 'Tipo', 'Acciones', 'F. Entrada', 'P. Entrada', 'Valor Aprox.'],
-            ['TLT', 'iShares 20+ Year Treasury Bond', 'LONG', '0,424', '06/02', '$87,40', '~$38'],
-        ]
-        t = Table(open_data, colWidths=[1.5*cm, 5.5*cm, 1.5*cm, 1.8*cm, 2*cm, 2*cm, 2*cm])
-        s = table_style()
-        s.add('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#d4edda'))
-        t.setStyle(s)
-        elements.append(t)
-        elements.append(Spacer(1, 0.5*cm))
-
-        # Por Tipo de Posicion
-        elements.append(Paragraph("POR TIPO DE POSICION (CERRADAS)", subtitle_style))
-        tipo_data = [
-            ['Posicion', 'Trades', 'P&L USD', 'Win Rate'],
-            ['LONG', '2', '+$1.313,19', '100%'],
-            ['SHORT', '4', '+$7.280,69', '75%'],
-        ]
-        t = Table(tipo_data, colWidths=[3*cm, 2.5*cm, 3*cm, 2.5*cm])
-        s = table_style()
-        s.add('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#d4edda'))
-        s.add('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f8d7da'))
-        s.add('TEXTCOLOR', (2, 1), (2, 2), GREEN)
-        t.setStyle(s)
-        elements.append(t)
-
-        # Footer
-        elements.append(Spacer(1, 1*cm))
-        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
-            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER, textColor=colors.grey)))
-
-        doc.build(elements)
-        buffer.seek(0)
-        return buffer.getvalue()
-
-    # Titulo con botón PDF
-    col_title, col_btn = st.columns([3, 1])
-    with col_title:
-        st.title("ETFs")
-    with col_btn:
-        st.write("")
-        pdf_bytes = generar_pdf_etfs()
-        st.download_button(
-            label="📄 Descargar PDF",
-            data=pdf_bytes,
-            file_name=f"ETFs_Estadisticos_{datetime.now().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
 
     # ==========================================================================
     # POSICIONES ETFs ABIERTAS
     # ==========================================================================
-    st.subheader("Posiciones Abiertas")
+    st.subheader("Posiciones ETFs Abiertas")
 
-    # Obtener fecha más reciente de IB en holding_diario
+    # Obtener fecha más reciente
     with db.get_session() as session:
         from sqlalchemy import text
         result = session.execute(text("""
-            SELECT MAX(fecha) FROM holding_diario WHERE account_code = 'IB'
+            SELECT MAX(fecha) FROM posicion WHERE fecha < date('now')
         """))
-        ib_date_val = result.fetchone()[0]
-        ib_date = parse_db_date(ib_date_val, date.today())
+        latest_date_str = result.fetchone()[0]
+        ib_date = datetime.strptime(latest_date_str, '%Y-%m-%d').date() if latest_date_str else date.today()
 
         # Obtener precios de compra desde ib_trades (promedio ponderado)
         precios_compra = {}
@@ -3647,10 +2063,10 @@ elif page == "ETFs":
 
         # Para posiciones sin trades en ib_trades, usar precio de primera fecha en holding_diario
         result = session.execute(text("""
-            SELECT DISTINCT ON (symbol) symbol, precio_entrada, fecha as first_date
+            SELECT symbol, precio_entrada, MIN(fecha) as first_date
             FROM holding_diario
-            WHERE account_code = 'IB' AND precio_entrada IS NOT NULL
-            ORDER BY symbol, fecha
+            WHERE account_code = 'IB'
+            GROUP BY symbol
         """))
         for row in result:
             if row[0] not in precios_compra and row[1]:
@@ -3752,9 +2168,9 @@ elif page == "ETFs":
     st.dataframe(styled_positions, use_container_width=True, hide_index=True)
 
     # ==========================================================================
-    # POSICIONES CERRADAS
+    # POSICIONES ETFs CERRADAS
     # ==========================================================================
-    st.subheader("Posiciones Cerradas")
+    st.subheader("Posiciones ETFs Cerradas")
 
     with db.get_session() as session:
         # Buscar ventas en ib_trades (posiciones cerradas)
@@ -3831,7 +2247,7 @@ elif page == "ETFs":
     st.caption(f"Fecha: {ib_date.strftime('%d/%m/%Y')} | EUR/USD: {eur_usd:.4f}")
 
 
-elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
+elif page == "Backtesting" and backtesting_option == "Estrategia Mensual":
     st.title("Seleccion Mensual")
     st.markdown("Day 0 = Ultimo dia de negociacion del mes anterior (End-of-Day prices)")
 
@@ -3853,397 +2269,6 @@ elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
         "Abril 2025": "TYL, UL, STZ, TT, BSX, MA, EQT, BKNG, HAS, AMZN",
         "Marzo 2025": "ANET, CHD, STZ, EQIX, AEM, GSK, EW, WST, CTRA, BKNG",
     }
-
-    # Mostrar resumen histórico con botón para cargar
-    st.subheader("Histórico de Meses")
-
-    # Mapeo de sectores para cada símbolo
-    sector_map = {
-        # Tecnología
-        'AVGO': 'Tecnología', 'NET': 'Tecnología', 'ANET': 'Tecnología', 'KLAC': 'Tecnología',
-        'MSFT': 'Tecnología', 'INTC': 'Tecnología', 'AMD': 'Tecnología', 'GOOGL': 'Tecnología',
-        'NVDA': 'Tecnología', 'LRCX': 'Tecnología', 'SNPS': 'Tecnología', 'AMAT': 'Tecnología',
-        'CRM': 'Tecnología', 'AKAM': 'Tecnología', 'HPE': 'Tecnología', 'IBM': 'Tecnología',
-        'EPAM': 'Tecnología', 'TYL': 'Tecnología', 'EA': 'Tecnología',
-        # Financiero
-        'MA': 'Financiero', 'MCO': 'Financiero', 'AXP': 'Financiero', 'SCHW': 'Financiero',
-        'JPM': 'Financiero', 'BAC': 'Financiero', 'WFC': 'Financiero', 'ALL': 'Financiero',
-        'AIZ': 'Financiero', 'MSCI': 'Financiero', 'BKNG': 'Financiero',
-        # Salud
-        'SYK': 'Salud', 'REGN': 'Salud', 'IDXX': 'Salud', 'HEI': 'Salud', 'VRTX': 'Salud',
-        'WST': 'Salud', 'BDX': 'Salud', 'HCA': 'Salud', 'AMGN': 'Salud', 'ABBV': 'Salud',
-        'GILD': 'Salud', 'RMD': 'Salud', 'LLY': 'Salud', 'BSX': 'Salud', 'EW': 'Salud',
-        'GSK': 'Salud', 'DHR': 'Salud', 'WAT': 'Salud', 'PODD': 'Salud',
-        # Consumo Discrecional
-        'AMZN': 'Consumo Disc.', 'TJX': 'Consumo Disc.', 'ULTA': 'Consumo Disc.',
-        'GM': 'Consumo Disc.', 'NFLX': 'Consumo Disc.', 'TSLA': 'Consumo Disc.',
-        'DHI': 'Consumo Disc.', 'HAS': 'Consumo Disc.', 'LYV': 'Consumo Disc.',
-        # Consumo Básico
-        'PEP': 'Consumo Básico', 'EL': 'Consumo Básico', 'MNST': 'Consumo Básico',
-        'KMB': 'Consumo Básico', 'STZ': 'Consumo Básico', 'CHD': 'Consumo Básico',
-        'SYY': 'Consumo Básico', 'UL': 'Consumo Básico',
-        # Industrial
-        'GE': 'Industrial', 'PCAR': 'Industrial', 'CBRE': 'Industrial', 'AME': 'Industrial',
-        'LDOS': 'Industrial', 'MSI': 'Industrial', 'PAYC': 'Industrial', 'CTAS': 'Industrial',
-        'ODFL': 'Industrial', 'TDG': 'Industrial', 'MCK': 'Industrial', 'TT': 'Industrial',
-        'ORLY': 'Industrial', 'IRM': 'Industrial', 'PWR': 'Industrial', 'FTI': 'Industrial',
-        # Energía
-        'PAA': 'Energía', 'CVX': 'Energía', 'E': 'Energía', 'EQT': 'Energía', 'CTRA': 'Energía',
-        # Materiales
-        'STLD': 'Materiales', 'BTG': 'Materiales', 'RIO': 'Materiales', 'AEM': 'Materiales',
-        # Utilities
-        'FE': 'Utilities', 'EVRG': 'Utilities', 'D': 'Utilities', 'CEG': 'Utilities',
-        'XEL': 'Utilities',
-        # Real Estate
-        'PLD': 'Real Estate', 'EQIX': 'Real Estate',
-        # Comunicaciones
-        'CBOE': 'Comunicaciones', 'RTO': 'Comunicaciones', 'SAN': 'Comunicaciones',
-        'DB1': 'Comunicaciones',
-        # Otros
-        'BRK-B': 'Financiero',
-    }
-
-    # Datos históricos pre-calculados (ordenados cronológicamente)
-    # Formato: avg=retorno medio, symbols=tickers, positive=positivos, negative=negativos, zero=neutros
-    historical_data = {
-        "Marzo 2025": {"avg": -0.98, "symbols": 10, "positive": 5, "negative": 5, "zero": 0},
-        "Abril 2025": {"avg": 1.96, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
-        "Mayo 2025": {"avg": 8.28, "symbols": 10, "positive": 9, "negative": 1, "zero": 0},
-        "Junio 2025": {"avg": 2.38, "symbols": 9, "positive": 7, "negative": 2, "zero": 1},
-        "Julio 2025": {"avg": 0.64, "symbols": 10, "positive": 4, "negative": 6, "zero": 0},
-        "Agosto 2025": {"avg": 2.94, "symbols": 9, "positive": 5, "negative": 4, "zero": 1},
-        "Septiembre 2025": {"avg": 7.17, "symbols": 7, "positive": 7, "negative": 0, "zero": 3},
-        "Octubre 2025": {"avg": 0.43, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-        "Noviembre 2025": {"avg": 1.90, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-        "Diciembre 2025": {"avg": -0.40, "symbols": 10, "positive": 5, "negative": 5, "zero": 0},
-        "Enero 2026": {"avg": -0.01, "symbols": 10, "positive": 7, "negative": 3, "zero": 0},
-        "Febrero 2026": {"avg": 1.69, "symbols": 10, "positive": 6, "negative": 4, "zero": 0},
-    }
-
-    if st.button("Calcular Retornos Reales", key="calc_hist"):
-        with st.spinner("Calculando retornos históricos..."):
-            monthly_returns = {}
-            with db.get_session() as session:
-                for month_key, symbols_str in monthly_selections.items():
-                    parts = month_key.split()
-                    m_name = parts[0]
-                    m_year = int(parts[1])
-                    m_num = [k for k, v in month_names.items() if v == m_name][0]
-
-                    if m_num == 1:
-                        prev_m, prev_y = 12, m_year - 1
-                    else:
-                        prev_m, prev_y = m_num - 1, m_year
-                    if m_num == 12:
-                        next_m, next_y = 1, m_year + 1
-                    else:
-                        next_m, next_y = m_num + 1, m_year
-
-                    first_day = datetime(m_year, m_num, 1)
-                    first_day_next = datetime(next_y, next_m, 1)
-                    start_date = datetime(prev_y, prev_m, 1)
-
-                    symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-                    returns = []
-
-                    for sym in symbols:
-                        db_symbol = session.query(Symbol).filter(Symbol.code == sym).first()
-                        if db_symbol:
-                            prices = db.get_price_history(session, db_symbol.id, start_date=start_date)
-                            if not prices.empty:
-                                prev_prices = prices[(prices.index >= start_date) & (prices.index < first_day)]
-                                curr_prices = prices[(prices.index >= first_day) & (prices.index < first_day_next)]
-                                if not prev_prices.empty and not curr_prices.empty:
-                                    open_p = prev_prices['close'].iloc[-1]
-                                    close_p = curr_prices['close'].iloc[-1]
-                                    ret = ((close_p - open_p) / open_p) * 100
-                                    returns.append(ret)
-
-                    if returns:
-                        historical_data[month_key] = {
-                            "avg": sum(returns) / len(returns),
-                            "symbols": len(symbols),
-                            "positive": sum(1 for r in returns if r > 0)
-                        }
-    # Orden cronológico (más antiguo primero)
-    month_order = [
-        "Marzo 2025", "Abril 2025", "Mayo 2025", "Junio 2025",
-        "Julio 2025", "Agosto 2025", "Septiembre 2025", "Octubre 2025",
-        "Noviembre 2025", "Diciembre 2025", "Enero 2026", "Febrero 2026"
-    ]
-
-    hist_data = []
-    for month_key in month_order:
-        if month_key in historical_data:
-            r = historical_data[month_key]
-            num_symbols = r['symbols']
-            positivos = r['positive']
-            negativos = r.get('negative', num_symbols - positivos)
-            zeros = r.get('zero', 0)
-
-            # Calcular Win% sobre tickers reales (excluyendo zeros)
-            effective_symbols = positivos + negativos
-            win_pct = f"{positivos/effective_symbols*100:.0f}%" if effective_symbols > 0 else '-'
-
-            # El avg ya está calculado sobre 10 (si hay menos tickers, los faltantes son 0%)
-            hist_data.append({
-                'Año': month_key.split()[1],
-                'Mes': month_key.split()[0],
-                'Tickers': num_symbols,
-                '+': positivos,
-                '-': negativos,
-                '0': zeros if zeros > 0 else '-',
-                'Win%': win_pct,
-                'Ret. Medio': f"{r['avg']:+.2f}%"
-            })
-
-    if hist_data:
-        # Métricas globales del histórico (con comisiones 0.3% total por mes)
-        COMISION_MENSUAL = 0.3  # 0.3% por mes
-        # Crear dict con retornos netos por mes
-        month_returns_neto = {}
-        for m in month_order:
-            if m in historical_data:
-                month_returns_neto[m] = historical_data[m]['avg'] - COMISION_MENSUAL
-
-        positive_months = sum(1 for a in month_returns_neto.values() if a > 0)
-        negative_months = sum(1 for a in month_returns_neto.values() if a < 0)
-
-        # Encontrar mes con máximo y mínimo
-        max_month = max(month_returns_neto, key=month_returns_neto.get)
-        min_month = min(month_returns_neto, key=month_returns_neto.get)
-        max_ret = month_returns_neto[max_month]
-        min_ret = month_returns_neto[min_month]
-
-        # Datos de acciones individuales (mejores y peores del histórico)
-        # Basado en los datos verificados de la base de datos
-        best_stock = {"symbol": "INTC", "month": "Sept 25", "ret": 37.78}
-        worst_stock = {"symbol": "INTC", "month": "Ago 25", "ret": -18.21}
-
-        # Profit Factor = suma ganancias / suma pérdidas
-        gains = sum(a for a in month_returns_neto.values() if a > 0)
-        losses = abs(sum(a for a in month_returns_neto.values() if a < 0))
-        profit_factor = gains / losses if losses > 0 else float('inf')
-
-        # Calcular retorno acumulado y medio
-        ret_acumulado = sum(month_returns_neto.values())
-        ret_medio = ret_acumulado / len(month_returns_neto)
-
-        # Calcular Sharpe y Sortino Ratios
-        import numpy as np
-        returns_list = list(month_returns_neto.values())
-        risk_free_rate = 0.3  # 0.3% mensual (~4% anual)
-
-        # Sharpe Ratio = (ret_medio - rf) / std_dev
-        std_dev = np.std(returns_list) if len(returns_list) > 1 else 0
-        sharpe_ratio = (ret_medio - risk_free_rate) / std_dev if std_dev > 0 else 0
-
-        # Sortino Ratio = (ret_medio - rf) / downside_deviation
-        negative_returns = [r for r in returns_list if r < 0]
-        downside_dev = np.std(negative_returns) if len(negative_returns) > 1 else 0
-        sortino_ratio = (ret_medio - risk_free_rate) / downside_dev if downside_dev > 0 else 0
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Meses Positivos", f"{positive_months}/{len(historical_data)}")
-        col2.metric("Win Rate", f"{positive_months/len(historical_data)*100:.0f}%")
-        col3.metric("Ret. Medio Mensual", f"{ret_medio:+.2f}%")
-        col4.metric("Ret. Acumulado", f"{ret_acumulado:+.2f}%")
-
-        col5, col6, col7, col8 = st.columns(4)
-        col5.metric(f"Máx. Mes ({max_month.split()[0][:3]})", f"{max_ret:+.2f}%")
-        col6.metric(f"Mín. Mes ({min_month.split()[0][:3]})", f"{min_ret:+.2f}%")
-        col7.metric(f"Máx. Acción ({best_stock['symbol']})", f"+{best_stock['ret']:.1f}%")
-        col8.metric(f"Mín. Acción ({worst_stock['symbol']})", f"{worst_stock['ret']:.1f}%")
-
-        col9, col10, col11, col12 = st.columns(4)
-        col9.metric("Profit Factor", f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞")
-        col10.metric("Sharpe Ratio", f"{sharpe_ratio:.2f}")
-        col11.metric("Sortino Ratio", f"{sortino_ratio:.2f}")
-
-    st.markdown("---")
-
-    # === RENTABILIDAD POR SECTOR ===
-    st.subheader("Rentabilidad por Sector")
-    st.caption("Calculado desde retornos históricos reales (después de 0.3% comisión)")
-
-    # Calcular retornos por ticker y agrupar por sector
-    COMISION = 0.3  # 0.3% comisión
-    ticker_returns = {}  # {ticker: [retornos de cada mes]}
-
-    with db.get_session() as session:
-        for month_key, symbols_str in monthly_selections.items():
-            parts = month_key.split()
-            m_name = parts[0]
-            m_year = int(parts[1])
-            m_num = [k for k, v in month_names.items() if v == m_name][0]
-
-            # Calcular fechas del mes
-            if m_num == 1:
-                prev_m, prev_y = 12, m_year - 1
-            else:
-                prev_m, prev_y = m_num - 1, m_year
-            if m_num == 12:
-                next_m, next_y = 1, m_year + 1
-            else:
-                next_m, next_y = m_num + 1, m_year
-
-            first_day = datetime(m_year, m_num, 1)
-            first_day_next = datetime(next_y, next_m, 1)
-            start_date = datetime(prev_y, prev_m, 1)
-
-            symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
-
-            for sym in symbols:
-                db_symbol = session.query(Symbol).filter(Symbol.code == sym).first()
-                if db_symbol:
-                    prices = db.get_price_history(session, db_symbol.id, start_date=start_date)
-                    if not prices.empty:
-                        prev_prices = prices[(prices.index >= start_date) & (prices.index < first_day)]
-                        curr_prices = prices[(prices.index >= first_day) & (prices.index < first_day_next)]
-                        if not prev_prices.empty and not curr_prices.empty:
-                            open_p = prev_prices['close'].iloc[-1]
-                            close_p = curr_prices['close'].iloc[-1]
-                            ret = ((close_p - open_p) / open_p) * 100
-                            if sym not in ticker_returns:
-                                ticker_returns[sym] = []
-                            ticker_returns[sym].append(ret)
-
-    # Agrupar por sector y calcular promedio
-    sector_stats = {}
-    for ticker, returns in ticker_returns.items():
-        sector = sector_map.get(ticker, 'Otros')
-        if sector not in sector_stats:
-            sector_stats[sector] = {'returns': [], 'tickers': set()}
-        sector_stats[sector]['returns'].extend(returns)
-        sector_stats[sector]['tickers'].add(ticker)
-
-    sector_data = []
-    for sector, stats in sector_stats.items():
-        if stats['returns']:
-            avg_bruto = sum(stats['returns']) / len(stats['returns'])
-            avg_neto = avg_bruto - COMISION
-            sector_data.append({
-                'Sector': sector,
-                'Tickers': len(stats['tickers']),
-                'Operaciones': len(stats['returns']),
-                'Ret. Neto': f"{avg_neto:+.2f}%"
-            })
-
-    if sector_data:
-        sector_df = pd.DataFrame(sector_data)
-        sector_df = sector_df.sort_values('Operaciones', ascending=False)
-
-        def style_sector(row):
-            styles = [''] * len(row)
-            try:
-                ret = float(row['Ret. Neto'].replace('%', '').replace('+', ''))
-                ret_idx = sector_df.columns.get_loc('Ret. Neto')
-                styles[ret_idx] = 'color: green' if ret > 0 else 'color: red' if ret < 0 else ''
-            except:
-                pass
-            return styles
-
-        st.dataframe(sector_df.style.apply(style_sector, axis=1), use_container_width=True, hide_index=True)
-    else:
-        st.info("No hay datos de retornos por sector")
-
-    st.markdown("---")
-
-    # === SIMULACIÓN DE CARTERA ===
-    st.subheader("Simulación de Cartera")
-    st.caption("Inversión: $50,000 por ticker | Comisiones + Deslizamiento: 0.3% por ticker")
-
-    INVERSION_POR_TICKER = 50000
-    TICKERS_ESTANDAR = 10
-    COMISION_DESLIZAMIENTO = 0.003  # 0.3% por ticker
-
-    # Calcular P&L mes a mes
-    portfolio_data = []
-    total_invertido = 0
-    total_pnl = 0
-    total_comisiones = 0
-    capital_acumulado = 0
-
-    for month_key in month_order:
-        if month_key in historical_data:
-            r = historical_data[month_key]
-            num_tickers = r['symbols']
-            ret_medio = r['avg']
-
-            # Inversión del mes
-            inversion_mes = INVERSION_POR_TICKER * num_tickers
-            cash_mes = INVERSION_POR_TICKER * (TICKERS_ESTANDAR - num_tickers) if num_tickers < TICKERS_ESTANDAR else 0
-
-            # Comisiones y deslizamientos (0.3% por cada ticker)
-            comisiones_mes = inversion_mes * COMISION_DESLIZAMIENTO
-
-            # P&L del mes (retorno medio aplicado a la inversión, menos comisiones)
-            pnl_bruto = inversion_mes * (ret_medio / 100)
-            pnl_mes = pnl_bruto - comisiones_mes
-
-            total_invertido += inversion_mes
-            total_pnl += pnl_mes
-            total_comisiones += comisiones_mes
-            capital_acumulado += inversion_mes + pnl_mes
-
-            # Retorno neto (después de comisiones)
-            ret_neto = ((pnl_mes) / inversion_mes) * 100 if inversion_mes > 0 else 0
-
-            portfolio_data.append({
-                'Mes': month_key,
-                'Tickers': num_tickers,
-                'Inversión': f"${inversion_mes:,.0f}",
-                'Cash': f"${cash_mes:,.0f}" if cash_mes > 0 else '-',
-                'Comisiones': f"${comisiones_mes:,.0f}",
-                'Ret. Bruto': f"{ret_medio:+.2f}%",
-                'Ret. Neto': f"{ret_neto:+.2f}%",
-                'P&L Mes': f"${pnl_mes:+,.0f}",
-                'P&L Acum.': f"${total_pnl:+,.0f}"
-            })
-
-    if portfolio_data:
-        portfolio_df = pd.DataFrame(portfolio_data)
-
-        def style_portfolio(row):
-            styles = [''] * len(row)
-            try:
-                pnl_str = row['P&L Mes'].replace('$', '').replace(',', '').replace('+', '')
-                pnl_val = float(pnl_str)
-                pnl_idx = portfolio_df.columns.get_loc('P&L Mes')
-                acum_idx = portfolio_df.columns.get_loc('P&L Acum.')
-                ret_bruto_idx = portfolio_df.columns.get_loc('Ret. Bruto')
-                ret_neto_idx = portfolio_df.columns.get_loc('Ret. Neto')
-                color = 'color: green' if pnl_val > 0 else 'color: red' if pnl_val < 0 else ''
-                styles[pnl_idx] = color
-                styles[ret_neto_idx] = color
-
-                # Color para retorno bruto
-                ret_bruto_str = row['Ret. Bruto'].replace('%', '').replace('+', '')
-                ret_bruto_val = float(ret_bruto_str)
-                styles[ret_bruto_idx] = 'color: green' if ret_bruto_val > 0 else 'color: red' if ret_bruto_val < 0 else ''
-
-                acum_str = row['P&L Acum.'].replace('$', '').replace(',', '').replace('+', '')
-                acum_val = float(acum_str)
-                styles[acum_idx] = 'color: green' if acum_val > 0 else 'color: red' if acum_val < 0 else ''
-            except:
-                pass
-            return styles
-
-        st.dataframe(portfolio_df.style.apply(style_portfolio, axis=1), use_container_width=True, hide_index=True)
-
-        # Métricas del portafolio
-        meses_positivos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] > 0)
-        meses_negativos = sum(1 for m in month_order if m in historical_data and historical_data[m]['avg'] < 0)
-        rentabilidad_neta = (total_pnl / total_invertido) * 100 if total_invertido > 0 else 0
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Total Invertido", f"${total_invertido:,.0f}")
-        col2.metric("Comisiones", f"${total_comisiones:,.0f}")
-        col3.metric("P&L Neto", f"${total_pnl:+,.0f}")
-        col4.metric("Rentabilidad Neta", f"{rentabilidad_neta:+.2f}%")
-        col5.metric("Win Rate", f"{meses_positivos}/{meses_positivos + meses_negativos}")
-
-    st.markdown("---")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -4270,13 +2295,16 @@ elif page == "Carih Mensual" and backtesting_option == "Estrategia Mensual":
     month = [k for k, v in month_names.items() if v == month_name][0]
 
     default_symbols = monthly_selections.get(selected_month, "")
-    symbols = [s.strip().upper() for s in default_symbols.split(",") if s.strip()]
 
-    # Mostrar símbolos del mes seleccionado
-    if symbols:
-        st.markdown(f"**Tickers ({len(symbols)}):** {', '.join(symbols)}")
+    symbols_input = st.text_input(
+        "Symbols",
+        value=default_symbols,
+        help="Stock symbols for this month's selection"
+    )
 
-    if symbols and st.button("Load Prices", type="primary", key=f"load_{selected_month}"):
+    symbols = [s.strip().upper() for s in symbols_input.split(",") if s.strip()]
+
+    if symbols and st.button("Load Prices", type="primary"):
         st.markdown("---")
 
         # Calcular mes anterior dinámicamente
@@ -4576,7 +2604,7 @@ elif page == "Screener":
         st.info(f"Metrics available for {metrics_count} records. Use filters below.")
 
 
-elif page == "Carih Mensual" and backtesting_option == "Portfolio Backtest":
+elif page == "Backtesting" and backtesting_option == "Portfolio Backtest":
     st.title("Portfolio Backtest")
     st.info("Herramienta de backtesting para estrategias de portfolio.")
 
