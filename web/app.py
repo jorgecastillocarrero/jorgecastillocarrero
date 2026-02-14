@@ -2864,6 +2864,277 @@ elif page == "Acciones":
 elif page == "Futuros":
     st.title("FUTUROS")
 
+    # Función para generar PDF
+    def generar_pdf_futuros(data):
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.lib.enums import TA_CENTER
+        from io import BytesIO
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=1.5*cm, leftMargin=1.5*cm, topMargin=1.5*cm, bottomMargin=1.5*cm)
+
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=18, alignment=TA_CENTER, spaceAfter=20)
+        subtitle_style = ParagraphStyle('Subtitle', parent=styles['Heading2'], fontSize=14, spaceAfter=10, spaceBefore=15)
+        desc_style = ParagraphStyle('Desc', parent=styles['Normal'], fontSize=9, textColor=colors.grey, spaceAfter=12)
+
+        elements = []
+        GREEN = colors.HexColor('#006600')
+        RED = colors.HexColor('#cc0000')
+
+        def table_style():
+            return TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a365d')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('FONTSIZE', (0, 1), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#e8f4f8')]),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ])
+
+        def fmt(n):
+            return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        def fmt_int(n):
+            return f"{n:,}".replace(",", ".")
+
+        # Titulo
+        elements.append(Paragraph("ANALISIS DE FUTUROS IB", title_style))
+        elements.append(Paragraph(f"Periodo: 01/01/2026 - 13/02/2026", ParagraphStyle('P', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, spaceAfter=5)))
+        elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | EUR/USD: {data['eur_usd']:.4f}", ParagraphStyle('P2', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceAfter=20, textColor=colors.grey)))
+        elements.append(Spacer(1, 0.5*cm))
+
+        # 1. Resultado Global
+        elements.append(Paragraph("1. RESULTADO GLOBAL", subtitle_style))
+        sign = '+' if data['total_pnl'] >= 0 else ''
+        comisiones = -539.60
+        pnl_neto = data['total_pnl'] + comisiones
+        avg_pnl = data['total_pnl'] / data['total_trades'] if data['total_trades'] > 0 else 0
+        tbl = [
+            ['Metrica', 'Valor'],
+            ['P&L Total USD', f"{sign}${fmt(data['total_pnl'])}"],
+            ['P&L Total EUR', f"{sign}{fmt(data['total_pnl']/data['eur_usd'])} EUR"],
+            ['Comisiones IB', f"${fmt(comisiones)}"],
+            ['P&L Neto USD', f"{'+' if pnl_neto >= 0 else ''}${fmt(pnl_neto)}"],
+            ['Trades', f"{data['total_trades']}"],
+            ['Contratos', f"{data['total_contracts']}"],
+            ['Win Rate', f"{data['wr']:.0f}%"],
+            ['P&L Promedio', f"{'+' if avg_pnl >= 0 else ''}${fmt(avg_pnl)} USD/trade"],
+        ]
+        t = Table(tbl, colWidths=[8*cm, 6*cm])
+        s = table_style()
+        s.add('TEXTCOLOR', (1, 1), (1, 2), GREEN)
+        s.add('TEXTCOLOR', (1, 3), (1, 3), RED)
+        s.add('TEXTCOLOR', (1, 4), (1, 4), GREEN)
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 2. Por Tipo
+        elements.append(Paragraph("2. POR TIPO DE ACTIVO", subtitle_style))
+        tbl = [['Tipo', 'Trades', 'Contr.', 'Importe', 'P&L USD', '%Total']]
+        for tipo in ['Oro', 'Índices', 'Ganado', 'Petróleo']:
+            if tipo in data['by_tipo']:
+                d = data['by_tipo'][tipo]
+                pct = d['pnl'] / data['total_pnl'] * 100 if data['total_pnl'] != 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                tbl.append([tipo, str(d['trades']), str(d['contracts']), f"${fmt_int(int(d['importe']))}", f"{sign}{fmt(d['pnl'])}", f"{pct:+.1f}%"])
+        t = Table(tbl, colWidths=[2.5*cm, 2*cm, 2*cm, 3*cm, 3*cm, 2.5*cm])
+        s = table_style()
+        for i, row in enumerate(tbl[1:], start=1):
+            if row[4].startswith('+'):
+                s.add('TEXTCOLOR', (4, i), (5, i), GREEN)
+            else:
+                s.add('TEXTCOLOR', (4, i), (5, i), RED)
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 3. Por Mes
+        elements.append(Paragraph("3. POR MES", subtitle_style))
+        tbl = [['Mes', 'Trades', 'W/L', 'Win%', 'P&L USD']]
+        for mes in ['Enero', 'Febrero']:
+            if mes in data['by_mes']:
+                d = data['by_mes'][mes]
+                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                tbl.append([mes, str(d['trades']), f"{d['wins']}/{d['losses']}", f"{wr:.0f}%", f"{sign}{fmt(d['pnl'])}"])
+        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
+        s = table_style()
+        for i, row in enumerate(tbl[1:], start=1):
+            s.add('TEXTCOLOR', (4, i), (4, i), GREEN if row[4].startswith('+') else RED)
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 4. Por Día
+        elements.append(Paragraph("4. POR DIA DE LA SEMANA", subtitle_style))
+        tbl = [['Dia', 'Trades', 'W/L', 'Win%', 'P&L USD']]
+        for dia in ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']:
+            if dia in data['by_dia']:
+                d = data['by_dia'][dia]
+                wr = d['wins'] / d['trades'] * 100 if d['trades'] > 0 else 0
+                sign = '+' if d['pnl'] >= 0 else ''
+                tbl.append([dia, str(d['trades']), f"{d['wins']}/{d['losses']}", f"{wr:.0f}%", f"{sign}{fmt(d['pnl'])}"])
+        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
+        s = table_style()
+        for i, row in enumerate(tbl[1:], start=1):
+            s.add('TEXTCOLOR', (4, i), (4, i), GREEN if row[4].startswith('+') else RED)
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 5. Por Franja
+        elements.append(Paragraph("5. POR FRANJA HORARIA", subtitle_style))
+        tbl = [
+            ['Franja Horaria', 'Trades', 'W/L', 'Win%', 'P&L USD'],
+            ['00:01-08:00 (Asia)', '14', '9/5', '64%', '+8.710,84'],
+            ['08:01-15:00 (EU)', '10', '1/9', '10%', '-4.862,18'],
+            ['15:01-23:59 (US)', '12', '7/5', '58%', '+16.441,74'],
+        ]
+        t = Table(tbl, colWidths=[4.5*cm, 2*cm, 2*cm, 2*cm, 4*cm])
+        s = table_style()
+        s.add('TEXTCOLOR', (4, 1), (4, 1), GREEN)
+        s.add('TEXTCOLOR', (4, 2), (4, 2), RED)
+        s.add('TEXTCOLOR', (4, 3), (4, 3), GREEN)
+        t.setStyle(s)
+        elements.append(t)
+
+        elements.append(PageBreak())
+
+        # 6. Por Posición
+        elements.append(Paragraph("6. POR TIPO DE POSICION", subtitle_style))
+        tbl = [
+            ['Posicion', 'Trades', 'Contratos', 'Win%', 'P&L USD'],
+            ['LONG', '21', '31', '62%', '+12.439,26'],
+            ['SHORT', '15', '71', '27%', '+7.851,14'],
+        ]
+        t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
+        s = table_style()
+        s.add('TEXTCOLOR', (4, 1), (4, 2), GREEN)
+        s.add('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#d4edda'))
+        s.add('BACKGROUND', (0, 2), (0, 2), colors.HexColor('#f8d7da'))
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 7. Por Duración
+        elements.append(Paragraph("7. POR DURACION DEL TRADE", subtitle_style))
+        tbl = [
+            ['Duracion', 'Trades', 'Win%', 'P&L USD', 'Nota'],
+            ['< 2 horas', '23', '57%', '-10.029,56', 'Stops ejecutados'],
+            ['2-6 horas', '59', '54%', '+21.342,54', 'Rango optimo'],
+            ['6+ horas', '20', '30%', '+8.977,42', 'Swing trading'],
+        ]
+        t = Table(tbl, colWidths=[2.5*cm, 2*cm, 2*cm, 3*cm, 4*cm])
+        s = table_style()
+        s.add('TEXTCOLOR', (3, 1), (3, 1), RED)
+        s.add('TEXTCOLOR', (3, 2), (3, 3), GREEN)
+        s.add('BACKGROUND', (4, 2), (4, 2), colors.HexColor('#d4edda'))
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.8*cm))
+
+        # 8. Lista de Trades
+        elements.append(Paragraph("8. RELACION DE TRADES POR FECHA", subtitle_style))
+        trades_list = [
+            ['Fecha', 'Symbol', 'Tipo', 'Contr.', 'P&L USD'],
+            ['20/01', 'GCH6', 'LONG', '1', '+3.315,06'],
+            ['20/01', 'GCH6', 'LONG', '1', '+3.335,06'],
+            ['20/01', 'GCH6', 'LONG', '1', '+2.515,06'],
+            ['20/01', 'GCH6', 'LONG', '1', '+2.375,06'],
+            ['20/01', 'GCH6', 'LONG', '1', '+2.365,06'],
+            ['21/01', 'GCH6', 'LONG', '1', '+4.445,06'],
+            ['21/01', 'GCH6', 'LONG', '1', '+4.445,06'],
+            ['23/01', 'GCH6', 'LONG', '1', '-684,94'],
+            ['23/01', 'GCH6', 'LONG', '1', '-694,94'],
+            ['26/01', 'GCH6', 'LONG', '1', '-1.254,94'],
+            ['26/01', 'GCH6', 'LONG', '1', '-1.314,94'],
+            ['26/01', 'GCH6', 'LONG', '1', '+915,06'],
+            ['26/01', 'GCJ6', 'LONG', '1', '-4.054,94'],
+            ['27/01', 'GCJ6', 'LONG', '1', '+325,06'],
+            ['27/01', 'GCJ6', 'LONG', '1', '+205,06'],
+            ['27/01', 'GCJ6', 'LONG', '1', '+5.515,06'],
+            ['28/01', 'CLH6', 'SHORT', '13', '+248,38'],
+            ['30/01', 'NQH6', 'SHORT', '1', '-724,50'],
+            ['02/02', 'ESH6', 'SHORT', '1', '-392,00'],
+            ['02/02', 'NQH6', 'SHORT', '1', '-599,50'],
+            ['03/02', 'ESH6', 'SHORT', '1', '+3.720,50'],
+            ['06/02', 'NQH6', 'SHORT', '1', '-344,50'],
+            ['06/02', 'NQH6', 'SHORT', '1', '-689,50'],
+            ['09/02', 'GCJ6', 'LONG', '1', '+345,06'],
+            ['09/02', 'GCJ6', 'LONG', '1', '+385,06'],
+            ['10/02', 'ESH6', 'SHORT', '1', '-242,00'],
+            ['10/02', 'HEJ6', 'SHORT', '23', '+4.183,38'],
+            ['11/02', 'CLH6', 'LONG', '1', '-394,74'],
+            ['11/02', 'CLH6', 'LONG', '11', '-4.592,14'],
+            ['11/02', 'GCJ6', 'LONG', '1', '-5.054,94'],
+            ['11/02', 'NQH6', 'SHORT', '1', '-509,50'],
+            ['11/02', 'NQH6', 'SHORT', '1', '-739,50'],
+            ['11/02', 'NQH6', 'SHORT', '1', '-644,50'],
+            ['12/02', 'ESH6', 'SHORT', '1', '+6.370,50'],
+            ['12/02', 'HEJ6', 'SHORT', '23', '-1.206,62'],
+            ['12/02', 'NQH6', 'SHORT', '1', '-579,50'],
+        ]
+        t = Table(trades_list, colWidths=[2*cm, 2.5*cm, 2*cm, 2*cm, 3.5*cm])
+        s = table_style()
+        for i, row in enumerate(trades_list[1:], start=1):
+            if row[4].startswith('+'):
+                s.add('TEXTCOLOR', (4, i), (4, i), GREEN)
+            else:
+                s.add('TEXTCOLOR', (4, i), (4, i), RED)
+        t.setStyle(s)
+        elements.append(t)
+
+        elements.append(PageBreak())
+
+        # 9. Top 5
+        elements.append(Paragraph("9. TOP 5 MEJORES Y PEORES TRADES", subtitle_style))
+        elements.append(Paragraph("TOP 5 MEJORES", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=8)))
+        best = [
+            ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
+            ['1', 'ESH6', '10-12/02', '2.3 dias', '+6.370,50'],
+            ['2', 'GCJ6', '27/01', '2.9 hrs', '+5.515,06'],
+            ['3', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
+            ['4', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
+            ['5', 'HEJ6', '10/02', '3.0 hrs', '+4.183,38'],
+        ]
+        t = Table(best, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
+        s = table_style()
+        for i in range(1, 6):
+            s.add('TEXTCOLOR', (4, i), (4, i), GREEN)
+        t.setStyle(s)
+        elements.append(t)
+        elements.append(Spacer(1, 0.5*cm))
+
+        elements.append(Paragraph("TOP 5 PEORES", ParagraphStyle('Sub2', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=8)))
+        worst = [
+            ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
+            ['1', 'GCJ6', '11/02', '1.2 hrs', '-5.054,94'],
+            ['2', 'CLH6', '11/02', '8.0 hrs', '-4.592,14'],
+            ['3', 'GCJ6', '26/01', '9.1 hrs', '-4.054,94'],
+            ['4', 'GCH6', '25-26/01', '3.3 hrs', '-1.314,94'],
+            ['5', 'GCH6', '25-26/01', '3.3 hrs', '-1.254,94'],
+        ]
+        t = Table(worst, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
+        s = table_style()
+        for i in range(1, 6):
+            s.add('TEXTCOLOR', (4, i), (4, i), RED)
+        t.setStyle(s)
+        elements.append(t)
+
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer.getvalue()
+
     # ==========================================================================
     # ANÁLISIS FUTUROS IB (01/01 - 13/02/2026)
     # ==========================================================================
@@ -2966,13 +3237,40 @@ elif page == "Futuros":
         """)).fetchone()
         eur_usd_ib = fx[0] if fx else 1.04
 
+    # Calcular totales para el PDF
+    total_contracts = sum(d.get('contracts', 0) for d in by_tipo.values())
+    wr = total_wins / total_trades * 100 if total_trades > 0 else 0
+
+    # Botón para descargar PDF
+    pdf_data = {
+        'total_pnl': total_pnl,
+        'total_trades': total_trades,
+        'total_contracts': total_contracts,
+        'total_wins': total_wins,
+        'total_losses': total_losses,
+        'wr': wr,
+        'eur_usd': eur_usd_ib,
+        'by_tipo': by_tipo,
+        'by_mes': by_mes,
+        'by_dia': by_dia,
+    }
+
+    col_title, col_btn = st.columns([3, 1])
+    with col_btn:
+        pdf_bytes = generar_pdf_futuros(pdf_data)
+        st.download_button(
+            label="📄 Descargar PDF",
+            data=pdf_bytes,
+            file_name=f"Analisis_Futuros_{datetime.now().strftime('%Y%m%d')}.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+
     # Tabla 1: Resultado Global
     st.markdown("**📊 Resultado Global**")
 
     comisiones = -539.60  # Comisiones del informe IB
     pnl_neto = total_pnl + comisiones
-    total_contracts = sum(d.get('contracts', 0) for d in by_tipo.values())
-    wr = total_wins / total_trades * 100 if total_trades > 0 else 0
     avg_pnl = total_pnl / total_trades if total_trades > 0 else 0
     sign = '+' if total_pnl >= 0 else ''
     sign_neto = '+' if pnl_neto >= 0 else ''
@@ -3062,9 +3360,9 @@ elif page == "Futuros":
     with col_franja:
         st.markdown("**🕐 Por Franja Horaria**")
         franja_data = [
-            {'Franja': '15:01-23:59 (US)', 'Trades': 12, 'W/L': '7/5', 'Win%': '58%', 'P&L USD': '+16.441,74'},
             {'Franja': '00:01-08:00 (Asia)', 'Trades': 14, 'W/L': '9/5', 'Win%': '64%', 'P&L USD': '+8.710,84'},
             {'Franja': '08:01-15:00 (EU)', 'Trades': 10, 'W/L': '1/9', 'Win%': '10%', 'P&L USD': '-4.862,18'},
+            {'Franja': '15:01-23:59 (US)', 'Trades': 12, 'W/L': '7/5', 'Win%': '58%', 'P&L USD': '+16.441,74'},
         ]
         st.dataframe(pd.DataFrame(franja_data), use_container_width=True, hide_index=True)
 
