@@ -87,7 +87,7 @@ elements.append(Spacer(1, 0.5*cm))
 indice = [
     "1. [Pendiente]",
     "2. Cartera",
-    "3. [Pendiente]",
+    "3. Composicion",
     "4. [Pendiente]",
     "5. [Pendiente]",
     "6. ETFs",
@@ -233,6 +233,121 @@ elements.append(Paragraph(
     "Alpha vs SPY: +6,79% | Alpha vs QQQ: +8,79%",
     ParagraphStyle('AlphaNote', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor=GREEN)
 ))
+
+elements.append(PageBreak())
+
+# =============================================================================
+# 3. COMPOSICION
+# =============================================================================
+elements.append(Paragraph("3. COMPOSICION", subtitle_style))
+elements.append(Paragraph(
+    "Distribucion de la cartera por diversificacion, estrategia y cuenta.",
+    description_style
+))
+
+# Obtener datos de composicion desde portfolio_service
+from src.portfolio_data import PortfolioDataService
+portfolio_service = PortfolioDataService()
+
+# Fecha actual
+comp_fecha = db.get_session().__enter__().execute(text('SELECT MAX(fecha) FROM posicion')).scalar()
+if hasattr(comp_fecha, 'date'):
+    comp_fecha = comp_fecha.date()
+
+# Valores por tipo de activo
+strategy_values = portfolio_service.get_values_by_asset_type(comp_fecha)
+
+# Totales por cuenta
+def get_account_totals(fecha):
+    all_holdings = portfolio_service.get_all_holdings_for_date(fecha)
+    eur_usd_rate = portfolio_service.get_eur_usd_rate(fecha)
+    result = {}
+    for account in ['CO3365', 'RCO951', 'LACAIXA', 'IB']:
+        holdings = all_holdings.get(account, {})
+        holding_value = 0
+        for symbol, data in holdings.items():
+            shares = data['shares']
+            value = portfolio_service.calculate_position_value(symbol, shares, fecha)
+            if value:
+                holding_value += value
+        cash_data = portfolio_service.get_cash_for_date(account, fecha)
+        cash_eur = 0
+        if cash_data:
+            cash_eur += cash_data.get('EUR', 0)
+            cash_eur += cash_data.get('USD', 0) / eur_usd_rate
+        result[account] = holding_value + cash_eur
+    result['TOTAL'] = sum(result.values())
+    return result
+
+account_totals = get_account_totals(comp_fecha)
+total_cartera = account_totals['TOTAL']
+
+# 3.1 Diversificacion
+elements.append(Paragraph("3.1 Composicion por Diversificacion", section_style))
+
+bolsa = (strategy_values.get('Quant', 0) +
+         strategy_values.get('Value', 0) +
+         strategy_values.get('Alpha Picks', 0) +
+         strategy_values.get('Mensual', 0) +
+         strategy_values.get('Stock', 0))
+oro = strategy_values.get('Oro/Mineras', 0)
+liquidez = strategy_values.get('Cash/ETFs', 0) or (strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0))
+
+div_data = [
+    ['Clase', 'Valor EUR', '%'],
+    ['Bolsa', fmt(bolsa), f'{bolsa/total_cartera*100:.1f}%'],
+    ['Oro', fmt(oro), f'{oro/total_cartera*100:.1f}%'],
+    ['Liquidez', fmt(liquidez), f'{liquidez/total_cartera*100:.1f}%'],
+    ['TOTAL', fmt(total_cartera), '100%'],
+]
+t = Table(div_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 3.2 Por Estrategia
+elements.append(Paragraph("3.2 Composicion por Estrategia", section_style))
+
+# Ordenar por valor
+sorted_strategies = sorted([(k, v) for k, v in strategy_values.items() if v > 0], key=lambda x: -x[1])
+total_estrategias = sum(v for k, v in sorted_strategies)
+
+est_data = [['Estrategia', 'Valor EUR', '%']]
+for estrategia, valor in sorted_strategies:
+    pct = valor / total_estrategias * 100 if total_estrategias > 0 else 0
+    est_data.append([estrategia, fmt(valor), f'{pct:.1f}%'])
+est_data.append(['TOTAL', fmt(total_estrategias), '100%'])
+
+t = Table(est_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 3.3 Por Cuenta
+elements.append(Paragraph("3.3 Composicion por Cuenta", section_style))
+
+cuenta_data = [['Cuenta', 'Valor EUR', '%']]
+for cuenta in ['RCO951', 'LACAIXA', 'CO3365', 'IB']:
+    valor = account_totals.get(cuenta, 0)
+    pct = valor / total_cartera * 100 if total_cartera > 0 else 0
+    cuenta_data.append([cuenta, fmt(valor), f'{pct:.1f}%'])
+cuenta_data.append(['TOTAL', fmt(total_cartera), '100%'])
+
+t = Table(cuenta_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+t.setStyle(s)
+elements.append(t)
 
 elements.append(PageBreak())
 
