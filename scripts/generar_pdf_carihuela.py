@@ -196,6 +196,43 @@ elements.append(Paragraph(
     "La cartera supera significativamente a los indices de referencia con +6,77% vs SPY (-0,02%) y QQQ (-2,02%).",
     description_style
 ))
+elements.append(Spacer(1, 0.5*cm))
+
+# 2.5 Rentabilidad Mensual vs Benchmark
+elements.append(Paragraph("2.5 Rentabilidad Mensual vs Benchmark", section_style))
+elements.append(Paragraph(
+    "Comparativa de rentabilidad mensual de la cartera frente a los indices SPY y QQQ.",
+    description_style
+))
+rent_mensual_data = [
+    ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Total 2026'],
+    ['Cartera', '+4,46%', '+2,21%', '-', '-', '-', '+6,77%'],
+    ['SPY', '+1,47%', '-1,48%', '-', '-', '-', '-0,02%'],
+    ['QQQ', '+1,23%', '-3,21%', '-', '-', '-', '-2,02%'],
+]
+t = Table(rent_mensual_data, colWidths=[2*cm, 2.2*cm, 2.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 2.5*cm])
+s = create_table_style()
+# Colores Cartera (fila 1)
+s.add('TEXTCOLOR', (1, 1), (2, 1), GREEN)  # Ene/Feb +
+s.add('TEXTCOLOR', (6, 1), (6, 1), GREEN)  # Total +
+# Colores SPY (fila 2)
+s.add('TEXTCOLOR', (1, 2), (1, 2), GREEN)  # Ene +
+s.add('TEXTCOLOR', (2, 2), (2, 2), RED)    # Feb -
+s.add('TEXTCOLOR', (6, 2), (6, 2), RED)    # Total -
+# Colores QQQ (fila 3)
+s.add('TEXTCOLOR', (1, 3), (1, 3), GREEN)  # Ene +
+s.add('TEXTCOLOR', (2, 3), (2, 3), RED)    # Feb -
+s.add('TEXTCOLOR', (6, 3), (6, 3), RED)    # Total -
+# Columna Total en negrita
+s.add('FONTNAME', (6, 0), (6, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (6, 0), (6, 0), colors.HexColor('#333333'))
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.3*cm))
+elements.append(Paragraph(
+    "Alpha vs SPY: +6,79% | Alpha vs QQQ: +8,79%",
+    ParagraphStyle('AlphaNote', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor=GREEN)
+))
 
 elements.append(PageBreak())
 
