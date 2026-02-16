@@ -88,7 +88,7 @@ indice = [
     "1. [Pendiente]",
     "2. Cartera",
     "3. Composicion",
-    "4. [Pendiente]",
+    "4. Acciones",
     "5. [Pendiente]",
     "6. ETFs",
     "7. Futuros",
@@ -282,6 +282,9 @@ def get_account_totals(fecha):
 account_totals = get_account_totals(comp_fecha)
 total_cartera = account_totals['TOTAL']
 
+# Importar matplotlib para graficos de queso
+import matplotlib.pyplot as plt
+
 # 3.1 Diversificacion
 elements.append(Paragraph("3.1 Composicion por Diversificacion", section_style))
 
@@ -293,6 +296,20 @@ bolsa = (strategy_values.get('Quant', 0) +
 oro = strategy_values.get('Oro/Mineras', 0)
 liquidez = strategy_values.get('Cash/ETFs', 0) or (strategy_values.get('Cash', 0) + strategy_values.get('ETFs', 0))
 
+# Grafico de queso - Diversificacion
+fig, ax = plt.subplots(figsize=(5, 5), facecolor='white')
+div_labels = ['Bolsa', 'Oro', 'Liquidez']
+div_values = [bolsa, oro, liquidez]
+div_colors = ['#636EFA', '#FFA15A', '#00CC96']
+wedges, texts, autotexts = ax.pie(div_values, labels=div_labels, autopct='%1.1f%%',
+                                   colors=div_colors, wedgeprops=dict(width=0.6))
+ax.set_title('Diversificacion por Clase de Activo', fontsize=12, fontweight='bold')
+plt.tight_layout()
+div_chart_path = r'C:\Users\usuario\Downloads\comp_diversificacion.png'
+plt.savefig(div_chart_path, dpi=120, bbox_inches='tight', facecolor='white')
+plt.close()
+
+# Tabla y grafico lado a lado usando tabla
 div_data = [
     ['Clase', 'Valor EUR', '%'],
     ['Bolsa', fmt(bolsa), f'{bolsa/total_cartera*100:.1f}%'],
@@ -300,13 +317,18 @@ div_data = [
     ['Liquidez', fmt(liquidez), f'{liquidez/total_cartera*100:.1f}%'],
     ['TOTAL', fmt(total_cartera), '100%'],
 ]
-t = Table(div_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+t = Table(div_data, colWidths=[3*cm, 3*cm, 2*cm])
 s = create_table_style()
 s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
 s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
 s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
 t.setStyle(s)
-elements.append(t)
+
+# Layout: grafico a la izquierda, tabla a la derecha
+div_img = Image(div_chart_path, width=7*cm, height=7*cm)
+layout_div = Table([[div_img, t]], colWidths=[8*cm, 9*cm])
+layout_div.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+elements.append(layout_div)
 elements.append(Spacer(1, 0.5*cm))
 
 # 3.2 Por Estrategia
@@ -316,38 +338,607 @@ elements.append(Paragraph("3.2 Composicion por Estrategia", section_style))
 sorted_strategies = sorted([(k, v) for k, v in strategy_values.items() if v > 0], key=lambda x: -x[1])
 total_estrategias = sum(v for k, v in sorted_strategies)
 
+# Grafico de queso - Estrategia
+fig, ax = plt.subplots(figsize=(5, 5), facecolor='white')
+est_labels = [s[0] for s in sorted_strategies]
+est_values = [s[1] for s in sorted_strategies]
+wedges, texts, autotexts = ax.pie(est_values, labels=est_labels, autopct='%1.1f%%',
+                                   wedgeprops=dict(width=0.6))
+ax.set_title('Distribucion por Estrategia', fontsize=12, fontweight='bold')
+plt.tight_layout()
+est_chart_path = r'C:\Users\usuario\Downloads\comp_estrategia.png'
+plt.savefig(est_chart_path, dpi=120, bbox_inches='tight', facecolor='white')
+plt.close()
+
 est_data = [['Estrategia', 'Valor EUR', '%']]
 for estrategia, valor in sorted_strategies:
     pct = valor / total_estrategias * 100 if total_estrategias > 0 else 0
     est_data.append([estrategia, fmt(valor), f'{pct:.1f}%'])
 est_data.append(['TOTAL', fmt(total_estrategias), '100%'])
 
-t = Table(est_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+t = Table(est_data, colWidths=[3*cm, 3*cm, 2*cm])
 s = create_table_style()
 s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
 s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
 s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
 t.setStyle(s)
-elements.append(t)
+
+est_img = Image(est_chart_path, width=7*cm, height=7*cm)
+layout_est = Table([[est_img, t]], colWidths=[8*cm, 9*cm])
+layout_est.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+elements.append(layout_est)
 elements.append(Spacer(1, 0.5*cm))
 
 # 3.3 Por Cuenta
 elements.append(Paragraph("3.3 Composicion por Cuenta", section_style))
 
+# Grafico de queso - Cuenta
+fig, ax = plt.subplots(figsize=(5, 5), facecolor='white')
+cuenta_labels = ['RCO951', 'La Caixa', 'CO3365', 'IB']
+cuenta_values = [account_totals.get('RCO951', 0), account_totals.get('LACAIXA', 0),
+                 account_totals.get('CO3365', 0), account_totals.get('IB', 0)]
+wedges, texts, autotexts = ax.pie(cuenta_values, labels=cuenta_labels, autopct='%1.1f%%',
+                                   wedgeprops=dict(width=0.6))
+ax.set_title('Distribucion por Cuenta', fontsize=12, fontweight='bold')
+plt.tight_layout()
+cuenta_chart_path = r'C:\Users\usuario\Downloads\comp_cuenta.png'
+plt.savefig(cuenta_chart_path, dpi=120, bbox_inches='tight', facecolor='white')
+plt.close()
+
 cuenta_data = [['Cuenta', 'Valor EUR', '%']]
-for cuenta in ['RCO951', 'LACAIXA', 'CO3365', 'IB']:
+for cuenta, label in [('RCO951', 'RCO951'), ('LACAIXA', 'La Caixa'), ('CO3365', 'CO3365'), ('IB', 'IB')]:
     valor = account_totals.get(cuenta, 0)
     pct = valor / total_cartera * 100 if total_cartera > 0 else 0
-    cuenta_data.append([cuenta, fmt(valor), f'{pct:.1f}%'])
+    cuenta_data.append([label, fmt(valor), f'{pct:.1f}%'])
 cuenta_data.append(['TOTAL', fmt(total_cartera), '100%'])
 
-t = Table(cuenta_data, colWidths=[4*cm, 4*cm, 2.5*cm])
+t = Table(cuenta_data, colWidths=[3*cm, 3*cm, 2*cm])
 s = create_table_style()
 s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
 s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
 s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
 t.setStyle(s)
+
+cuenta_img = Image(cuenta_chart_path, width=7*cm, height=7*cm)
+layout_cuenta = Table([[cuenta_img, t]], colWidths=[8*cm, 9*cm])
+layout_cuenta.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+elements.append(layout_cuenta)
+
+elements.append(PageBreak())
+
+# =============================================================================
+# 4. ACCIONES
+# =============================================================================
+from src.portfolio_data import PortfolioDataService
+acciones_service = PortfolioDataService()
+
+elements.append(Paragraph("4. Acciones", subtitle_style))
+elements.append(Paragraph(
+    "Posiciones en acciones (excluye ETFs y Futuros). Datos de compra, rentabilidad periodo y rentabilidad historica.",
+    description_style
+))
+
+# Obtener fecha mas reciente
+with db.get_session() as session:
+    acc_fecha = session.execute(text('SELECT MAX(fecha) FROM posicion')).scalar()
+    if hasattr(acc_fecha, 'date'):
+        acc_fecha = acc_fecha.date()
+
+# Tipos de cambio
+eur_usd_current = acciones_service.get_eur_usd_rate(acc_fecha)
+eur_usd_31dic = acciones_service.get_exchange_rate('EURUSD=X', date(2025, 12, 31)) or 1.1747
+cad_eur_current = acciones_service.get_cad_eur_rate(acc_fecha) or 0.619
+chf_eur_current = acciones_service.get_chf_eur_rate(acc_fecha) or 1.06
+
+# Mapeo exchange a moneda
+EXCHANGE_TO_CURRENCY = {'US': '$', 'TO': 'C$', 'MC': '€', 'SW': 'CHF', 'L': '£', 'DE': '€', 'F': '€', 'MI': '€'}
+
+# 4.1 Posiciones Abiertas
+elements.append(Paragraph("4.1 Posiciones Abiertas", section_style))
+
+with db.get_session() as session:
+    holdings_result = session.execute(text("""
+        SELECT h.account_code, h.symbol, h.shares, h.currency, h.asset_type,
+               c.fecha as fecha_compra, c.precio as precio_compra
+        FROM holding_diario h
+        LEFT JOIN (
+            SELECT account_code, symbol, MIN(fecha) as fecha,
+                   (SELECT precio FROM compras c2
+                    WHERE c2.account_code = c1.account_code
+                    AND c2.symbol = c1.symbol
+                    ORDER BY fecha LIMIT 1) as precio
+            FROM compras c1
+            GROUP BY account_code, symbol
+        ) c ON h.account_code = c.account_code AND h.symbol = c.symbol
+        WHERE h.fecha = :fecha
+        AND (h.asset_type IS NULL OR h.asset_type NOT IN ('ETF', 'ETFs', 'Future', 'Futures'))
+        ORDER BY h.account_code, h.symbol
+    """), {'fecha': acc_fecha})
+
+    acc_data = [['Ticker', 'Cuenta', 'Titulos', 'P.Compra', 'P.Actual', 'Valor EUR', 'Rent.%']]
+    total_valor_eur = 0
+    total_rent_eur = 0
+    posiciones = []
+
+    for account, ticker, shares, currency_code, asset_type, fecha_compra, precio_compra_db in holdings_result.fetchall():
+        parts = ticker.split('.')
+        exchange = parts[1] if len(parts) > 1 else 'US'
+        currency_symbol = EXCHANGE_TO_CURRENCY.get(exchange, '$')
+        cuenta_display = 'La Caixa' if account == 'LACAIXA' else account
+
+        # Precios
+        precio_compra = precio_compra_db
+        precio_actual = acciones_service.get_symbol_price(ticker, acc_fecha)
+        if not precio_actual:
+            precio_actual = acciones_service.get_symbol_price(parts[0], acc_fecha)
+
+        if precio_actual:
+            # Calcular valor EUR según moneda
+            if currency_symbol == '$':  # USD
+                valor_eur = (shares * precio_actual) / eur_usd_current
+            elif currency_symbol == 'C$':  # CAD
+                valor_eur = (shares * precio_actual) * cad_eur_current
+            elif currency_symbol == 'CHF':  # CHF
+                valor_eur = (shares * precio_actual) * chf_eur_current
+            else:  # EUR
+                valor_eur = shares * precio_actual
+
+            # Rentabilidad
+            rent_pct = ((precio_actual / precio_compra) - 1) * 100 if precio_compra and precio_compra > 0 else 0
+
+            total_valor_eur += valor_eur
+            if precio_compra:
+                if currency_symbol == '$':  # USD
+                    valor_compra_eur = (shares * precio_compra) / eur_usd_current
+                elif currency_symbol == 'C$':  # CAD
+                    valor_compra_eur = (shares * precio_compra) * cad_eur_current
+                elif currency_symbol == 'CHF':  # CHF
+                    valor_compra_eur = (shares * precio_compra) * chf_eur_current
+                else:  # EUR
+                    valor_compra_eur = shares * precio_compra
+                total_rent_eur += valor_eur - valor_compra_eur
+
+            posiciones.append({
+                'ticker': parts[0],
+                'cuenta': cuenta_display,
+                'shares': int(shares),
+                'p_compra': f"{currency_symbol}{precio_compra:.2f}" if precio_compra else '-',
+                'p_actual': f"{currency_symbol}{precio_actual:.2f}",
+                'valor_eur': valor_eur,
+                'rent_pct': rent_pct
+            })
+
+# Ordenar por valor EUR descendente y tomar top 15
+posiciones.sort(key=lambda x: -x['valor_eur'])
+for pos in posiciones[:15]:
+    rent_color = '+' if pos['rent_pct'] >= 0 else ''
+    acc_data.append([
+        pos['ticker'],
+        pos['cuenta'],
+        fmt_int(pos['shares']),
+        pos['p_compra'],
+        pos['p_actual'],
+        fmt(pos['valor_eur']),
+        f"{rent_color}{pos['rent_pct']:.1f}%"
+    ])
+
+if len(posiciones) > 15:
+    otros_valor = sum(p['valor_eur'] for p in posiciones[15:])
+    acc_data.append(['... otros', '', '', '', '', fmt(otros_valor), ''])
+
+acc_data.append(['TOTAL', '', '', '', '', fmt(total_valor_eur), f"{total_rent_eur/total_valor_eur*100:.1f}%" if total_valor_eur > 0 else ''])
+
+t = Table(acc_data, colWidths=[2.2*cm, 2*cm, 1.5*cm, 2*cm, 2*cm, 2.5*cm, 2*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+# Colorear rentabilidades
+for i, pos in enumerate(posiciones[:15], start=1):
+    if pos['rent_pct'] >= 0:
+        s.add('TEXTCOLOR', (6, i), (6, i), GREEN)
+    else:
+        s.add('TEXTCOLOR', (6, i), (6, i), RED)
+t.setStyle(s)
 elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 4.2 Posiciones Cerradas
+elements.append(Paragraph("4.2 Posiciones Cerradas", section_style))
+
+with db.get_session() as session:
+    ventas_result = session.execute(text("""
+        SELECT fecha, account_code, symbol,
+               SUM(shares) as total_shares,
+               SUM(importe_total) / SUM(shares) as precio_venta,
+               currency,
+               AVG(rent_periodo) as rent_periodo
+        FROM ventas
+        WHERE symbol NOT IN ('TLT', 'EMB', 'GLD', 'SLV', 'QQQ', 'SPY', 'IWM', 'DIA', 'VTI', 'VOO')
+        AND symbol NOT SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
+        GROUP BY fecha, account_code, symbol, currency
+        ORDER BY fecha DESC
+        LIMIT 10
+    """))
+
+    # Precios compra
+    compras_result = session.execute(text("""
+        SELECT symbol, AVG(precio) as precio_compra
+        FROM compras
+        GROUP BY symbol
+    """))
+    precios_compra_map = {row[0]: row[1] for row in compras_result.fetchall()}
+
+ventas_data = [['Fecha', 'Ticker', 'Titulos', 'P.Compra', 'P.Venta', 'Rent.%']]
+for venta in ventas_result.fetchall():
+    fecha_v, cuenta_v, symbol_v, shares_v, precio_venta_v, currency_v, rent_periodo_v = venta
+    precio_compra_v = precios_compra_map.get(symbol_v, 0)
+    curr_sym = '$' if currency_v == 'USD' else '€'
+
+    if precio_compra_v and precio_compra_v > 0:
+        rent_hist = ((precio_venta_v / precio_compra_v) - 1) * 100
+    else:
+        rent_hist = 0
+
+    rent_sign = '+' if rent_hist >= 0 else ''
+    ventas_data.append([
+        fecha_v.strftime('%d/%m') if hasattr(fecha_v, 'strftime') else str(fecha_v)[:5],
+        symbol_v.split('.')[0],
+        fmt_int(int(shares_v)),
+        f"{curr_sym}{precio_compra_v:.2f}" if precio_compra_v else '-',
+        f"{curr_sym}{precio_venta_v:.2f}",
+        f"{rent_sign}{rent_hist:.1f}%"
+    ])
+
+t = Table(ventas_data, colWidths=[2*cm, 2.5*cm, 1.5*cm, 2.2*cm, 2.2*cm, 2*cm])
+s = create_table_style()
+# Colorear rentabilidades
+for i in range(1, len(ventas_data)):
+    rent_str = ventas_data[i][5]
+    if rent_str.startswith('+'):
+        s.add('TEXTCOLOR', (5, i), (5, i), GREEN)
+    elif rent_str.startswith('-'):
+        s.add('TEXTCOLOR', (5, i), (5, i), RED)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 4.3 Resumen
+elements.append(Paragraph("4.3 Resumen Acciones", section_style))
+
+# Calcular estadisticas
+total_posiciones = len(posiciones)
+positivas = sum(1 for p in posiciones if p['rent_pct'] > 0)
+negativas = sum(1 for p in posiciones if p['rent_pct'] < 0)
+
+resumen_acc = [
+    ['Metrica', 'Valor'],
+    ['Total Posiciones Abiertas', str(total_posiciones)],
+    ['Valor Total EUR', fmt(total_valor_eur)],
+    ['P&L EUR', f"{'+' if total_rent_eur >= 0 else ''}{fmt(total_rent_eur)}"],
+    ['Positivas / Negativas', f"{positivas} / {negativas}"],
+    ['% Positivas', f"{positivas/total_posiciones*100:.1f}%" if total_posiciones > 0 else '0%'],
+]
+t = Table(resumen_acc, colWidths=[5*cm, 4*cm])
+s = create_table_style()
+if total_rent_eur >= 0:
+    s.add('TEXTCOLOR', (1, 3), (1, 3), GREEN)
+else:
+    s.add('TEXTCOLOR', (1, 3), (1, 3), RED)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 4.5 Rentabilidad por Market Cap
+elements.append(Paragraph("4.5 Rentabilidad por Market Cap - Periodo 2026", section_style))
+elements.append(Paragraph(
+    "Rentabilidad agrupada por capitalizacion de mercado. Base: 31/12/2025 para acciones existentes, precio de compra para nuevas.",
+    description_style
+))
+
+# Obtener tipos de cambio
+with db.get_session() as session:
+    eur_usd_31dic = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'EURUSD=X' AND ph.date = '2025-12-31'
+    ''')).scalar() or 1.1747
+
+    eur_usd_current = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'EURUSD=X' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar() or 1.1871
+
+    cad_eur_31dic = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'CADEUR=X' AND ph.date = '2025-12-31'
+    ''')).scalar() or 0.6215
+
+    cad_eur_current = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'CADEUR=X' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar() or 0.619
+
+    chf_eur_31dic = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'CHFEUR=X' AND ph.date = '2025-12-31'
+    ''')).scalar() or 1.06
+
+    chf_eur_current = session.execute(text('''
+        SELECT ph.close FROM price_history ph
+        JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'CHFEUR=X' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar() or 1.06
+
+    # Market cap data
+    mcap_result = session.execute(text('''
+        SELECT s.code, f.market_cap FROM fundamentals f
+        JOIN symbols s ON f.symbol_id = s.id
+        WHERE f.market_cap IS NOT NULL AND f.market_cap > 0
+    '''))
+    mcap_data = {row[0]: row[1] for row in mcap_result.fetchall()}
+
+def get_mcap_cat(mcap):
+    if mcap is None: return 'Sin datos'
+    m = mcap / 1_000_000
+    if m < 5000: return '<5.000M'
+    elif m < 10000: return '5.000-10.000M'
+    elif m < 50000: return '10.000-50.000M'
+    else: return '>50.000M'
+
+EXCHANGE_TO_CURRENCY_MCAP = {'US': 'USD', 'TO': 'CAD', 'MC': 'EUR', 'SW': 'CHF', 'L': 'GBP', 'DE': 'EUR', 'MI': 'EUR'}
+fecha_corte_mcap = date(2025, 12, 31)
+mcap_positions = []
+
+# ABIERTAS
+with db.get_session() as session:
+    holdings_mcap = session.execute(text('''
+        SELECT h.symbol, h.shares, c.precio as p_compra, c.fecha as f_compra
+        FROM holding_diario h
+        LEFT JOIN (
+            SELECT account_code, symbol, MIN(fecha) as fecha,
+                   (SELECT precio FROM compras c2 WHERE c2.account_code = c1.account_code AND c2.symbol = c1.symbol ORDER BY fecha LIMIT 1) as precio
+            FROM compras c1 GROUP BY account_code, symbol
+        ) c ON h.account_code = c.account_code AND h.symbol = c.symbol
+        WHERE h.fecha = :f
+        AND (h.asset_type IS NULL OR h.asset_type NOT IN ('ETF', 'ETFs', 'Future', 'Futures'))
+        AND h.symbol NOT LIKE '%SGLE%'
+    '''), {'f': acc_fecha}).fetchall()
+
+    for ticker, shares, p_compra, f_compra in holdings_mcap:
+        if not p_compra: continue
+        parts = ticker.split('.')
+        exchange = parts[1] if len(parts) > 1 else 'US'
+        currency = EXCHANGE_TO_CURRENCY_MCAP.get(exchange, 'USD')
+
+        if hasattr(f_compra, 'date'):
+            f_compra = f_compra.date()
+
+        p_actual = acciones_service.get_symbol_price(ticker, acc_fecha)
+        if not p_actual:
+            p_actual = acciones_service.get_symbol_price(parts[0], acc_fecha)
+        if not p_actual: continue
+
+        p_31dic = acciones_service.get_symbol_price(ticker, fecha_corte_mcap)
+        if not p_31dic:
+            p_31dic = acciones_service.get_symbol_price(parts[0], fecha_corte_mcap)
+
+        if f_compra and f_compra > fecha_corte_mcap:
+            precio_base = p_compra
+        else:
+            precio_base = p_31dic if p_31dic else p_compra
+
+        # Calcular valor EUR con tipos de cambio correctos
+        if currency == 'USD':
+            if f_compra and f_compra > fecha_corte_mcap:
+                valor_base_eur = (shares * precio_base) / eur_usd_current
+            else:
+                valor_base_eur = (shares * precio_base) / eur_usd_31dic
+            valor_actual_eur = (shares * p_actual) / eur_usd_current
+        elif currency == 'CAD':
+            if f_compra and f_compra > fecha_corte_mcap:
+                valor_base_eur = (shares * precio_base) * cad_eur_current
+            else:
+                valor_base_eur = (shares * precio_base) * cad_eur_31dic
+            valor_actual_eur = (shares * p_actual) * cad_eur_current
+        elif currency == 'CHF':
+            if f_compra and f_compra > fecha_corte_mcap:
+                valor_base_eur = (shares * precio_base) * chf_eur_current
+            else:
+                valor_base_eur = (shares * precio_base) * chf_eur_31dic
+            valor_actual_eur = (shares * p_actual) * chf_eur_current
+        else:
+            valor_base_eur = shares * precio_base
+            valor_actual_eur = shares * p_actual
+
+        pnl_eur = valor_actual_eur - valor_base_eur
+        rent_periodo = ((valor_actual_eur / valor_base_eur) - 1) * 100 if valor_base_eur > 0 else 0
+        mcap = mcap_data.get(parts[0]) or mcap_data.get(ticker)
+        mcap_positions.append({'ticker': parts[0], 'rent_pct': rent_periodo, 'pnl_eur': pnl_eur, 'mcap': mcap})
+
+# CERRADAS
+with db.get_session() as session:
+    ventas_mcap = session.execute(text('''
+        SELECT v.symbol, SUM(v.shares) as shares,
+               SUM(v.importe_total)/SUM(v.shares) as precio_venta, v.currency,
+               AVG(v.precio_31_12) as p31_12,
+               (SELECT AVG(c.precio) FROM compras c WHERE c.symbol = v.symbol) as p_compra,
+               (SELECT MIN(c.fecha) FROM compras c WHERE c.symbol = v.symbol) as f_compra
+        FROM ventas v
+        WHERE v.symbol NOT IN ('TLT', 'EMB', 'GLD', 'SLV', 'QQQ', 'SPY', 'IWM', 'DIA', 'VTI', 'VOO')
+        AND v.symbol NOT SIMILAR TO '%[FGHJKMNQUVXZ][0-9]'
+        AND v.symbol NOT LIKE '%SGLE%'
+        GROUP BY v.symbol, v.currency
+    ''')).fetchall()
+
+    for symbol, shares, precio_venta, currency, p31_12, p_compra, f_compra in ventas_mcap:
+        if hasattr(f_compra, 'date'):
+            f_compra = f_compra.date()
+
+        if f_compra and f_compra > fecha_corte_mcap:
+            precio_base = p_compra if p_compra else precio_venta
+        else:
+            precio_base = p31_12 if p31_12 else (p_compra if p_compra else precio_venta)
+
+        if currency == 'USD':
+            if f_compra and f_compra > fecha_corte_mcap:
+                valor_base_eur = (abs(shares) * precio_base) / eur_usd_current
+            else:
+                valor_base_eur = (abs(shares) * precio_base) / eur_usd_31dic
+            valor_venta_eur = (abs(shares) * precio_venta) / eur_usd_current
+        elif currency == 'CAD':
+            if f_compra and f_compra > fecha_corte_mcap:
+                valor_base_eur = (abs(shares) * precio_base) * cad_eur_current
+            else:
+                valor_base_eur = (abs(shares) * precio_base) * cad_eur_31dic
+            valor_venta_eur = (abs(shares) * precio_venta) * cad_eur_current
+        else:
+            valor_base_eur = abs(shares) * precio_base
+            valor_venta_eur = abs(shares) * precio_venta
+
+        pnl_eur = valor_venta_eur - valor_base_eur
+        rent_periodo = ((valor_venta_eur / valor_base_eur) - 1) * 100 if valor_base_eur > 0 else 0
+        ticker = symbol.split('.')[0]
+        mcap = mcap_data.get(ticker) or mcap_data.get(symbol)
+        mcap_positions.append({'ticker': ticker, 'rent_pct': rent_periodo, 'pnl_eur': pnl_eur, 'mcap': mcap})
+
+# Agrupar por market cap
+mcap_stats = {'<5.000M': [], '5.000-10.000M': [], '10.000-50.000M': [], '>50.000M': [], 'Sin datos': []}
+for p in mcap_positions:
+    cat = get_mcap_cat(p['mcap'])
+    mcap_stats[cat].append(p)
+
+mcap_table_data = [['Market Cap', 'Operaciones', 'Rent. Media', 'P&L EUR']]
+total_mcap_pnl = 0
+for cat in ['<5.000M', '5.000-10.000M', '10.000-50.000M', '>50.000M']:
+    lst = mcap_stats[cat]
+    if lst:
+        avg = sum(p['rent_pct'] for p in lst) / len(lst)
+        pnl = sum(p['pnl_eur'] for p in lst)
+        total_mcap_pnl += pnl
+        mcap_table_data.append([cat, str(len(lst)), f"{avg:+.1f}%", f"{pnl:+,.0f}".replace(',', '.')])
+
+mcap_table_data.append(['TOTAL', str(len(mcap_positions)), '', f"{total_mcap_pnl:+,.0f}".replace(',', '.')])
+
+t = Table(mcap_table_data, colWidths=[4*cm, 3*cm, 3*cm, 4*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+# Colorear P&L
+for i in range(1, len(mcap_table_data) - 1):
+    pnl_str = mcap_table_data[i][3]
+    if pnl_str.startswith('+'):
+        s.add('TEXTCOLOR', (3, i), (3, i), GREEN)
+    elif pnl_str.startswith('-'):
+        s.add('TEXTCOLOR', (3, i), (3, i), RED)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.5*cm))
+
+# 4.6 Rentabilidad por Sector vs Benchmark
+elements.append(Paragraph("4.6 Rentabilidad por Sector vs Benchmark - Periodo 2026", section_style))
+elements.append(Paragraph(
+    "Comparativa de la rentabilidad de la cartera por sector frente al ETF benchmark correspondiente (SPDR Select Sector).",
+    description_style
+))
+
+# ETFs benchmark por sector
+SECTOR_ETF = {
+    'Technology': 'XLK', 'Healthcare': 'XLV', 'Financial Services': 'XLF',
+    'Consumer Cyclical': 'XLY', 'Consumer Defensive': 'XLP', 'Industrials': 'XLI',
+    'Basic Materials': 'XLB', 'Energy': 'XLE', 'Utilities': 'XLU',
+    'Real Estate': 'XLRE', 'Communication Services': 'XLC',
+}
+
+# Obtener datos de sector
+with db.get_session() as session:
+    sector_result = session.execute(text('''
+        SELECT s.code, f.sector FROM fundamentals f
+        JOIN symbols s ON f.symbol_id = s.id
+        WHERE f.sector IS NOT NULL AND f.sector != ''
+    '''))
+    sector_data = {row[0]: row[1] for row in sector_result.fetchall()}
+
+# Calcular rentabilidad de cada ETF benchmark
+etf_returns = {}
+for sector, etf in SECTOR_ETF.items():
+    p_31dic = acciones_service.get_symbol_price(etf, fecha_corte_mcap)
+    p_actual = acciones_service.get_symbol_price(etf, acc_fecha)
+    if p_31dic and p_actual:
+        etf_returns[sector] = ((p_actual / p_31dic) - 1) * 100
+    else:
+        etf_returns[sector] = None
+
+# Calcular rentabilidad de la cartera por sector (reutilizar mcap_positions)
+sector_positions = []
+for p in mcap_positions:
+    sector = sector_data.get(p['ticker'])
+    sector_positions.append({'ticker': p['ticker'], 'rent_pct': p['rent_pct'], 'pnl_eur': p['pnl_eur'], 'sector': sector})
+
+# Agrupar por sector
+sector_stats = {}
+for p in sector_positions:
+    sector = p['sector'] or 'Sin datos'
+    if sector not in sector_stats:
+        sector_stats[sector] = []
+    sector_stats[sector].append(p)
+
+# Ordenar por P&L
+sorted_sectors = sorted(sector_stats.items(), key=lambda x: sum(p['pnl_eur'] for p in x[1]), reverse=True)
+
+sector_table_data = [['Sector', 'Ops', 'Cartera', 'Benchmark', 'Alpha', 'P&L EUR']]
+total_sector_pnl = 0
+for sector, lst in sorted_sectors:
+    avg_cartera = sum(p['rent_pct'] for p in lst) / len(lst)
+    pnl = sum(p['pnl_eur'] for p in lst)
+    total_sector_pnl += pnl
+    benchmark = etf_returns.get(sector)
+    if benchmark is not None:
+        alpha = avg_cartera - benchmark
+        benchmark_str = f"{benchmark:+.1f}%"
+        alpha_str = f"{alpha:+.1f}%"
+    else:
+        benchmark_str = "N/A"
+        alpha_str = "N/A"
+    sector_table_data.append([
+        sector[:20], str(len(lst)), f"{avg_cartera:+.1f}%",
+        benchmark_str, alpha_str, f"{pnl:+,.0f}".replace(',', '.')
+    ])
+
+sector_table_data.append(['TOTAL', str(len(sector_positions)), '', '', '', f"{total_sector_pnl:+,.0f}".replace(',', '.')])
+
+t = Table(sector_table_data, colWidths=[4*cm, 1.2*cm, 2*cm, 2.2*cm, 2*cm, 2.8*cm])
+s = create_table_style()
+s.add('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#333333'))
+s.add('TEXTCOLOR', (0, -1), (-1, -1), colors.white)
+# Colorear Alpha y P&L
+for i in range(1, len(sector_table_data) - 1):
+    # Alpha
+    alpha_str = sector_table_data[i][4]
+    if alpha_str != 'N/A':
+        if alpha_str.startswith('+'):
+            s.add('TEXTCOLOR', (4, i), (4, i), GREEN)
+        elif alpha_str.startswith('-'):
+            s.add('TEXTCOLOR', (4, i), (4, i), RED)
+    # P&L
+    pnl_str = sector_table_data[i][5]
+    if pnl_str.startswith('+'):
+        s.add('TEXTCOLOR', (5, i), (5, i), GREEN)
+    elif pnl_str.startswith('-'):
+        s.add('TEXTCOLOR', (5, i), (5, i), RED)
+t.setStyle(s)
+elements.append(t)
+elements.append(Spacer(1, 0.3*cm))
+elements.append(Paragraph(
+    "Benchmark ETFs: XLK (Tech), XLV (Health), XLF (Financials), XLY (Consumer Cycl), XLP (Consumer Def), XLI (Industrials), XLB (Materials), XLE (Energy), XLU (Utilities), XLRE (Real Estate)",
+    ParagraphStyle('Note', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
+))
 
 elements.append(PageBreak())
 

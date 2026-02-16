@@ -1806,17 +1806,30 @@ if page == "Posición":
         'rentabilidad_mensual': monthly_data
     }
 
-    # Botón para generar PDF Cartera
-    if st.button("📊 Generar PDF Cartera", key="btn_pdf_cartera"):
-        import subprocess
-        result = subprocess.run(
-            ['py', '-3', 'scripts/generar_pdf_cartera.py'],
-            capture_output=True, text=True, cwd='.'
-        )
-        if result.returncode == 0:
-            st.success("PDF Cartera generado en Downloads")
-        else:
-            st.error(f"Error: {result.stderr}")
+    # Botones para generar PDFs
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    with col_btn1:
+        if st.button("📊 Generar PDF Cartera", key="btn_pdf_cartera"):
+            import subprocess
+            result = subprocess.run(
+                ['py', '-3', 'scripts/generar_pdf_cartera.py'],
+                capture_output=True, text=True, cwd='.'
+            )
+            if result.returncode == 0:
+                st.success("PDF Cartera generado en Downloads")
+            else:
+                st.error(f"Error: {result.stderr}")
+    with col_btn2:
+        if st.button("📈 Generar PDF Composición", key="btn_pdf_composicion"):
+            import subprocess
+            result = subprocess.run(
+                ['py', '-3', 'scripts/generar_pdf_composicion.py'],
+                capture_output=True, text=True, cwd='.'
+            )
+            if result.returncode == 0:
+                st.success("PDF Composición generado en Downloads")
+            else:
+                st.error(f"Error: {result.stderr}")
 
 
 elif page == "Composición":
@@ -2114,6 +2127,34 @@ elif page == "Composición":
 
 elif page == "Acciones":
     st.title("ACCIONES")
+
+    # Botón para generar PDF Carihuela
+    col_pdf1, col_pdf2 = st.columns([1, 5])
+    with col_pdf1:
+        if st.button("📄 Generar PDF Carihuela", key="pdf_carihuela_acciones"):
+            with st.spinner("Generando PDF..."):
+                import subprocess
+                result = subprocess.run(
+                    ["py", "-3", "scripts/generar_pdf_carihuela.py"],
+                    capture_output=True, text=True, cwd="."
+                )
+                if result.returncode == 0:
+                    pdf_path = r"C:\Users\usuario\Downloads\Carihuela_Inversiones.pdf"
+                    try:
+                        with open(pdf_path, "rb") as f:
+                            pdf_bytes = f.read()
+                        st.download_button(
+                            label="⬇️ Descargar PDF",
+                            data=pdf_bytes,
+                            file_name="Carihuela_Inversiones.pdf",
+                            mime="application/pdf"
+                        )
+                        st.success("PDF generado correctamente")
+                    except Exception as e:
+                        st.error(f"Error leyendo PDF: {e}")
+                else:
+                    st.error(f"Error generando PDF: {result.stderr}")
+
     loading_placeholder = st.empty()
     loading_placeholder.info("Cargando datos...")
 
@@ -2759,14 +2800,14 @@ elif page == "Acciones":
                 st.info("No hay posiciones cerradas")
 
             # =====================================================
-            # RENTABILIDAD POR MARKET CAP
+            # RENTABILIDAD POR MARKET CAP - PERIODO 2026
             # =====================================================
             st.markdown("---")
-            st.subheader("📊 Rentabilidad por Market Cap")
+            st.subheader("📊 Rentabilidad por Market Cap - Periodo 2026")
+            st.caption("Base: precio 31/12/2025 para posiciones existentes, precio de compra para nuevas adquisiciones")
 
             # Obtener market cap de fundamentals para cada símbolo
             with db.get_session() as session:
-                # Consultar market cap desde fundamentals
                 mcap_result = session.execute(text("""
                     SELECT s.code, f.market_cap
                     FROM fundamentals f
@@ -2779,7 +2820,7 @@ elif page == "Acciones":
             def get_mcap_category(mcap_value):
                 if mcap_value is None:
                     return 'Sin datos'
-                mcap_millions = mcap_value / 1_000_000  # Convertir a millones
+                mcap_millions = mcap_value / 1_000_000
                 if mcap_millions < 5000:
                     return '<5.000M'
                 elif mcap_millions < 10000:
@@ -2791,53 +2832,56 @@ elif page == "Acciones":
 
             # Calcular rentabilidad por categoría (combinando abiertas y cerradas)
             mcap_stats = {
-                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
-                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': [], 'rents': []},
+                '<5.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '5.000-10.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '10.000-50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                '>50.000M': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
+                'Sin datos': {'count': 0, 'rent_sum': 0, 'rent_eur_sum': 0, 'tickers': []},
             }
 
-            # Procesar posiciones abiertas
+            # Procesar posiciones abiertas (excluir SGLE - ETF Oro)
             for _, row in asset_returns_df.iterrows():
-                ticker = row['Ticker'].split('.')[0] if '.' in row['Ticker'] else row['Ticker']
-                mcap = mcap_data.get(ticker) or mcap_data.get(row['Ticker'])
+                ticker_full = row['Ticker']
+                if 'SGLE' in ticker_full:
+                    continue
+                ticker = ticker_full.split('.')[0] if '.' in ticker_full else ticker_full
+                mcap = mcap_data.get(ticker) or mcap_data.get(ticker_full)
                 category = get_mcap_category(mcap)
                 mcap_stats[category]['count'] += 1
                 mcap_stats[category]['rent_sum'] += row['Rent.Periodo %']
                 mcap_stats[category]['rent_eur_sum'] += row['Rent.Periodo EUR']
                 mcap_stats[category]['tickers'].append(ticker)
-                mcap_stats[category]['rents'].append(row['Rent.Periodo %'])
 
-            # Procesar posiciones cerradas
+            # Procesar posiciones cerradas (excluir SGLE)
             for pos in closed_positions:
-                ticker = pos['Ticker'].split('.')[0] if '.' in pos['Ticker'] else pos['Ticker']
-                mcap = mcap_data.get(ticker) or mcap_data.get(pos['Ticker'])
+                ticker_full = pos['Ticker']
+                if 'SGLE' in ticker_full:
+                    continue
+                ticker = ticker_full.split('.')[0] if '.' in ticker_full else ticker_full
+                mcap = mcap_data.get(ticker) or mcap_data.get(ticker_full)
                 category = get_mcap_category(mcap)
                 mcap_stats[category]['count'] += 1
                 mcap_stats[category]['rent_sum'] += pos['Rent. %']
                 mcap_stats[category]['rent_eur_sum'] += pos['Rent. EUR']
                 mcap_stats[category]['tickers'].append(ticker)
-                mcap_stats[category]['rents'].append(pos['Rent. %'])
 
             # Crear tabla de resumen
             mcap_table_data = []
+            total_ops = 0
+            total_pnl = 0
             order = ['<5.000M', '5.000-10.000M', '10.000-50.000M', '>50.000M']
             for cat in order:
                 stats = mcap_stats[cat]
                 if stats['count'] > 0:
                     avg_rent = stats['rent_sum'] / stats['count']
-                    max_rent = max(stats['rents'])
-                    min_rent = min(stats['rents'])
                     mcap_table_data.append({
                         'Market Cap': cat,
                         'Operaciones': stats['count'],
                         'Rent. Media %': avg_rent,
-                        'Máx %': max_rent,
-                        'Mín %': min_rent,
-                        'Rent. Total EUR': stats['rent_eur_sum'],
-                        'Tickers': ', '.join(set(stats['tickers'][:5])) + ('...' if len(set(stats['tickers'])) > 5 else '')
+                        'P&L EUR': stats['rent_eur_sum'],
                     })
+                    total_ops += stats['count']
+                    total_pnl += stats['rent_eur_sum']
 
             if mcap_table_data:
                 mcap_df = pd.DataFrame(mcap_table_data)
@@ -2848,12 +2892,21 @@ elif page == "Acciones":
                     column_config={
                         'Market Cap': st.column_config.TextColumn('Market Cap', width='medium'),
                         'Operaciones': st.column_config.NumberColumn('Operaciones', width='small', format='%d'),
-                        'Rent. Media %': st.column_config.NumberColumn('Rent. Media %', width='small', format='%.2f %%'),
-                        'Máx %': st.column_config.NumberColumn('Máx %', width='small', format='%.2f %%'),
-                        'Mín %': st.column_config.NumberColumn('Mín %', width='small', format='%.2f %%'),
-                        'Rent. Total EUR': st.column_config.NumberColumn('Rent. Total EUR', width='medium', format='%.0f €'),
-                        'Tickers': st.column_config.TextColumn('Tickers', width='large'),
+                        'Rent. Media %': st.column_config.NumberColumn('Rent. Media %', width='small', format='%.1f %%'),
+                        'P&L EUR': st.column_config.NumberColumn('P&L EUR', width='medium', format='%.0f €'),
                     }
+                )
+
+                # Total
+                st.markdown(
+                    f"""
+                    <div style="background-color: #1a1a1a; color: white; padding: 10px; border-radius: 5px; display: flex; justify-content: space-between; font-weight: bold;">
+                        <span>TOTAL</span>
+                        <span>{total_ops} operaciones</span>
+                        <span style="color: {'#00cc00' if total_pnl >= 0 else '#cc0000'};">{total_pnl:+,.0f} €</span>
+                    </div>
+                    """.replace(",", "."),
+                    unsafe_allow_html=True
                 )
 
                 # Mostrar si hay posiciones sin datos de market cap

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 DB_URL = "postgresql://fmp:fmp123@localhost:5433/fmp_data"
-START_YEAR = 1920
+START_YEAR = 2021
 END_YEAR = 2026
 
 # GDELT Event Codes for economic events (04 = Economy)
