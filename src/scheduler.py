@@ -1,6 +1,6 @@
 """
 Scheduler for automated daily data downloads from Yahoo Finance.
-Runs at 00:01 AM Spain Time (Europe/Madrid) every day.
+Runs at 22:30 Spain Time (Europe/Madrid) on market days (after US market close).
 """
 
 import logging
@@ -50,6 +50,17 @@ class DailyDataUpdater:
             symbols = session.query(Symbol.code).all()
             return [s[0] for s in symbols]
 
+    def _download_symbol_safe(self, symbol: str) -> tuple:
+        """
+        Safely download a single symbol's price data.
+        Returns (symbol, count, error) tuple.
+        """
+        try:
+            count = self.downloader.download_historical_prices(symbol, period='5d')
+            return (symbol, count if count else 0, None)
+        except Exception as e:
+            return (symbol, 0, str(e))
+
     def update_missing_prices(self) -> dict:
         """
         Update prices only for symbols missing the last market day's data.
@@ -61,12 +72,14 @@ class DailyDataUpdater:
         from sqlalchemy import text
         started_at = datetime.now(ET)
 
-        # Find the last two market days with data in the database
+        # Find the last two market days with significant data (>1000 records)
         with self.db.get_session() as session:
-            # Get the two most recent dates with price data
+            # Get dates with significant price data (real market days)
             dates_result = session.execute(text('''
-                SELECT DISTINCT DATE(date) as d
+                SELECT DATE(date) as d, COUNT(*) as cnt
                 FROM price_history
+                GROUP BY DATE(date)
+                HAVING COUNT(*) > 1000
                 ORDER BY d DESC
                 LIMIT 2
             ''')).fetchall()
@@ -75,8 +88,9 @@ class DailyDataUpdater:
                 logger.info("Not enough historical data to detect missing symbols")
                 return {"total": 0, "success": 0, "failed": 0, "new_records": 0}
 
-            target_date = str(dates_result[0][0])  # Most recent date (last market day)
+            target_date = str(dates_result[0][0])  # Most recent market day with data
             prev_date = str(dates_result[1][0])    # Previous market day
+            logger.info(f"Detecting missing: target={target_date} ({dates_result[0][1]} records), prev={prev_date} ({dates_result[1][1]} records)")
 
             # Get symbols that have prev_date data but not target_date data
             result = session.execute(text('''
@@ -511,6 +525,53 @@ class DailyDataUpdater:
 
         return results
 
+    def run_prices_update(self):
+        """Run prices update only (22:30 after market close)."""
+        logger.info("=" * 60)
+        logger.info("PRICES UPDATE STARTED")
+        logger.info(f"Time: {datetime.now(ET).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.info("=" * 60)
+
+        # Update prices
+        price_results = self.update_prices()
+
+        # Update technical metrics
+        metrics_results = self.update_metrics()
+
+        # Update news
+        news_results = self.update_news()
+
+        # Process IB reports (if any new ones in folder)
+        ib_results = self.update_ib_reports()
+
+        logger.info("=" * 60)
+        logger.info("PRICES UPDATE COMPLETED")
+        logger.info(f"Prices: {price_results['new_records']} new records")
+        logger.info(f"Metrics: {metrics_results['success']} calculated")
+        logger.info(f"News: {news_results['total_saved']} articles")
+        if ib_results['reports_processed'] > 0:
+            logger.info(f"IB Reports: {ib_results['reports_processed']} processed")
+        logger.info("=" * 60)
+
+        return {"prices": price_results, "metrics": metrics_results, "news": news_results, "ib_reports": ib_results}
+
+    def run_positions_update(self):
+        """Run positions calculation only (02:00 next day for full price coverage)."""
+        logger.info("=" * 60)
+        logger.info("POSITIONS UPDATE STARTED")
+        logger.info(f"Time: {datetime.now(ET).strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.info("=" * 60)
+
+        # Update portfolio positions (holding_diario, cash_diario, posicion)
+        position_results = self.update_positions()
+
+        logger.info("=" * 60)
+        logger.info("POSITIONS UPDATE COMPLETED")
+        logger.info(f"Positions: {position_results['total_eur']:,.0f} EUR ({position_results['holdings_count']} holdings)")
+        logger.info("=" * 60)
+
+        return {"positions": position_results}
+
     def run_daily_update(self):
         """Run the complete daily update (prices + fundamentals + metrics + news + positions)."""
         logger.info("=" * 60)
@@ -578,28 +639,56 @@ class SchedulerManager:
         else:
             logger.info(f"Job {event.job_id} executed successfully")
 
-    def add_daily_update_job(self, hour: int = 0, minute: int = 1):
+    def add_daily_update_job(self, hour: int = 22, minute: int = 30):
         """
-        Add daily update job at specified time in Spain Time.
+        Add daily price update job at specified time in Spain Time.
+        Only runs on market days (Monday-Friday).
 
         Args:
-            hour: Hour in ET (default: 0 = midnight)
-            minute: Minute (default: 1)
+            hour: Hour in Spain Time (default: 22 = after US market close)
+            minute: Minute (default: 30)
         """
         self.scheduler.add_job(
-            self.updater.run_daily_update,
+            self.updater.run_prices_update,
             trigger=CronTrigger(
+                day_of_week='mon-fri',
                 hour=hour,
                 minute=minute,
                 timezone=ET
             ),
-            id="daily_update",
+            id="prices_update",
             replace_existing=True,
-            name=f"Daily Update at {hour:02d}:{minute:02d} ET",
+            name=f"Prices Update at {hour:02d}:{minute:02d} Spain Time (Mon-Fri)",
         )
 
         logger.info(
-            f"Scheduled daily update at {hour:02d}:{minute:02d} Spain Time"
+            f"Scheduled prices update at {hour:02d}:{minute:02d} Spain Time (Mon-Fri only)"
+        )
+
+    def add_positions_job(self, hour: int = 2, minute: int = 0):
+        """
+        Add positions calculation job at specified time in Spain Time.
+        Runs Tue-Sat at 02:00 (day after market day) to ensure full price coverage.
+
+        Args:
+            hour: Hour in Spain Time (default: 2)
+            minute: Minute (default: 0)
+        """
+        self.scheduler.add_job(
+            self.updater.run_positions_update,
+            trigger=CronTrigger(
+                day_of_week='tue-sat',
+                hour=hour,
+                minute=minute,
+                timezone=ET
+            ),
+            id="positions_update",
+            replace_existing=True,
+            name=f"Positions Update at {hour:02d}:{minute:02d} Spain Time (Tue-Sat)",
+        )
+
+        logger.info(
+            f"Scheduled positions update at {hour:02d}:{minute:02d} Spain Time (Tue-Sat)"
         )
 
     def add_hourly_missing_update_job(self):
@@ -712,13 +801,13 @@ def run_scheduler_daemon():
 
     scheduler = SchedulerManager(blocking=True)
 
-    # Schedule daily update at 00:01 ET
-    scheduler.add_daily_update_job(hour=0, minute=1)
+    # Schedule prices update at 22:30 Spain time (Mon-Fri, after US market close at 22:00)
+    scheduler.add_daily_update_job(hour=22, minute=30)
 
-    # Note: Hourly missing update job disabled - parallel downloads should complete in one run
-    # scheduler.add_hourly_missing_update_job()
+    # Schedule positions calculation at 02:00 Spain time (Tue-Sat, day after market)
+    scheduler.add_positions_job(hour=2, minute=0)
 
-    # Schedule weekly fundamentals on Sunday at 01:00 ET
+    # Schedule weekly fundamentals on Sunday at 01:00 Spain time
     scheduler.add_weekly_fundamentals_job(day_of_week='sun', hour=1)
 
     print("Scheduled jobs:")

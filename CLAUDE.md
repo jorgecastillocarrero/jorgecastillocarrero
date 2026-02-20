@@ -7,7 +7,7 @@ PatrimonioSmart es una plataforma de gestion patrimonial que:
 - Calcula posiciones, valoraciones y metricas de cartera
 - Muestra un dashboard interactivo (Streamlit) en patrimoniosmart.club
 - Incluye un asistente IA con RAG (LangChain + ChromaDB)
-- Scheduler automatico para actualizaciones diarias a las 00:01 ET
+- Scheduler automatico: precios 22:30 (lun-vie), posiciones 02:00 (mar-sab)
 
 ---
 
@@ -19,7 +19,7 @@ PatrimonioSmart es una plataforma de gestion patrimonial que:
 | Base de datos | PostgreSQL (Railway, servicio "caring") |
 | Dashboard | Streamlit (web/app.py) |
 | IA/RAG | Anthropic Claude, LangChain, ChromaDB, HuggingFace embeddings |
-| Scheduler | APScheduler (cron diario 00:01 ET) |
+| Scheduler | APScheduler (precios 22:30 lun-vie, posiciones 02:00 mar-sab) |
 | Deploy web | Railway (servicio "enthusiastic" en patrimoniosmart.club) |
 | Deploy scheduler | Railway (servicio "awake-light", SERVICE_MODE=scheduler) |
 | Repo | GitHub: jorgecastillocarrero/jorgecastillocarrero |
@@ -157,7 +157,7 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 ### Pendiente / En progreso
 - Dashboard local lento por latencia a Railway PostgreSQL (cada query ~200ms vs <1ms en produccion)
 - Metricas tecnicas no se calculan (requieren 200+ registros, PostgreSQL tiene ~191 por simbolo)
-- Scheduler Railway no ejecuto el 12/02 a las 00:01 ET (verificar logs y reiniciar si es necesario)
+- Scheduler Railway actualizado: precios 22:30 (mismo dia), posiciones 02:00 (dia siguiente)
 - Actualizar holding_diario para fechas intermedias 02-10/02 con datos correctos de IB
 
 ### Servicios Railway
@@ -165,7 +165,7 @@ Para desbloquear: "Autorizo modificar [X]" o "Desbloquea [X]"
 |----------|---------|--------|
 | enthusiastic | Web (Streamlit) en patrimoniosmart.club | Activo |
 | caring | PostgreSQL | Activo |
-| awake-light | Scheduler (00:01 ET diario, dom 01:00 fundamentales) | Activo |
+| awake-light | Scheduler (precios 22:30 lun-vie, posiciones 02:00 mar-sab, fundamentales dom 01:00) | Activo |
 
 ---
 
