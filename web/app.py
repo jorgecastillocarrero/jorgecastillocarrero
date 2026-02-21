@@ -774,7 +774,11 @@ def calculate_portfolio_by_type(target_date):
     Returns dict: {asset_type: value_eur}
     """
     # Use the centralized service that reads from holding_diario and posicion
-    return portfolio_service.get_values_by_asset_type(target_date)
+    values = portfolio_service.get_values_by_asset_type(target_date)
+    # Combine Cash and ETFs into single Cash/ETFs category
+    if 'Cash' in values or 'ETFs' in values:
+        values['Cash/ETFs'] = values.pop('Cash', 0) + values.pop('ETFs', 0)
+    return values
 
 
 def calculate_portfolio_total(target_date):
