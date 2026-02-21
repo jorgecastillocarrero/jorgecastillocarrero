@@ -15,7 +15,7 @@ from sqlalchemy import text
 logger = logging.getLogger(__name__)
 
 # Minimum percentage of symbols required to consider a date valid
-MIN_PRICE_COVERAGE = 0.98  # 98%
+MIN_PRICE_COVERAGE = 0.97  # 97%
 
 # Strategy order for display
 STRATEGY_ORDER = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'ETFs', 'Cash']
