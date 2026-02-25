@@ -4,11 +4,17 @@ Analiza el guidance para extraer sentimiento positivo/negativo.
 """
 import psycopg2
 import re
+import sys
 from datetime import timedelta, date
 from collections import defaultdict
 
-conn = psycopg2.connect('postgresql://fmp:fmp123@localhost:5433/fmp_data')
-cur = conn.cursor()
+try:
+    conn = psycopg2.connect('postgresql://fmp:fmp123@localhost:5433/fmp_data', connect_timeout=5)
+    cur = conn.cursor()
+except Exception as e:
+    print(f"ERROR: No se pudo conectar a FMP database: {e}")
+    print("Asegúrate de que Docker esté corriendo: docker-compose -f docker-compose-fmp.yml up -d")
+    sys.exit(1)
 
 COMMISSION_RATE = 0.003
 POSITION_SIZE = 20000

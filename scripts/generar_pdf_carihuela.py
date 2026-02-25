@@ -47,7 +47,137 @@ def fmt_int(n):
 # =============================================================================
 # CONEXION A BASE DE DATOS
 # =============================================================================
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import os
+
 db = get_db_manager()
+
+# =============================================================================
+# OBTENER DATOS DINAMICOS (Seccion 2 - Cartera)
+# =============================================================================
+def to_date(d):
+    if isinstance(d, datetime):
+        return d.date()
+    return d
+
+with db.get_session() as session:
+    fecha_actual = to_date(session.execute(text('SELECT MAX(fecha) FROM posicion')).scalar())
+    fecha_anterior = to_date(session.execute(text(
+        'SELECT MAX(fecha) FROM posicion WHERE fecha < :fecha'
+    ), {'fecha': fecha_actual}).scalar())
+
+    fx = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'EURUSD=X' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar() or 1.04
+    fx_inicial = 1.1747
+
+    valor_inicial = session.execute(text(
+        "SELECT SUM(total_eur) FROM posicion WHERE fecha = '2025-12-31'"
+    )).scalar() or 3930529
+    valor_actual = session.execute(text(
+        'SELECT SUM(total_eur) FROM posicion WHERE fecha = :fecha'
+    ), {'fecha': fecha_actual}).scalar()
+    valor_anterior = session.execute(text(
+        'SELECT SUM(total_eur) FROM posicion WHERE fecha = :fecha'
+    ), {'fecha': fecha_anterior}).scalar()
+
+    ganancia_eur = valor_actual - valor_inicial
+    rent_pct = (valor_actual / valor_inicial - 1) * 100
+
+    spy_ini = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'SPY' AND ph.date = '2025-12-31'
+    ''')).scalar() or 681.92
+    spy_act = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'SPY' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar()
+    qqq_ini = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'QQQ' AND ph.date = '2025-12-31'
+    ''')).scalar() or 614.31
+    qqq_act = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'QQQ' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar()
+
+    spy_rent = (spy_act / spy_ini - 1) * 100
+    qqq_rent = (qqq_act / qqq_ini - 1) * 100
+
+    valor_enero = session.execute(text('''
+        SELECT SUM(total_eur) FROM posicion
+        WHERE fecha = (SELECT MAX(fecha) FROM posicion WHERE fecha <= '2026-01-31')
+    ''')).scalar()
+    spy_enero = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'SPY' AND ph.date <= '2026-01-31' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar()
+    qqq_enero = session.execute(text('''
+        SELECT ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'QQQ' AND ph.date <= '2026-01-31' ORDER BY ph.date DESC LIMIT 1
+    ''')).scalar()
+
+    # Datos para grafico
+    cartera_data_chart = session.execute(text('''
+        SELECT fecha, SUM(total_eur) as total FROM posicion
+        WHERE fecha >= '2025-12-31' AND fecha != '2026-01-01'
+        GROUP BY fecha ORDER BY fecha
+    ''')).fetchall()
+    spy_data_chart = session.execute(text('''
+        SELECT ph.date, ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'SPY' AND ph.date >= '2025-12-31' ORDER BY ph.date
+    ''')).fetchall()
+    qqq_data_chart = session.execute(text('''
+        SELECT ph.date, ph.close FROM price_history ph JOIN symbols s ON ph.symbol_id = s.id
+        WHERE s.code = 'QQQ' AND ph.date >= '2025-12-31' ORDER BY ph.date
+    ''')).fetchall()
+
+rent_ene = (valor_enero / valor_inicial - 1) * 100
+rent_feb = (valor_actual / valor_enero - 1) * 100
+spy_ene = (spy_enero / spy_ini - 1) * 100
+spy_feb = (spy_act / spy_enero - 1) * 100
+qqq_ene = (qqq_enero / qqq_ini - 1) * 100
+qqq_feb = (qqq_act / qqq_enero - 1) * 100
+
+# Generar grafico benchmark
+cartera_fechas = [to_date(r[0]) for r in cartera_data_chart]
+cartera_valores = [float(r[1]) for r in cartera_data_chart]
+cartera_ini_v = cartera_valores[0]
+cartera_rent_chart = [(v / cartera_ini_v - 1) * 100 for v in cartera_valores]
+spy_fechas = [to_date(r[0]) for r in spy_data_chart]
+spy_precios = [float(r[1]) for r in spy_data_chart]
+spy_ini_v = spy_precios[0]
+spy_rent_chart = [(p / spy_ini_v - 1) * 100 for p in spy_precios]
+qqq_fechas = [to_date(r[0]) for r in qqq_data_chart]
+qqq_precios = [float(r[1]) for r in qqq_data_chart]
+qqq_ini_v = qqq_precios[0]
+qqq_rent_chart = [(p / qqq_ini_v - 1) * 100 for p in qqq_precios]
+
+fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
+ax.set_facecolor('white')
+ax.plot(cartera_fechas, cartera_rent_chart, label=f'Cartera (+{cartera_rent_chart[-1]:.2f}%)', color='#1a365d', linewidth=2.5)
+ax.plot(spy_fechas, spy_rent_chart, label=f'SPY ({spy_rent_chart[-1]:+.2f}%)', color='#e74c3c', linewidth=2, linestyle='--')
+ax.plot(qqq_fechas, qqq_rent_chart, label=f'QQQ ({qqq_rent_chart[-1]:+.2f}%)', color='#f39c12', linewidth=2, linestyle='--')
+ax.axhline(y=0, color='black', linestyle='-', linewidth=1.5)
+ax.set_xlabel('Fecha', fontsize=11)
+ax.set_ylabel('Rentabilidad (%)', fontsize=11)
+ax.set_title('Rentabilidad Cartera vs Benchmark (desde 31/12/2025)', fontsize=14, fontweight='bold')
+ax.legend(loc='upper left', fontsize=10)
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
+ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+plt.xticks(rotation=45)
+ax.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+benchmark_chart_path = r'C:\Users\usuario\Downloads\rentabilidad_benchmark.png'
+plt.savefig(benchmark_chart_path, dpi=150, bbox_inches='tight', facecolor='white')
+plt.close()
+
+# Variacion diaria dinamica
+from src.variacion_diaria_tipo_activo import VariacionDiariaTipoActivo
+variacion_calc = VariacionDiariaTipoActivo()
+variacion_results = variacion_calc.calculate_variacion_diaria(str(fecha_actual))
 
 # =============================================================================
 # CREAR PDF
@@ -113,31 +243,32 @@ elements.append(Paragraph(
 elements.append(Paragraph("2.1 Resumen de Cartera", section_style))
 cartera_data = [
     ['Metrica', 'EUR', 'USD'],
-    ['Valor Inicial 31/12/2025', '3.930.529 EUR', '$4.617.308'],
-    ['Valor Actual 13/02/2026', '4.196.615 EUR', '$4.981.737'],
-    ['Ganancia Acumulada 2026', '+266.086 EUR (+6,77%)', '+$364.429 (+7,89%)'],
+    ['Valor Inicial 31/12/2025', f'{fmt_int(int(valor_inicial))} EUR', f'${fmt_int(int(valor_inicial * fx_inicial))}'],
+    [f'Valor Actual {fecha_actual.strftime("%d/%m/%Y")}', f'{fmt_int(int(valor_actual))} EUR', f'${fmt_int(int(valor_actual * fx))}'],
+    ['Ganancia Acumulada 2026', f'+{fmt_int(int(ganancia_eur))} EUR (+{rent_pct:.2f}%)', f'+${fmt_int(int(ganancia_eur * fx))} (+{rent_pct:.2f}%)'],
 ]
 t = Table(cartera_data, colWidths=[5.5*cm, 4.5*cm, 4.5*cm])
 s = create_table_style()
-s.add('TEXTCOLOR', (1, 3), (2, 3), GREEN)
+s.add('TEXTCOLOR', (1, 3), (2, 3), GREEN if ganancia_eur >= 0 else RED)
 t.setStyle(s)
 elements.append(t)
 elements.append(Spacer(1, 0.3*cm))
-elements.append(Paragraph("Tipos de cambio: EUR/USD 31/12/2025: 1,1747 | EUR/USD actual: 1,1871", description_style))
+elements.append(Paragraph(f"Tipos de cambio: EUR/USD 31/12/2025: {fx_inicial:.4f} | EUR/USD actual: {fx:.4f}", description_style))
 elements.append(Spacer(1, 0.5*cm))
 
 # 2.2 Benchmark
 elements.append(Paragraph("2.2 Benchmark 2026", section_style))
 benchmark_data = [
     ['Indice', 'Rentabilidad'],
-    ['SPY', '-0,02%'],
-    ['QQQ', '-2,02%'],
-    ['Alpha vs SPY', '+6,79%'],
-    ['Alpha vs QQQ', '+8,79%'],
+    ['SPY', f'{spy_rent:+.2f}%'],
+    ['QQQ', f'{qqq_rent:+.2f}%'],
+    ['Alpha vs SPY', f'+{rent_pct - spy_rent:.2f}%'],
+    ['Alpha vs QQQ', f'+{rent_pct - qqq_rent:.2f}%'],
 ]
 t = Table(benchmark_data, colWidths=[5*cm, 4*cm])
 s = create_table_style()
-s.add('TEXTCOLOR', (1, 1), (1, 2), RED)
+s.add('TEXTCOLOR', (1, 1), (1, 1), GREEN if spy_rent >= 0 else RED)
+s.add('TEXTCOLOR', (1, 2), (1, 2), GREEN if qqq_rent >= 0 else RED)
 s.add('TEXTCOLOR', (1, 3), (1, 4), GREEN)
 s.add('FONTNAME', (0, 3), (1, 4), 'Helvetica-Bold')
 t.setStyle(s)
@@ -147,33 +278,51 @@ elements.append(Spacer(1, 0.5*cm))
 # 2.3 Variacion Diaria por Tipo de Activo
 elements.append(Paragraph("2.3 Variacion Diaria por Tipo de Activo", section_style))
 elements.append(Paragraph(
-    "Comparativa del valor de la cartera por tipo de activo entre dos dias consecutivos.",
+    f"Comparativa del valor de la cartera por tipo de activo entre {fecha_anterior.strftime('%d/%m')} y {fecha_actual.strftime('%d/%m')}.",
     description_style
 ))
-variacion_data = [
-    ['Tipo', '12/02', '13/02', 'Diferencia', 'Var %'],
-    ['Mensual', '415.581', '416.727', '+1.146', '+0,28%'],
-    ['Quant', '1.487.173', '1.477.718', '-9.455', '-0,64%'],
-    ['Value', '379.754', '247.932', '-131.822', '-34,71%'],
-    ['Alpha Picks', '369.132', '369.040', '-92', '-0,03%'],
-    ['Oro/Mineras', '783.802', '808.331', '+24.529', '+3,13%'],
-    ['Cash/ETFs', '716.667', '876.867', '+160.199', '+22,35%'],
-    ['TOTAL', '4.152.110', '4.196.615', '+44.505', '+1,07%'],
-]
+
+by_strat = dict(variacion_results.get('by_strategy', {}))
+cash_d = by_strat.pop('Cash', {})
+etfs_d = by_strat.pop('ETFs', {})
+by_strat['Cash/ETFs'] = {
+    'actual': cash_d.get('actual', 0) + etfs_d.get('actual', 0),
+    'anterior': cash_d.get('anterior', 0) + etfs_d.get('anterior', 0),
+    'diff': cash_d.get('diff', 0) + etfs_d.get('diff', 0),
+}
+by_strat['Cash/ETFs']['pct'] = (by_strat['Cash/ETFs']['diff'] / by_strat['Cash/ETFs']['anterior'] * 100) if by_strat['Cash/ETFs']['anterior'] > 0 else 0
+
+variacion_data = [['Tipo', fecha_anterior.strftime('%d/%m'), fecha_actual.strftime('%d/%m'), 'Diferencia', 'Var %']]
+var_color_rules = []
+var_row_idx = 1
+for tipo in ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']:
+    data = by_strat.get(tipo)
+    if not data:
+        continue
+    diff = data['diff']
+    pct = data['pct']
+    variacion_data.append([
+        tipo, fmt_int(int(data['anterior'])), fmt_int(int(data['actual'])),
+        f'{diff:+,.0f}'.replace(',', '.'), f'{pct:+.2f}%'.replace('.', ',')
+    ])
+    var_color_rules.append(('TEXTCOLOR', (3, var_row_idx), (4, var_row_idx), GREEN if diff >= 0 else RED))
+    var_row_idx += 1
+
+total_diff = valor_actual - valor_anterior
+total_pct_var = (total_diff / valor_anterior * 100) if valor_anterior > 0 else 0
+variacion_data.append([
+    'TOTAL', fmt_int(int(valor_anterior)), fmt_int(int(valor_actual)),
+    f'{total_diff:+,.0f}'.replace(',', '.'), f'{total_pct_var:+.2f}%'.replace('.', ',')
+])
+var_color_rules.append(('TEXTCOLOR', (3, var_row_idx), (4, var_row_idx), GREEN if total_diff >= 0 else RED))
+
 t = Table(variacion_data, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2*cm])
 s = create_table_style()
-# Color para diferencias positivas/negativas
-s.add('TEXTCOLOR', (3, 1), (4, 1), GREEN)  # Mensual +
-s.add('TEXTCOLOR', (3, 2), (4, 2), RED)    # Quant -
-s.add('TEXTCOLOR', (3, 3), (4, 3), RED)    # Value -
-s.add('TEXTCOLOR', (3, 4), (4, 4), RED)    # Alpha Picks -
-s.add('TEXTCOLOR', (3, 5), (4, 5), GREEN)  # Oro/Mineras +
-s.add('TEXTCOLOR', (3, 6), (4, 6), GREEN)  # Cash/ETFs +
-s.add('TEXTCOLOR', (3, 7), (4, 7), GREEN)  # TOTAL +
-# Fila TOTAL en negrita
-s.add('FONTNAME', (0, 7), (-1, 7), 'Helvetica-Bold')
-s.add('BACKGROUND', (0, 7), (-1, 7), colors.HexColor('#333333'))
-s.add('TEXTCOLOR', (0, 7), (2, 7), colors.white)
+for rule in var_color_rules:
+    s.add(*rule)
+s.add('FONTNAME', (0, var_row_idx), (-1, var_row_idx), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, var_row_idx), (-1, var_row_idx), colors.HexColor('#d9e2ec'))
+s.add('TEXTCOLOR', (0, var_row_idx), (2, var_row_idx), colors.HexColor('#1a365d'))
 t.setStyle(s)
 elements.append(t)
 elements.append(Spacer(1, 0.5*cm))
@@ -184,16 +333,12 @@ elements.append(Paragraph(
     "Evolucion de la rentabilidad de la cartera comparada con SPY y QQQ desde 31/12/2025.",
     description_style
 ))
-# Insertar imagen del grafico
-chart_path = r'C:\Users\usuario\Downloads\rentabilidad_benchmark.png'
-try:
-    chart_img = Image(chart_path, width=16*cm, height=10*cm)
+if os.path.exists(benchmark_chart_path):
+    chart_img = Image(benchmark_chart_path, width=16*cm, height=9*cm)
     elements.append(chart_img)
-except:
-    elements.append(Paragraph("[Grafico no disponible - ejecutar generador de grafico primero]", normal_style))
 elements.append(Spacer(1, 0.3*cm))
 elements.append(Paragraph(
-    "La cartera supera significativamente a los indices de referencia con +6,77% vs SPY (-0,02%) y QQQ (-2,02%).",
+    f"La cartera supera significativamente a los indices de referencia con +{rent_pct:.2f}% vs SPY ({spy_rent:+.2f}%) y QQQ ({qqq_rent:+.2f}%).",
     description_style
 ))
 elements.append(Spacer(1, 0.5*cm))
@@ -206,31 +351,28 @@ elements.append(Paragraph(
 ))
 rent_mensual_data = [
     ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Total 2026'],
-    ['Cartera', '+4,46%', '+2,21%', '-', '-', '-', '+6,77%'],
-    ['SPY', '+1,47%', '-1,48%', '-', '-', '-', '-0,02%'],
-    ['QQQ', '+1,23%', '-3,21%', '-', '-', '-', '-2,02%'],
+    ['Cartera', f'+{rent_ene:.2f}%', f'+{rent_feb:.2f}%', '-', '-', '-', f'+{rent_pct:.2f}%'],
+    ['SPY', f'{spy_ene:+.2f}%', f'{spy_feb:+.2f}%', '-', '-', '-', f'{spy_rent:+.2f}%'],
+    ['QQQ', f'{qqq_ene:+.2f}%', f'{qqq_feb:+.2f}%', '-', '-', '-', f'{qqq_rent:+.2f}%'],
 ]
 t = Table(rent_mensual_data, colWidths=[2*cm, 2.2*cm, 2.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 2.5*cm])
 s = create_table_style()
-# Colores Cartera (fila 1)
-s.add('TEXTCOLOR', (1, 1), (2, 1), GREEN)  # Ene/Feb +
-s.add('TEXTCOLOR', (6, 1), (6, 1), GREEN)  # Total +
-# Colores SPY (fila 2)
-s.add('TEXTCOLOR', (1, 2), (1, 2), GREEN)  # Ene +
-s.add('TEXTCOLOR', (2, 2), (2, 2), RED)    # Feb -
-s.add('TEXTCOLOR', (6, 2), (6, 2), RED)    # Total -
-# Colores QQQ (fila 3)
-s.add('TEXTCOLOR', (1, 3), (1, 3), GREEN)  # Ene +
-s.add('TEXTCOLOR', (2, 3), (2, 3), RED)    # Feb -
-s.add('TEXTCOLOR', (6, 3), (6, 3), RED)    # Total -
-# Columna Total en negrita
+s.add('TEXTCOLOR', (1, 1), (1, 1), GREEN if rent_ene >= 0 else RED)
+s.add('TEXTCOLOR', (2, 1), (2, 1), GREEN if rent_feb >= 0 else RED)
+s.add('TEXTCOLOR', (6, 1), (6, 1), GREEN if rent_pct >= 0 else RED)
+s.add('TEXTCOLOR', (1, 2), (1, 2), GREEN if spy_ene >= 0 else RED)
+s.add('TEXTCOLOR', (2, 2), (2, 2), GREEN if spy_feb >= 0 else RED)
+s.add('TEXTCOLOR', (6, 2), (6, 2), GREEN if spy_rent >= 0 else RED)
+s.add('TEXTCOLOR', (1, 3), (1, 3), GREEN if qqq_ene >= 0 else RED)
+s.add('TEXTCOLOR', (2, 3), (2, 3), GREEN if qqq_feb >= 0 else RED)
+s.add('TEXTCOLOR', (6, 3), (6, 3), GREEN if qqq_rent >= 0 else RED)
 s.add('FONTNAME', (6, 0), (6, -1), 'Helvetica-Bold')
 s.add('BACKGROUND', (6, 0), (6, 0), colors.HexColor('#333333'))
 t.setStyle(s)
 elements.append(t)
 elements.append(Spacer(1, 0.3*cm))
 elements.append(Paragraph(
-    "Alpha vs SPY: +6,79% | Alpha vs QQQ: +8,79%",
+    f"Alpha vs SPY: +{rent_pct - spy_rent:.2f}% | Alpha vs QQQ: +{rent_pct - qqq_rent:.2f}%",
     ParagraphStyle('AlphaNote', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, textColor=GREEN)
 ))
 
@@ -254,8 +396,10 @@ comp_fecha = db.get_session().__enter__().execute(text('SELECT MAX(fecha) FROM p
 if hasattr(comp_fecha, 'date'):
     comp_fecha = comp_fecha.date()
 
-# Valores por tipo de activo
+# Valores por tipo de activo (combinar Cash + ETFs)
 strategy_values = portfolio_service.get_values_by_asset_type(comp_fecha)
+if 'Cash' in strategy_values or 'ETFs' in strategy_values:
+    strategy_values['Cash/ETFs'] = strategy_values.pop('Cash', 0) + strategy_values.pop('ETFs', 0)
 
 # Totales por cuenta
 def get_account_totals(fecha):
@@ -281,9 +425,6 @@ def get_account_totals(fecha):
 
 account_totals = get_account_totals(comp_fecha)
 total_cartera = account_totals['TOTAL']
-
-# Importar matplotlib para graficos de queso
-import matplotlib.pyplot as plt
 
 # 3.1 Diversificacion
 elements.append(Paragraph("3.1 Composicion por Diversificacion", section_style))
@@ -947,7 +1088,7 @@ elements.append(PageBreak())
 # =============================================================================
 elements.append(Paragraph("6. ETFs", subtitle_style))
 elements.append(Paragraph(
-    "Operaciones de ETFs en Interactive Brokers. Periodo: 01/01/2026 - 13/02/2026.",
+    f"Operaciones de ETFs en Interactive Brokers. Periodo: 01/01/2026 - {fecha_actual.strftime('%d/%m/%Y')}.",
     description_style
 ))
 
@@ -1025,7 +1166,7 @@ elements.append(PageBreak())
 # =============================================================================
 elements.append(Paragraph("7. FUTUROS", subtitle_style))
 elements.append(Paragraph(
-    "Analisis de operaciones de futuros en Interactive Brokers. Periodo: 01/01/2026 - 13/02/2026.",
+    f"Analisis de operaciones de futuros en Interactive Brokers. Periodo: 01/01/2026 - {fecha_actual.strftime('%d/%m/%Y')}.",
     description_style
 ))
 

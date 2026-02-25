@@ -196,7 +196,7 @@ ax.set_facecolor('white')
 ax.plot(cartera_fechas, cartera_rent_chart, label=f'Cartera (+{cartera_rent_chart[-1]:.2f}%)', color='#1a365d', linewidth=2.5)
 ax.plot(spy_fechas, spy_rent_chart, label=f'SPY ({spy_rent_chart[-1]:+.2f}%)', color='#e74c3c', linewidth=2, linestyle='--')
 ax.plot(qqq_fechas, qqq_rent_chart, label=f'QQQ ({qqq_rent_chart[-1]:+.2f}%)', color='#f39c12', linewidth=2, linestyle='--')
-ax.axhline(y=0, color='gray', linestyle='-', linewidth=0.5)
+ax.axhline(y=0, color='black', linestyle='-', linewidth=1.5)
 ax.set_xlabel('Fecha', fontsize=11)
 ax.set_ylabel('Rentabilidad (%)', fontsize=11)
 ax.set_title('Rentabilidad Cartera vs Benchmark (desde 31/12/2025)', fontsize=14, fontweight='bold')
@@ -273,29 +273,57 @@ elements.append(Paragraph(
     f"Comparativa del valor de la cartera por tipo de activo entre {fecha_anterior.strftime('%d/%m')} y {fecha_actual.strftime('%d/%m')}.",
     description_style
 ))
-# Datos de variación (estos deberían calcularse dinámicamente, pero usamos los últimos conocidos)
-variacion_data = [
-    ['Tipo', fecha_anterior.strftime('%d/%m'), fecha_actual.strftime('%d/%m'), 'Diferencia', 'Var %'],
-    ['Mensual', '415.581', '416.727', '+1.146', '+0,28%'],
-    ['Quant', '1.487.173', '1.477.718', '-9.455', '-0,64%'],
-    ['Value', '379.754', '247.932', '-131.822', '-34,71%'],
-    ['Alpha Picks', '369.132', '369.040', '-92', '-0,03%'],
-    ['Oro/Mineras', '783.802', '808.331', '+24.529', '+3,13%'],
-    ['Cash/ETFs', '716.667', '876.867', '+160.199', '+22,35%'],
-    ['TOTAL', fmt(valor_anterior), fmt(valor_actual), f'+{fmt(valor_actual - valor_anterior)}', f'+{(valor_actual/valor_anterior-1)*100:.2f}%'],
-]
+# Calcular variación dinámica por tipo de activo
+from src.variacion_diaria_tipo_activo import VariacionDiariaTipoActivo
+variacion_calc = VariacionDiariaTipoActivo()
+variacion_results = variacion_calc.calculate_variacion_diaria(str(fecha_actual))
+
+variacion_data = [['Tipo', fecha_anterior.strftime('%d/%m'), fecha_actual.strftime('%d/%m'), 'Diferencia', 'Var %']]
+tipo_order = ['Mensual', 'Quant', 'Value', 'Alpha Picks', 'Oro/Mineras', 'Cash/ETFs']
+
+# Combine Cash + ETFs into Cash/ETFs
+by_strat = dict(variacion_results.get('by_strategy', {}))
+cash_data = by_strat.pop('Cash', {})
+etfs_data = by_strat.pop('ETFs', {})
+cash_val_ant = cash_data.get('anterior', 0) + etfs_data.get('anterior', 0)
+cash_val_act = cash_data.get('actual', 0) + etfs_data.get('actual', 0)
+cash_diff = cash_val_act - cash_val_ant
+cash_pct = (cash_diff / cash_val_ant * 100) if cash_val_ant > 0 else 0
+by_strat['Cash/ETFs'] = {'actual': cash_val_act, 'anterior': cash_val_ant, 'diff': cash_diff, 'pct': cash_pct}
+
+var_color_rules = []
+row_idx = 1
+for tipo in tipo_order:
+    data = by_strat.get(tipo)
+    if not data:
+        continue
+    diff = data['diff']
+    pct = data['pct']
+    variacion_data.append([
+        tipo, fmt(data['anterior']), fmt(data['actual']),
+        f'{diff:+,.0f}'.replace(',', '.'), f'{pct:+.2f}%'.replace('.', ',')
+    ])
+    color = GREEN if diff >= 0 else RED
+    var_color_rules.append(('TEXTCOLOR', (3, row_idx), (4, row_idx), color))
+    row_idx += 1
+
+# TOTAL row
+total_diff = valor_actual - valor_anterior
+total_pct = (total_diff / valor_anterior * 100) if valor_anterior > 0 else 0
+variacion_data.append([
+    'TOTAL', fmt(valor_anterior), fmt(valor_actual),
+    f'{total_diff:+,.0f}'.replace(',', '.'), f'{total_pct:+.2f}%'.replace('.', ',')
+])
+total_color = GREEN if total_diff >= 0 else RED
+var_color_rules.append(('TEXTCOLOR', (3, row_idx), (4, row_idx), total_color))
+
 t = Table(variacion_data, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 2*cm])
 s = create_table_style()
-s.add('TEXTCOLOR', (3, 1), (4, 1), GREEN)
-s.add('TEXTCOLOR', (3, 2), (4, 2), RED)
-s.add('TEXTCOLOR', (3, 3), (4, 3), RED)
-s.add('TEXTCOLOR', (3, 4), (4, 4), RED)
-s.add('TEXTCOLOR', (3, 5), (4, 5), GREEN)
-s.add('TEXTCOLOR', (3, 6), (4, 6), GREEN)
-s.add('TEXTCOLOR', (3, 7), (4, 7), GREEN)
-s.add('FONTNAME', (0, 7), (-1, 7), 'Helvetica-Bold')
-s.add('BACKGROUND', (0, 7), (-1, 7), colors.HexColor('#333333'))
-s.add('TEXTCOLOR', (0, 7), (2, 7), colors.white)
+for rule in var_color_rules:
+    s.add(*rule)
+s.add('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold')
+s.add('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#d9e2ec'))
+s.add('TEXTCOLOR', (0, row_idx), (2, row_idx), colors.HexColor('#1a365d'))
 t.setStyle(s)
 elements.append(t)
 elements.append(Spacer(1, 0.5*cm))

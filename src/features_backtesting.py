@@ -25,6 +25,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 FMP_DATABASE_URL = "postgresql://fmp:fmp123@localhost:5433/fmp_data"
+FMP_CONNECT_TIMEOUT = 5  # segundos
 
 
 class FeaturesBacktestingBuilder:
@@ -35,7 +36,12 @@ class FeaturesBacktestingBuilder:
 
     def connect(self):
         if not self.conn:
-            self.conn = psycopg2.connect(FMP_DATABASE_URL)
+            try:
+                self.conn = psycopg2.connect(FMP_DATABASE_URL, connect_timeout=FMP_CONNECT_TIMEOUT)
+            except Exception as e:
+                logger.error(f"No se pudo conectar a FMP database (Docker): {e}")
+                logger.error("Asegúrate de que Docker esté corriendo: docker-compose -f docker-compose-fmp.yml up -d")
+                raise ConnectionError(f"FMP database no disponible. ¿Docker está corriendo? Error: {e}")
         return self.conn
 
     def close(self):
