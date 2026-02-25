@@ -55,6 +55,42 @@ def adjust_score_by_price(scores, dd_row, rsi_row):
             adjusted[sub_id] = score
     return adjusted
 
+def decide_cautious_support(scores_v3, dd_row, rsi_row):
+    """CAUTIOUS: solo operar extremos. Comprar sectores en soporte (DD ~-15%).
+    No buscar tendencia, solo reversion desde soporte.
+    Si no hay extremos, no operar (0L+0S).
+    """
+    candidates = []
+    for sub_id in SUBSECTORS:
+        dd = dd_row.get(sub_id, 0) if dd_row is not None else 0
+        rsi = rsi_row.get(sub_id, 50) if rsi_row is not None else 50
+        score = scores_v3.get(sub_id, 5.0)
+        if not pd.notna(dd): dd = 0
+        if not pd.notna(rsi): rsi = 50
+
+        # Filtro: sector en soporte (-12% a -25% DD)
+        # No demasiado profundo (eso es colapso, no soporte)
+        if dd > -12 or dd < -25: continue
+
+        # RSI < 45 confirma sobreventa (pero no extrema < 20)
+        if rsi > 45 or rsi < 20: continue
+
+        # Score >= 4.0: fundamentales no destruidos (soporte valido)
+        if score < 4.0: continue
+
+        # Scoring: cuanto mas cerca de -15% y mas oversold, mejor
+        support_score = 0.0
+        support_score += np.clip((abs(dd) - 12) / 8, 0, 1) * 2.0     # profundidad DD
+        support_score += np.clip((45 - rsi) / 20, 0, 1) * 1.5         # RSI oversold
+        support_score += np.clip((score - 4.0) / 2.0, 0, 1) * 1.0     # fundamentales ok
+
+        candidates.append((sub_id, support_score))
+
+    candidates.sort(key=lambda x: -x[1])
+    longs = [c[0] for c in candidates[:2]]  # max 2 longs concentrados
+    weights = {s: w for s, w in candidates[:2]}
+    return longs, weights
+
 def decide_neutral_meanrev(scores_evt, dd_row, rsi_row, atr_row):
     long_cands, short_cands = [], []
     for sub_id in SUBSECTORS:
@@ -80,6 +116,43 @@ def decide_neutral_meanrev(scores_evt, dd_row, rsi_row, atr_row):
     weights = {s: w for s, w in long_cands[:3]}
     weights.update({s: w for s, w in short_cands[:2]})
     return longs, shorts, weights
+
+def decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row):
+    """Shorts agresivos para BEARISH: sectores en inicio de ruptura.
+    - DD entre -5% y -20% (empezando a caer, NO ya colapsados)
+    - RSI 30-50 (debilitandose, pero sin sobreventa extrema = sin squeeze)
+    - ATR alto (mas recorrido por posicion)
+    - Score < 4.5 (fundamentales debilitandose)
+    """
+    candidates = []
+    for sub_id in SUBSECTORS:
+        score = scores_v3.get(sub_id, 5.0)
+        dd = dd_row.get(sub_id, 0) if dd_row is not None else 0
+        rsi = rsi_row.get(sub_id, 50) if rsi_row is not None else 50
+        atr = atr_row.get(sub_id, 0) if atr_row is not None else 0
+        if not pd.notna(dd): dd = 0
+        if not pd.notna(rsi): rsi = 50
+        if not pd.notna(atr): atr = 0
+
+        # Filtros: sector en ruptura inicial, no colapsado
+        if score >= 4.5: continue          # fundamentales no suficientemente debiles
+        if dd < -25: continue              # ya colapsado = squeeze risk
+        if rsi < 25: continue              # sobreventa extrema = squeeze risk
+        if atr < ATR_MIN: continue         # sin volatilidad = sin recorrido
+
+        # Scoring: mas agresivo = mas recorrido potencial
+        breakdown_score = 0.0
+        breakdown_score += np.clip((5.0 - score) / 3.0, 0, 1) * 2.0    # peor fair value = mejor short
+        breakdown_score += np.clip(abs(dd) / 20.0, 0, 1) * 1.5          # drawdown moderado
+        breakdown_score += np.clip((50 - rsi) / 25.0, 0, 1) * 1.5       # RSI debilitandose
+        breakdown_score += np.clip((atr - ATR_MIN) / 3.0, 0, 1) * 1.0   # mas ATR = mas recorrido
+
+        candidates.append((sub_id, breakdown_score))
+
+    candidates.sort(key=lambda x: -x[1])
+    shorts = [c[0] for c in candidates[:3]]
+    weights = {s: w for s, w in candidates[:3]}
+    return shorts, weights
 
 def calc_pnl(longs, shorts, scores, ret_row, capital):
     n = len(longs) + len(shorts)
@@ -175,15 +248,15 @@ def classify_regime_market(date, dd_wide, rsi_wide, spy_w, vix_df):
 
     if total >= 4.0: regime = 'BULLISH'
     elif total >= 0.5: regime = 'NEUTRAL'
-    elif total >= -1.5: regime = 'BEAR_LEVE'      # -1.5 a 0.5: bearish suave
-    elif total >= -3.0: regime = 'BEAR_MODERADO'   # -3.0 a -1.5: bearish fuerte
+    elif total >= -1.5: regime = 'CAUTIOUS'      # -1.5 a 0.5: bearish suave
+    elif total >= -3.0: regime = 'BEARISH'   # -3.0 a -1.5: bearish fuerte
     else: regime = 'CRISIS'                        # < -3.0: crisis
 
     # VIX como alerta: calm -> less stable
     if vix_val >= 30 and regime == 'BULLISH':
         regime = 'NEUTRAL'
     elif vix_val >= 35 and regime == 'NEUTRAL':
-        regime = 'BEAR_LEVE'
+        regime = 'CAUTIOUS'
 
     return regime, {'score_total': total}
 
@@ -313,8 +386,8 @@ for date in returns_wide.index:
     shorts_pool = sorted([(s, sc) for s, sc in scores_v3.items() if sc < 3.5], key=lambda x: x[1])
 
     if regime == 'CRISIS':         nl, ns = 0, 3   # solo shorts
-    elif regime == 'BEAR_MODERADO': nl, ns = 1, 3   # defensivo fuerte
-    elif regime == 'BEAR_LEVE':     nl, ns = 2, 3   # defensivo suave
+    elif regime == 'BEARISH': nl, ns = 0, 3   # solo shorts
+    elif regime == 'CAUTIOUS':     nl, ns = 0, 0   # solo opera extremos (soporte)
     elif regime == 'NEUTRAL':       nl, ns = 3, 3   # mean reversion
     else:                           nl, ns = 3, 0   # BULLISH solo longs
 
@@ -325,14 +398,36 @@ for date in returns_wide.index:
         shorts = [s for s in shorts if pd.notna(atr_row.get(s)) and atr_row[s] >= ATR_MIN]
 
     # Calcular con capital unitario ($1) para obtener retorno %
-    if regime == 'NEUTRAL':
+    if regime == 'CAUTIOUS':
+        longs_sup, weights_sup = decide_cautious_support(scores_v3, dd_row, rsi_row)
+        if longs_sup:
+            longs = longs_sup
+            shorts = []
+            pnl_unit = calc_pnl_meanrev(longs_sup, [], weights_sup, ret_row, 1.0)
+        else:
+            longs = []
+            shorts = []
+            pnl_unit = 0.0  # no hay extremos, no operar
+    elif regime == 'NEUTRAL':
         longs, shorts, weights_mr = decide_neutral_meanrev(scores_evt, dd_row, rsi_row, atr_row)
         pnl_unit = calc_pnl_meanrev(longs, shorts, weights_mr, ret_row, 1.0)
+    elif regime == 'BEARISH':
+        shorts_bear, weights_bear = decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row)
+        if shorts_bear:
+            longs = []
+            shorts = shorts_bear
+            pnl_unit = calc_pnl_meanrev([], shorts_bear, weights_bear, ret_row, 1.0)
+        else:
+            pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
     else:
         pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
 
     n_pos = len(longs) + len(shorts)
     cost_pct = COST_PER_TRADE * 2 if n_pos > 0 else 0  # 0.20% round-trip
+
+    # Separar P&L longs vs shorts para diagnostico
+    pnl_longs = calc_pnl(longs, [], scores_v3, ret_row, 1.0) if longs else 0
+    pnl_shorts = calc_pnl([], shorts, scores_v3, ret_row, 1.0) if shorts else 0
 
     weekly_returns.append({
         'date': date,
@@ -340,6 +435,10 @@ for date in returns_wide.index:
         'cost_pct': cost_pct,        # coste % (como fraccion de 1)
         'regime': regime,
         'n_pos': n_pos,
+        'n_longs': len(longs),
+        'n_shorts': len(shorts),
+        'pnl_longs': pnl_longs,
+        'pnl_shorts': pnl_shorts,
     })
 
 df_ret = pd.DataFrame(weekly_returns)
@@ -401,8 +500,8 @@ for year in sorted(df_ret['date'].dt.year.unique()):
         'spy_ret': spy_annual.get(year, 0),
         'bull': rc.get('BULLISH', 0),
         'neut': rc.get('NEUTRAL', 0),
-        'bear_l': rc.get('BEAR_LEVE', 0),
-        'bear_m': rc.get('BEAR_MODERADO', 0),
+        'caut': rc.get('CAUTIOUS', 0),
+        'bear': rc.get('BEARISH', 0),
         'cris': rc.get('CRISIS', 0),
     })
 
@@ -427,7 +526,7 @@ print("=" * 120)
 
 print(f"\n{'Ano':>5} {'Cap.Inicio':>12} {'S&P500':>8} {'Sist%':>8} {'Alpha':>8} "
       f"{'P&L Neto':>12} {'Costes':>10} {'Cap.Final':>14}  "
-      f"{'BULL':>5} {'NEUT':>5} {'BR_L':>5} {'BR_M':>5} {'CRIS':>5}  {'SPY Cap':>14}")
+      f"{'BULL':>5} {'NEUT':>5} {'CAUT':>5} {'BEAR':>5} {'CRIS':>5}  {'SPY Cap':>14}")
 print("-" * 145)
 
 for _, row in df_r.iterrows():
@@ -435,7 +534,7 @@ for _, row in df_r.iterrows():
     print(f"{int(row['year']):>5} ${row['capital_inicio']:>11,.0f} {row['spy_ret']:>7.1f}% "
           f"{row['rent_net']:>7.1f}% {alpha:>+7.1f}% "
           f"${row['pnl_net']:>11,.0f} ${row['cost']:>9,.0f} ${row['capital_fin']:>13,.0f}  "
-          f"{int(row['bull']):>5} {int(row['neut']):>5} {int(row['bear_l']):>5} {int(row['bear_m']):>5} {int(row['cris']):>5}  "
+          f"{int(row['bull']):>5} {int(row['neut']):>5} {int(row['caut']):>5} {int(row['bear']):>5} {int(row['cris']):>5}  "
           f"${row['spy_capital']:>13,.0f}")
 
 # Resumen final
@@ -453,7 +552,7 @@ print("-" * 145)
 # Estadisticas por regimen
 print(f"\n{'Regimen':<16} {'Semanas':>7} {'Avg ret%':>10} {'WinRate':>8} {'Config':>8}")
 print("-" * 55)
-for reg, cfg in [('BULLISH', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('BEAR_LEVE', '2L+3S'), ('BEAR_MODERADO', '1L+3S'), ('CRISIS', '0L+3S')]:
+for reg, cfg in [('BULLISH', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', '2L+3S'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -470,3 +569,250 @@ print(f"  {'CAGR':>20} {cagr_sys*100:>13.1f}% {cagr_spy*100:>13.1f}% {(cagr_sys-
 print(f"  {'Costes totales':>20} ${total_costs:>14,.0f}")
 print(f"  {'Anos positivos':>20} {(df_r['pnl_net'] > 0).sum():>10}/{n_years}")
 print(f"  {'Anos alpha > 0':>20} {((df_r['rent_net'] - df_r['spy_ret']) > 0).sum():>10}/{n_years}")
+
+# Impacto por regimen (base $500K)
+BASE = 500_000
+print(f"\n{'IMPACTO POR REGIMEN (base $500K)':>45}")
+print("-" * 75)
+print(f"  {'Regimen':<16} {'N':>5} {'Avg bruto':>12} {'Avg neto':>12} {'Coste/sem':>10} {'Margen':>12}")
+print("-" * 75)
+for reg, cfg in [('BULLISH', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', '2L+3S'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
+    mask = df_ret['regime'] == reg
+    if mask.sum() == 0:
+        continue
+    sub = df_ret[mask]
+    avg_gross = sub['ret_gross'].mean() * BASE
+    avg_cost = sub['cost_pct'].mean() * BASE
+    avg_net = sub['ret_net'].mean() * BASE
+    ratio = avg_net / avg_cost if avg_cost > 0 else 0
+    margen = "Holgado" if ratio > 2.5 else "OK" if ratio > 1.0 else "Justo" if ratio > 0.2 else "NEGATIVO"
+    print(f"  {reg:<16} {mask.sum():>5} ${avg_gross:>10,.0f} ${avg_net:>10,.0f} ${avg_cost:>8,.0f}   {margen:<10} ({ratio:.1f}x)")
+
+# ================================================================
+# ESTADISTICOS DETALLADOS
+# ================================================================
+print("\n" + "=" * 80)
+print("ESTADISTICOS DETALLADOS")
+print("=" * 80)
+
+# --- Nivel semanal ---
+rets = df_ret['ret_net'].values
+rets_spy = spy_w['ret_spy'].reindex(df_ret['date'].values).values
+
+# Sharpe (anualizado, 52 semanas)
+sharpe_sys = rets.mean() / rets.std() * np.sqrt(52) if rets.std() > 0 else 0
+sharpe_spy = np.nanmean(rets_spy) / np.nanstd(rets_spy) * np.sqrt(52) if np.nanstd(rets_spy) > 0 else 0
+
+# Sortino (solo downside deviation)
+downside = rets[rets < 0]
+downside_std = np.sqrt(np.mean(downside**2)) if len(downside) > 0 else 1e-9
+sortino_sys = rets.mean() / downside_std * np.sqrt(52)
+
+downside_spy = rets_spy[~np.isnan(rets_spy) & (rets_spy < 0)]
+downside_std_spy = np.sqrt(np.mean(downside_spy**2)) if len(downside_spy) > 0 else 1e-9
+sortino_spy = np.nanmean(rets_spy) / downside_std_spy * np.sqrt(52)
+
+# Max Drawdown semanal (sobre equity curve compuesta)
+equity = CAPITAL_INICIAL * np.cumprod(1 + rets)
+peak = np.maximum.accumulate(equity)
+dd_pct = (equity - peak) / peak
+max_dd = dd_pct.min() * 100
+
+equity_spy = CAPITAL_INICIAL * np.cumprod(1 + np.nan_to_num(rets_spy))
+peak_spy = np.maximum.accumulate(equity_spy)
+dd_spy = (equity_spy - peak_spy) / peak_spy
+max_dd_spy = dd_spy.min() * 100
+
+# Calmar = CAGR / |MaxDD|
+calmar_sys = (cagr_sys * 100) / abs(max_dd) if max_dd != 0 else 0
+calmar_spy = (cagr_spy * 100) / abs(max_dd_spy) if max_dd_spy != 0 else 0
+
+# Profit Factor
+gross_wins = rets[rets > 0].sum()
+gross_losses = abs(rets[rets < 0].sum())
+profit_factor = gross_wins / gross_losses if gross_losses > 0 else float('inf')
+
+# Win/Loss stats
+avg_win = rets[rets > 0].mean() * 100 if (rets > 0).any() else 0
+avg_loss = rets[rets < 0].mean() * 100 if (rets < 0).any() else 0
+best_week = rets.max() * 100
+worst_week = rets.min() * 100
+win_rate = (rets > 0).mean() * 100
+n_weeks = len(rets)
+n_active = (df_ret['n_pos'] > 0).sum()
+
+# Streaks
+streaks_win, streaks_loss = [], []
+curr = 0
+for r in rets:
+    if r > 0:
+        if curr > 0: curr += 1
+        else: curr = 1
+    elif r < 0:
+        if curr < 0: curr -= 1
+        else:
+            if curr > 0: streaks_win.append(curr)
+            curr = -1
+    else:
+        if curr > 0: streaks_win.append(curr)
+        elif curr < 0: streaks_loss.append(abs(curr))
+        curr = 0
+if curr > 0: streaks_win.append(curr)
+elif curr < 0: streaks_loss.append(abs(curr))
+
+max_win_streak = max(streaks_win) if streaks_win else 0
+max_loss_streak = max(streaks_loss) if streaks_loss else 0
+
+# Volatilidad anualizada
+vol_sys = rets.std() * np.sqrt(52) * 100
+vol_spy = np.nanstd(rets_spy) * np.sqrt(52) * 100
+
+# Skew y Kurtosis (manual, sin scipy)
+n = len(rets)
+m = rets.mean()
+s = rets.std()
+skew_sys = (np.sum((rets - m)**3) / n) / s**3 if s > 0 else 0
+kurt_sys = (np.sum((rets - m)**4) / n) / s**4 - 3 if s > 0 else 0  # excess kurtosis
+
+# Max DD duration
+dd_start = None
+max_dd_dur = 0
+curr_dur = 0
+for i, eq in enumerate(equity):
+    if eq < peak[i]:
+        curr_dur += 1
+        max_dd_dur = max(max_dd_dur, curr_dur)
+    else:
+        curr_dur = 0
+
+# Peor ano
+worst_year_row = df_r.loc[df_r['rent_net'].idxmin()]
+best_year_row = df_r.loc[df_r['rent_net'].idxmax()]
+
+# Años con perdida
+loss_years = df_r[df_r['pnl_net'] < 0]
+
+print(f"\n{'METRICAS DE RIESGO-RETORNO':>35} {'SISTEMA':>12} {'S&P 500':>12}")
+print("-" * 62)
+print(f"  {'Sharpe Ratio (anual.)':>33} {sharpe_sys:>11.2f} {sharpe_spy:>11.2f}")
+print(f"  {'Sortino Ratio (anual.)':>33} {sortino_sys:>11.2f} {sortino_spy:>11.2f}")
+print(f"  {'Calmar Ratio':>33} {calmar_sys:>11.2f} {calmar_spy:>11.2f}")
+print(f"  {'Volatilidad Anualizada':>33} {vol_sys:>10.1f}% {vol_spy:>10.1f}%")
+print(f"  {'Max Drawdown':>33} {max_dd:>10.1f}% {max_dd_spy:>10.1f}%")
+print(f"  {'Max DD Duracion (semanas)':>33} {max_dd_dur:>11} {'':>12}")
+print(f"  {'Profit Factor':>33} {profit_factor:>11.2f} {'':>12}")
+print(f"  {'Skewness':>33} {skew_sys:>+11.3f} {'':>12}")
+print(f"  {'Kurtosis (excess)':>33} {kurt_sys:>11.2f} {'':>12}")
+
+print(f"\n{'DISTRIBUCION SEMANAL':>35}")
+print("-" * 62)
+print(f"  {'Semanas totales':>33} {n_weeks:>11}")
+print(f"  {'Semanas activas':>33} {n_active:>11}")
+print(f"  {'Win Rate':>33} {win_rate:>10.1f}%")
+print(f"  {'Avg Win':>33} {avg_win:>+10.3f}%")
+print(f"  {'Avg Loss':>33} {avg_loss:>+10.3f}%")
+print(f"  {'Win/Loss Ratio':>33} {abs(avg_win/avg_loss) if avg_loss != 0 else 0:>11.2f}")
+print(f"  {'Mejor Semana':>33} {best_week:>+10.2f}%")
+print(f"  {'Peor Semana':>33} {worst_week:>+10.2f}%")
+print(f"  {'Max Racha Ganadora':>33} {max_win_streak:>8} sem")
+print(f"  {'Max Racha Perdedora':>33} {max_loss_streak:>8} sem")
+
+print(f"\n{'DISTRIBUCION ANUAL':>35}")
+print("-" * 62)
+print(f"  {'Mejor Ano':>33}  {int(best_year_row['year'])} ({best_year_row['rent_net']:+.1f}%)")
+print(f"  {'Peor Ano':>33}  {int(worst_year_row['year'])} ({worst_year_row['rent_net']:+.1f}%)")
+print(f"  {'Anos con perdida':>33} {len(loss_years):>11}")
+if len(loss_years) > 0:
+    for _, ly in loss_years.iterrows():
+        print(f"  {'':>35} {int(ly['year'])}: {ly['rent_net']:+.1f}%")
+
+# Estadisticos por regimen detallados
+print(f"\n{'DETALLE POR REGIMEN':>35}")
+print("-" * 95)
+print(f"  {'Regimen':<16} {'N':>5} {'Avg%':>7} {'Med%':>7} {'Std%':>7} {'WR%':>6} {'Sharpe':>7} {'Best%':>8} {'Worst%':>8} {'PF':>6}")
+print("-" * 95)
+for reg, cfg in [('BULLISH', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', '2L+3S'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
+    mask = df_ret['regime'] == reg
+    if mask.sum() == 0:
+        continue
+    sub = df_ret[mask]['ret_net'].values
+    avg = sub.mean() * 100
+    med = np.median(sub) * 100
+    std = sub.std() * 100
+    wr = (sub > 0).mean() * 100
+    sh = sub.mean() / sub.std() * np.sqrt(52) if sub.std() > 0 else 0
+    bst = sub.max() * 100
+    wst = sub.min() * 100
+    gw = sub[sub > 0].sum()
+    gl = abs(sub[sub < 0].sum())
+    pf = gw / gl if gl > 0 else float('inf')
+    print(f"  {reg:<16} {mask.sum():>5} {avg:>+6.2f} {med:>+6.2f} {std:>6.2f} {wr:>5.1f} {sh:>+6.2f} {bst:>+7.2f} {wst:>+7.2f} {pf:>5.2f}")
+
+# Diagnostico LONGS vs SHORTS por regimen
+print(f"\n{'DIAGNOSTICO LONGS vs SHORTS POR REGIMEN':>45}")
+print("-" * 85)
+print(f"  {'Regimen':<16} {'N':>5}  {'Avg L%':>8} {'WR L%':>7}  {'Avg S%':>8} {'WR S%':>7}  {'L $/sem':>10} {'S $/sem':>10}")
+print("-" * 85)
+BASE = 500_000
+for reg in ['BULLISH', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS']:
+    mask = df_ret['regime'] == reg
+    if mask.sum() == 0:
+        continue
+    sub = df_ret[mask]
+    avg_l = sub['pnl_longs'].mean() * 100
+    avg_s = sub['pnl_shorts'].mean() * 100
+    wr_l = (sub['pnl_longs'] > 0).mean() * 100 if (sub['n_longs'] > 0).any() else 0
+    wr_s = (sub['pnl_shorts'] > 0).mean() * 100 if (sub['n_shorts'] > 0).any() else 0
+    dl = sub['pnl_longs'].mean() * BASE
+    ds = sub['pnl_shorts'].mean() * BASE
+    print(f"  {reg:<16} {mask.sum():>5}  {avg_l:>+7.3f} {wr_l:>6.1f}  {avg_s:>+7.3f} {wr_s:>6.1f}  ${dl:>9,.0f} ${ds:>9,.0f}")
+
+# Caracteristicas detalladas LONGS y SHORTS por regimen
+print(f"\n{'CARACTERISTICAS DETALLADAS POR LADO Y REGIMEN':>50}")
+print("=" * 100)
+for reg in ['BULLISH', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS']:
+    mask = df_ret['regime'] == reg
+    if mask.sum() == 0:
+        continue
+    sub = df_ret[mask]
+
+    print(f"\n  {reg} ({mask.sum()} semanas)")
+    print(f"  {'-'*96}")
+
+    for side, col in [('LONGS', 'pnl_longs'), ('SHORTS', 'pnl_shorts')]:
+        vals = sub[col].values
+        n_active = (sub[f'n_{side.lower()}'] > 0).sum()
+        if n_active == 0:
+            print(f"    {side:<8} No activo")
+            continue
+
+        vals_active = vals[sub[f'n_{side.lower()}'] > 0]
+        avg = vals_active.mean() * 100
+        med = np.median(vals_active) * 100
+        std = vals_active.std() * 100
+        wr = (vals_active > 0).mean() * 100
+        best = vals_active.max() * 100
+        worst = vals_active.min() * 100
+        sharpe = vals_active.mean() / vals_active.std() * np.sqrt(52) if vals_active.std() > 0 else 0
+        gw = vals_active[vals_active > 0].sum()
+        gl = abs(vals_active[vals_active < 0].sum())
+        pf = gw / gl if gl > 0 else float('inf')
+        avg_n = sub.loc[sub[f'n_{side.lower()}'] > 0, f'n_{side.lower()}'].mean()
+
+        # Streaks
+        wins = vals_active > 0
+        max_wstreak = max_lstreak = curr = 0
+        for w in wins:
+            if w: curr = max(0, curr) + 1; max_wstreak = max(max_wstreak, curr)
+            else: curr = min(0, curr) - 1; max_lstreak = max(max_lstreak, abs(curr))
+
+        # Distribucion por quintiles
+        q25 = np.percentile(vals_active, 25) * 100
+        q75 = np.percentile(vals_active, 75) * 100
+
+        print(f"    {side:<8} N={n_active:>4} | Avg={avg:>+6.3f}% Med={med:>+6.3f}% Std={std:>5.3f}% | "
+              f"WR={wr:>5.1f}% Sharpe={sharpe:>+5.2f} PF={pf:>4.2f}")
+        print(f"    {'':8} Avg pos={avg_n:>3.1f} | Best={best:>+6.2f}% Worst={worst:>+6.2f}% | "
+              f"Q25={q25:>+6.3f}% Q75={q75:>+6.3f}%")
+        print(f"    {'':8} Racha W={max_wstreak} L={max_lstreak} | "
+              f"$/sem=${vals_active.mean()*BASE:>+8,.0f}")
