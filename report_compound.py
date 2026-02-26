@@ -152,67 +152,26 @@ def decide_burbuja_aggressive(scores_v3, dd_row, rsi_row):
     weights = {s: w for s, w in candidates[:3]}
     return longs, weights
 
-def decide_cautious_support(scores_v3, dd_row, rsi_row):
-    """CAUTIOUS: solo operar extremos. Comprar sectores en soporte (DD ~-15%).
-    No buscar tendencia, solo reversion desde soporte.
-    Si no hay extremos, no operar (0L+0S).
+def decide_neutral_oversold(scores_v3, dd_row, rsi_row):
+    """NEUTRAL: Oversold Deep (solo longs, sin shorts).
+    Comprar sectores en soporte extremo: DD < -15%, RSI < 35, score >= 3.5.
+    Si no hay candidatos, no operar (0L+0S).
     """
     candidates = []
     for sub_id in SUBSECTORS:
-        dd = dd_row.get(sub_id, 0) if dd_row is not None else 0
-        rsi = rsi_row.get(sub_id, 50) if rsi_row is not None else 50
         score = scores_v3.get(sub_id, 5.0)
-        if not pd.notna(dd): dd = 0
-        if not pd.notna(rsi): rsi = 50
-
-        # Filtro: sector en soporte (-12% a -25% DD)
-        # No demasiado profundo (eso es colapso, no soporte)
-        if dd > -12 or dd < -25: continue
-
-        # RSI < 45 confirma sobreventa (pero no extrema < 20)
-        if rsi > 45 or rsi < 20: continue
-
-        # Score >= 4.0: fundamentales no destruidos (soporte valido)
-        if score < 4.0: continue
-
-        # Scoring: cuanto mas cerca de -15% y mas oversold, mejor
-        support_score = 0.0
-        support_score += np.clip((abs(dd) - 12) / 8, 0, 1) * 2.0     # profundidad DD
-        support_score += np.clip((45 - rsi) / 20, 0, 1) * 1.5         # RSI oversold
-        support_score += np.clip((score - 4.0) / 2.0, 0, 1) * 1.0     # fundamentales ok
-
-        candidates.append((sub_id, support_score))
-
-    candidates.sort(key=lambda x: -x[1])
-    longs = [c[0] for c in candidates[:2]]  # max 2 longs concentrados
-    weights = {s: w for s, w in candidates[:2]}
-    return longs, weights
-
-def decide_neutral_meanrev(scores_evt, dd_row, rsi_row, atr_row):
-    long_cands, short_cands = [], []
-    for sub_id in SUBSECTORS:
-        score = scores_evt.get(sub_id, 5.0)
         dd = dd_row.get(sub_id, 0) if dd_row is not None else 0
         rsi = rsi_row.get(sub_id, 50) if rsi_row is not None else 50
-        atr = atr_row.get(sub_id, 0) if atr_row is not None else 0
         if not pd.notna(dd): dd = 0
         if not pd.notna(rsi): rsi = 50
-        if not pd.notna(atr): atr = 0
-        dd_factor = np.clip((abs(dd) - 15) / 30, 0, 1)
-        rsi_os = np.clip((40 - rsi) / 25, 0, 1)
-        oversold = max(dd_factor, rsi_os)
-        if oversold > 0.1 and score >= 4.0:
-            long_cands.append((sub_id, oversold))
-        rsi_ob = np.clip((rsi - 65) / 20, 0, 1)
-        if rsi_ob > 0.1 and dd > -8 and score <= 6.0 and atr >= ATR_MIN:
-            short_cands.append((sub_id, rsi_ob))
-    long_cands.sort(key=lambda x: -x[1])
-    short_cands.sort(key=lambda x: -x[1])
-    longs = [c[0] for c in long_cands[:3]]
-    shorts = [c[0] for c in short_cands[:2]]
-    weights = {s: w for s, w in long_cands[:3]}
-    weights.update({s: w for s, w in short_cands[:2]})
-    return longs, shorts, weights
+        if dd > -15 or rsi > 35: continue
+        if score < 3.5: continue
+        w = np.clip((abs(dd) - 15) / 20, 0, 1) + np.clip((35 - rsi) / 15, 0, 1)
+        candidates.append((sub_id, w))
+    candidates.sort(key=lambda x: -x[1])
+    longs = [c[0] for c in candidates[:3]]
+    weights = {s: w for s, w in candidates[:3]}
+    return longs, weights
 
 def decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row):
     """Shorts agresivos para BEARISH: sectores en inicio de ruptura.
@@ -314,46 +273,60 @@ def classify_regime_market(date, dd_wide, rsi_wide, spy_w, vix_df):
     vix_val = vix_df.loc[vix_dates[-1], 'vix'] if len(vix_dates) > 0 else 20
     if not pd.notna(vix_val): vix_val = 20
 
+    # Scoring extendido: mas resolucion en zona negativa (rango -12.5 a +8.0)
+    # Zona positiva sin cambios, zona negativa añade 1 escalon extra por indicador
+
+    # Breadth DD (% subsectores con DD > -10%)
     if pct_dd_healthy >= 75: score_bdd = 2.0
     elif pct_dd_healthy >= 60: score_bdd = 1.0
     elif pct_dd_healthy >= 45: score_bdd = 0.0
     elif pct_dd_healthy >= 30: score_bdd = -1.0
-    else: score_bdd = -2.0
+    elif pct_dd_healthy >= 15: score_bdd = -2.0
+    else: score_bdd = -3.0
 
+    # Breadth RSI (% subsectores con RSI > 55)
     if pct_rsi_above55 >= 75: score_brsi = 2.0
     elif pct_rsi_above55 >= 60: score_brsi = 1.0
     elif pct_rsi_above55 >= 45: score_brsi = 0.0
     elif pct_rsi_above55 >= 30: score_brsi = -1.0
-    else: score_brsi = -2.0
+    elif pct_rsi_above55 >= 15: score_brsi = -2.0
+    else: score_brsi = -3.0
 
+    # DD deep (% subsectores con DD < -20%)
     if pct_dd_deep <= 5: score_ddp = 1.5
     elif pct_dd_deep <= 15: score_ddp = 0.5
     elif pct_dd_deep <= 30: score_ddp = -0.5
-    else: score_ddp = -1.5
+    elif pct_dd_deep <= 50: score_ddp = -1.5
+    else: score_ddp = -2.5
 
+    # SPY vs MA200
     if spy_above_ma200 and spy_dist > 5: score_spy = 1.5
     elif spy_above_ma200: score_spy = 0.5
     elif spy_dist > -5: score_spy = -0.5
-    else: score_spy = -1.5
+    elif spy_dist > -15: score_spy = -1.5
+    else: score_spy = -2.5
 
+    # SPY momentum 10 semanas
     if spy_mom_10w > 5: score_mom = 1.0
     elif spy_mom_10w > 0: score_mom = 0.5
     elif spy_mom_10w > -5: score_mom = -0.5
-    else: score_mom = -1.0
+    elif spy_mom_10w > -15: score_mom = -1.0
+    else: score_mom = -1.5
 
     total = score_bdd + score_brsi + score_ddp + score_spy + score_mom
 
     # BURBUJA: condiciones extremas (DD healthy >= 85% Y RSI>55 >= 90%)
-    # Solo ~10 semanas en 25 anos: euforia total real
     is_burbuja = (total >= 8.0 and pct_dd_healthy >= 85 and pct_rsi_above55 >= 90)
 
-    if is_burbuja: regime = 'BURBUJA'               # euforia total (~10 sem en 25 anos)
-    elif total >= 7.0: regime = 'GOLDILOCKS'         # 7.0+: sweet spot (~10% del tiempo)
-    elif total >= 4.0: regime = 'ALCISTA'            # 4.0-7.0: bull modesto
+    # Regimenes: positivos sin cambios, negativos con 4 niveles
+    if is_burbuja: regime = 'BURBUJA'
+    elif total >= 7.0: regime = 'GOLDILOCKS'
+    elif total >= 4.0: regime = 'ALCISTA'
     elif total >= 0.5: regime = 'NEUTRAL'
-    elif total >= -1.5: regime = 'CAUTIOUS'
-    elif total >= -3.0: regime = 'BEARISH'
-    else: regime = 'CRISIS'
+    elif total >= -2.0: regime = 'CAUTIOUS'
+    elif total >= -5.0: regime = 'BEARISH'
+    elif total >= -9.0: regime = 'CRISIS'
+    else: regime = 'PANICO'
 
     # VIX como alerta
     if vix_val >= 30 and regime in ('BURBUJA', 'GOLDILOCKS', 'ALCISTA'):
@@ -533,10 +506,11 @@ for date in returns_wide.index:
     longs_pool = sorted([(s, sc) for s, sc in scores_v3.items() if sc > 6.5], key=lambda x: -x[1])
     shorts_pool = sorted([(s, sc) for s, sc in scores_v3.items() if sc < 3.5], key=lambda x: x[1])
 
-    if regime == 'CRISIS':         nl, ns = 0, 3   # solo shorts
+    if regime == 'PANICO':          nl, ns = 0, 3   # solo shorts (extremo)
+    elif regime == 'CRISIS':         nl, ns = 0, 3   # solo shorts
     elif regime == 'BEARISH':       nl, ns = 0, 3   # shorts agresivos
-    elif regime == 'CAUTIOUS':      nl, ns = 0, 0   # solo opera extremos (soporte)
-    elif regime == 'NEUTRAL':       nl, ns = 3, 3   # mean reversion
+    elif regime == 'CAUTIOUS':      nl, ns = 3, 0   # oversold deep (solo longs)
+    elif regime == 'NEUTRAL':       nl, ns = 3, 0   # oversold deep (solo longs)
     elif regime == 'ALCISTA':    nl, ns = 3, 0   # longs standard
     elif regime == 'GOLDILOCKS':       nl, ns = 3, 0   # longs standard
     elif regime == 'BURBUJA':       nl, ns = 3, 0   # longs agresivos (override abajo)
@@ -570,24 +544,47 @@ for date in returns_wide.index:
         shorts = []
         pnl_unit = calc_pnl(longs, [], scores_v3, ret_row, 1.0)
     elif regime == 'CAUTIOUS':
-        longs_sup, weights_sup = decide_cautious_support(scores_v3, dd_row, rsi_row)
-        if longs_sup:
-            longs = longs_sup
+        longs_caut, weights_caut = decide_neutral_oversold(scores_v3, dd_row, rsi_row)
+        if longs_caut:
+            longs = longs_caut
             shorts = []
-            pnl_unit = calc_pnl_meanrev(longs_sup, [], weights_sup, ret_row, 1.0)
+            pnl_unit = calc_pnl_meanrev(longs_caut, [], weights_caut, ret_row, 1.0)
         else:
             longs = []
             shorts = []
-            pnl_unit = 0.0  # no hay extremos, no operar
+            pnl_unit = 0.0
     elif regime == 'NEUTRAL':
-        longs, shorts, weights_mr = decide_neutral_meanrev(scores_evt, dd_row, rsi_row, atr_row)
-        pnl_unit = calc_pnl_meanrev(longs, shorts, weights_mr, ret_row, 1.0)
+        longs_neut, weights_neut = decide_neutral_oversold(scores_v3, dd_row, rsi_row)
+        if longs_neut:
+            longs = longs_neut
+            shorts = []
+            pnl_unit = calc_pnl_meanrev(longs_neut, [], weights_neut, ret_row, 1.0)
+        else:
+            longs = []
+            shorts = []
+            pnl_unit = 0.0
     elif regime == 'BEARISH':
         shorts_bear, weights_bear = decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row)
         if shorts_bear:
             longs = []
             shorts = shorts_bear
             pnl_unit = calc_pnl_meanrev([], shorts_bear, weights_bear, ret_row, 1.0)
+        else:
+            pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
+    elif regime == 'CRISIS':
+        shorts_cri, weights_cri = decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row)
+        if shorts_cri:
+            longs = []
+            shorts = shorts_cri
+            pnl_unit = calc_pnl_meanrev([], shorts_cri, weights_cri, ret_row, 1.0)
+        else:
+            pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
+    elif regime == 'PANICO':
+        shorts_pan, weights_pan = decide_bear_aggressive(scores_v3, dd_row, rsi_row, atr_row)
+        if shorts_pan:
+            longs = []
+            shorts = shorts_pan
+            pnl_unit = calc_pnl_meanrev([], shorts_pan, weights_pan, ret_row, 1.0)
         else:
             pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
     else:
@@ -677,6 +674,7 @@ for year in sorted(df_ret['date'].dt.year.unique()):
         'caut': rc.get('CAUTIOUS', 0),
         'bear': rc.get('BEARISH', 0),
         'cris': rc.get('CRISIS', 0),
+        'pani': rc.get('PANICO', 0),
     })
 
 df_r = pd.DataFrame(results)
@@ -701,8 +699,8 @@ print("=" * 120)
 
 print(f"\n{'Ano':>5} {'Cap.Inicio':>12} {'S&P500':>8} {'Sist%':>8} {'Alpha':>8} "
       f"{'P&L Neto':>12} {'Costes':>10} {'Cap.Final':>14}  "
-      f"{'BURB':>5} {'ALCI':>5} {'GOLD':>5} {'NEUT':>5} {'CAUT':>5} {'BEAR':>5} {'CRIS':>5}  {'SPY Cap':>14}")
-print("-" * 160)
+      f"{'BURB':>5} {'ALCI':>5} {'GOLD':>5} {'NEUT':>5} {'CAUT':>5} {'BEAR':>5} {'CRIS':>5} {'PANI':>5}  {'SPY Cap':>14}")
+print("-" * 170)
 
 for _, row in df_r.iterrows():
     alpha = row['rent_net'] - row['spy_ret']
@@ -710,7 +708,7 @@ for _, row in df_r.iterrows():
           f"{row['rent_net']:>7.1f}% {alpha:>+7.1f}% "
           f"${row['pnl_net']:>11,.0f} ${row['cost']:>9,.0f} ${row['capital_fin']:>13,.0f}  "
           f"{int(row['burb']):>5} {int(row['alci']):>5} {int(row['gold']):>5} "
-          f"{int(row['neut']):>5} {int(row['caut']):>5} {int(row['bear']):>5} {int(row['cris']):>5}  "
+          f"{int(row['neut']):>5} {int(row['caut']):>5} {int(row['bear']):>5} {int(row['cris']):>5} {int(row['pani']):>5}  "
           f"${row['spy_capital']:>13,.0f}")
 
 # Resumen final
@@ -728,7 +726,7 @@ print("-" * 145)
 # Estadisticas por regimen
 print(f"\n{'Regimen':<16} {'Semanas':>7} {'Avg ret%':>10} {'WinRate':>8} {'Config':>8}")
 print("-" * 55)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', 'soporte'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -752,7 +750,7 @@ print(f"\n{'IMPACTO POR REGIMEN (base $500K)':>45}")
 print("-" * 75)
 print(f"  {'Regimen':<16} {'N':>5} {'Avg bruto':>12} {'Avg neto':>12} {'Coste/sem':>10} {'Margen':>12}")
 print("-" * 75)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', 'soporte'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -907,7 +905,7 @@ print(f"\n{'DETALLE POR REGIMEN':>35}")
 print("-" * 95)
 print(f"  {'Regimen':<16} {'N':>5} {'Avg%':>7} {'Med%':>7} {'Std%':>7} {'WR%':>6} {'Sharpe':>7} {'Best%':>8} {'Worst%':>8} {'PF':>6}")
 print("-" * 95)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', '3L+3S*'), ('CAUTIOUS', 'soporte'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -930,7 +928,7 @@ print("-" * 85)
 print(f"  {'Regimen':<16} {'N':>5}  {'Avg L%':>8} {'WR L%':>7}  {'Avg S%':>8} {'WR S%':>7}  {'L $/sem':>10} {'S $/sem':>10}")
 print("-" * 85)
 BASE = 500_000
-for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS']:
+for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS', 'PANICO']:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -946,7 +944,7 @@ for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH'
 # Caracteristicas detalladas LONGS y SHORTS por regimen
 print(f"\n{'CARACTERISTICAS DETALLADAS POR LADO Y REGIMEN':>50}")
 print("=" * 100)
-for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS']:
+for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS', 'PANICO']:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
