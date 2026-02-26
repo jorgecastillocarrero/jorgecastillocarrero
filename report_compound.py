@@ -13,7 +13,8 @@ engine = create_engine(FMP_DB)
 MAX_CONTRIBUTION = 4.0
 CAPITAL_INICIAL = 500_000
 ATR_MIN = 1.5
-COST_PER_TRADE = 0.0010  # 0.10% por trade
+COST_PER_TRADE = 0.0010  # 0.10% por trade (comisiones + spread)
+SLIPPAGE_PER_SIDE = 0.0005  # 0.05% slippage por lado (gap weekend + ejecucion)
 
 # ================================================================
 # FUNCIONES (mismas)
@@ -376,7 +377,7 @@ all_tickers = list(ticker_to_sub.keys())
 tlist = "','".join(all_tickers)
 
 df_all = pd.read_sql(f"""
-    SELECT symbol, date, close, high, low
+    SELECT symbol, date, open, close, high, low
     FROM fmp_price_history
     WHERE symbol IN ('{tlist}')
     AND date BETWEEN '2000-01-01' AND '2026-02-21'
@@ -388,6 +389,7 @@ df_all = df_all.dropna(subset=['subsector'])
 df_all['week'] = df_all['date'].dt.isocalendar().week.astype(int)
 df_all['year'] = df_all['date'].dt.year
 
+# Datos viernes (ultimo dia de la semana): para senales (DD, RSI, regimen)
 df_weekly = df_all.sort_values('date').groupby(['symbol', 'year', 'week']).last().reset_index()
 df_weekly = df_weekly.sort_values(['symbol', 'date'])
 df_weekly['prev_close'] = df_weekly.groupby('symbol')['close'].shift(1)
@@ -397,11 +399,23 @@ df_weekly['hl_range'] = (df_weekly['high'] - df_weekly['low']) / df_weekly['clos
 df_weekly['atr_pct'] = df_weekly.groupby('symbol')['hl_range'].transform(
     lambda x: x.rolling(5, min_periods=3).mean() * 100)
 
+# Datos lunes (primer dia de la semana): para retornos reales de trading
+df_monday = df_all.sort_values('date').groupby(['symbol', 'year', 'week']).first().reset_index()
+df_monday = df_monday.sort_values(['symbol', 'date'])
+df_monday['prev_open'] = df_monday.groupby('symbol')['open'].shift(1)
+df_monday['return_mon'] = df_monday['open'] / df_monday['prev_open'] - 1
+df_monday = df_monday.dropna(subset=['return_mon'])
+
 sub_weekly = df_weekly.groupby(['subsector', 'date']).agg(
     avg_close=('close', 'mean'), avg_high=('high', 'mean'),
     avg_low=('low', 'mean'), avg_return=('return', 'mean'),
     avg_atr=('atr_pct', 'mean')).reset_index()
 sub_weekly = sub_weekly.sort_values(['subsector', 'date'])
+
+# Retornos lunes open -> lunes open (1 semana exacta de holding)
+sub_monday = df_monday.groupby(['subsector', 'date']).agg(
+    avg_return_mon=('return_mon', 'mean')).reset_index()
+sub_monday = sub_monday.sort_values(['subsector', 'date'])
 
 date_counts = sub_weekly.groupby('date')['subsector'].count()
 valid_dates = date_counts[date_counts >= 40].index
@@ -428,6 +442,30 @@ dd_wide = sub_weekly.pivot(index='date', columns='subsector', values='drawdown_5
 rsi_wide = sub_weekly.pivot(index='date', columns='subsector', values='rsi_14w')
 atr_wide_lagged = atr_wide.shift(1)
 
+# Retornos lunes open -> lunes open (1 semana exacta de holding)
+# Flujo: senal viernes W-1 -> compra lunes W open -> venta lunes W+1 open
+# return_mon del lunes W+1 = open(lun W+1) / open(lun W) - 1 = retorno de semana W
+# Para viernes W (que es el ultimo dia de semana W), el retorno es:
+# return_mon del lunes de la SIGUIENTE semana (fri + 3 dias)
+returns_mon_wide = sub_monday.pivot(index='date', columns='subsector', values='avg_return_mon')
+mon_dates = returns_mon_wide.index.tolist()
+fri_dates = returns_wide.index.tolist()
+
+fri_to_mon_ret = {}
+for fri in fri_dates:
+    target = fri + pd.Timedelta(days=3)  # viernes + 3 = lunes siguiente
+    diffs = [abs((d - target).days) for d in mon_dates]
+    if diffs:
+        closest_mon = mon_dates[diffs.index(min(diffs))]
+        if abs((closest_mon - target).days) <= 3:
+            fri_to_mon_ret[fri] = closest_mon
+
+returns_trade_wide = pd.DataFrame(index=returns_wide.index, columns=returns_wide.columns, dtype=float)
+for fri, mon in fri_to_mon_ret.items():
+    if mon in returns_mon_wide.index:
+        returns_trade_wide.loc[fri] = returns_mon_wide.loc[mon]
+print(f"Retornos lunes->lunes mapeados: {returns_trade_wide.notna().any(axis=1).sum()}/{len(fri_dates)} semanas")
+
 spy_daily = pd.read_sql("""
     SELECT date, close FROM fmp_price_history
     WHERE symbol = 'SPY' AND date BETWEEN '2000-01-01' AND '2026-02-21'
@@ -452,6 +490,9 @@ weekly_events = build_weekly_events('2000-01-01', '2026-02-21')
 
 # ================================================================
 # PASO 1: Calcular retornos semanales % (con capital fijo para obtener %)
+# Senal disponible lunes open (eventos programados + regimen de semana anterior)
+# Retorno = viernes W-1 close -> viernes W close (aprox. lunes open -> viernes close)
+# Gap weekend + slippage ejecucion modelados como coste adicional
 # ================================================================
 print("Calculando retornos semanales...")
 
@@ -480,7 +521,12 @@ for date in returns_wide.index:
     rsi_row = rsi_wide.loc[prev_dates[-1]] if len(prev_dates) > 0 else None
     scores_v3 = adjust_score_by_price(scores_evt, dd_row, rsi_row)
     atr_row = atr_wide_lagged.loc[date] if date in atr_wide_lagged.index else None
-    ret_row = returns_wide.loc[date]
+
+    # Retorno real: lunes open -> lunes open (1 semana exacta)
+    if date in returns_trade_wide.index and returns_trade_wide.loc[date].notna().any():
+        ret_row = returns_trade_wide.loc[date]
+    else:
+        ret_row = returns_wide.loc[date]  # fallback viernes->viernes
 
     regime, _ = classify_regime_market(date, dd_wide, rsi_wide, spy_w, vix_df)
 
@@ -512,21 +558,17 @@ for date in returns_wide.index:
         else:
             pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
     elif regime == 'GOLDILOCKS':
-        longs_brk, weights_brk = decide_goldilocks_breakout(scores_v3, dd_row, rsi_row)
-        if longs_brk:
-            longs = longs_brk
-            shorts = []
-            pnl_unit = calc_pnl_meanrev(longs_brk, [], weights_brk, ret_row, 1.0)
-        else:
-            pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
+        # Top3 FairValue: los 3 subsectores con mayor score, ponderados por score-5.0
+        top3_gold = sorted([(s, sc) for s, sc in scores_v3.items() if sc > 5.5], key=lambda x: -x[1])[:3]
+        longs = [s for s, _ in top3_gold]
+        shorts = []
+        pnl_unit = calc_pnl(longs, [], scores_v3, ret_row, 1.0)
     elif regime == 'ALCISTA':
-        longs_pb, weights_pb = decide_alcista_pullback(scores_v3, dd_row, rsi_row)
-        if longs_pb:
-            longs = longs_pb
-            shorts = []
-            pnl_unit = calc_pnl_meanrev(longs_pb, [], weights_pb, ret_row, 1.0)
-        else:
-            pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
+        # Top3 FairValue: los 3 subsectores con mayor score, ponderados por score-5.0
+        top3_alc = sorted([(s, sc) for s, sc in scores_v3.items() if sc > 5.5], key=lambda x: -x[1])[:3]
+        longs = [s for s, _ in top3_alc]
+        shorts = []
+        pnl_unit = calc_pnl(longs, [], scores_v3, ret_row, 1.0)
     elif regime == 'CAUTIOUS':
         longs_sup, weights_sup = decide_cautious_support(scores_v3, dd_row, rsi_row)
         if longs_sup:
@@ -552,7 +594,8 @@ for date in returns_wide.index:
         pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
 
     n_pos = len(longs) + len(shorts)
-    cost_pct = COST_PER_TRADE * 2 if n_pos > 0 else 0  # 0.20% round-trip
+    # Costes: comisiones (0.10%/lado) + slippage (0.05%/lado) = 0.15%/lado, 0.30% round-trip
+    cost_pct = (COST_PER_TRADE + SLIPPAGE_PER_SIDE) * 2 if n_pos > 0 else 0
 
     # Separar P&L longs vs shorts para diagnostico
     pnl_longs = calc_pnl(longs, [], scores_v3, ret_row, 1.0) if longs else 0
@@ -652,7 +695,8 @@ df_r['spy_capital'] = spy_caps
 # ================================================================
 print("\n" + "=" * 120)
 print(f"SISTEMA MARKET CON REINVERSION ANUAL - Capital inicial: ${CAPITAL_INICIAL:,.0f}")
-print(f"Costes: {COST_PER_TRADE*100:.2f}% por trade (conservador)")
+print(f"Costes: {COST_PER_TRADE*100:.2f}% comision + {SLIPPAGE_PER_SIDE*100:.2f}% slippage por lado = {(COST_PER_TRADE+SLIPPAGE_PER_SIDE)*2*100:.2f}% round-trip")
+print(f"Timing: senal viernes close -> compra lunes open -> retorno semanal (gap+slippage en costes)")
 print("=" * 120)
 
 print(f"\n{'Ano':>5} {'Cap.Inicio':>12} {'S&P500':>8} {'Sist%':>8} {'Alpha':>8} "
