@@ -28,6 +28,7 @@ EVENT_CALENDAR = [
     ("bajada_tipos_interes", "2019-07-31", "2019-10-30", 1.0, "Powell insurance cuts 2.50->1.75%"),
     ("bajada_tipos_interes", "2020-03-03", "2020-03-15", 2.0, "COVID emergency 1.75->0%"),
     ("bajada_tipos_interes", "2024-09-18", "2025-01-29", 1.0, "Powell cuts 5.50->4.25%"),
+    ("bajada_tipos_interes", "2026-06-01", "2026-12-31", 1.0, "Fed expected cuts 4.25->3.0%"),
 
     # =================================================================
     # GEOPOLITICA: MEDIO ORIENTE
@@ -45,6 +46,7 @@ EVENT_CALENDAR = [
     ("guerra_medio_oriente", "2023-10-07", "2024-04-30", 2.0, "Israel-Hamas war (Oct 7)"),
     ("guerra_medio_oriente", "2024-01-12", "2024-06-30", 1.5, "Houthi Red Sea shipping attacks"),
     ("guerra_medio_oriente", "2024-04-13", "2024-04-20", 2.0, "Iran-Israel direct strikes"),
+    ("guerra_medio_oriente", "2024-05-01", "2025-06-30", 1.5, "Israel-Hamas war extended + Lebanon ops"),
 
     # =================================================================
     # GEOPOLITICA: RUSIA / UCRANIA
@@ -53,7 +55,8 @@ EVENT_CALENDAR = [
     ("guerra_rusia_ucrania", "2014-02-20", "2014-09-05", 1.5, "Crimea annexation + Donbass"),
     ("guerra_rusia_ucrania", "2022-02-24", "2022-06-30", 2.0, "Russia invades Ukraine - peak"),
     ("guerra_rusia_ucrania", "2022-07-01", "2022-12-31", 1.5, "Ukraine war - energy crisis"),
-    ("guerra_rusia_ucrania", "2023-01-01", "2024-12-31", 0.8, "Ukraine war ongoing"),
+    ("guerra_rusia_ucrania", "2023-01-01", "2025-12-31", 0.8, "Ukraine war ongoing"),
+    ("guerra_rusia_ucrania", "2026-01-01", "2026-06-30", 0.5, "Ukraine ceasefire talks Paris/Geneva"),
 
     # =================================================================
     # GEOPOLITICA: CHINA / TAIWAN
@@ -64,7 +67,8 @@ EVENT_CALENDAR = [
     ("tension_china_taiwan", "2020-05-20", "2020-08-31", 1.0, "Hong Kong security law"),
     ("tension_china_taiwan", "2022-08-02", "2022-08-31", 2.0, "Pelosi visits Taiwan"),
     ("tension_china_taiwan", "2022-10-07", "2023-03-31", 1.5, "US chip export ban to China"),
-    ("tension_china_taiwan", "2025-02-04", "2025-04-30", 1.5, "Trump 10% tariffs China"),
+    ("tension_china_taiwan", "2025-02-04", "2025-05-12", 1.5, "Trump tariffs China escalation to 145%"),
+    ("tension_china_taiwan", "2025-05-13", "2026-06-30", 1.0, "US-China tariff truce + tech restrictions"),
 
     # =================================================================
     # SANCIONES COMERCIALES
@@ -74,7 +78,10 @@ EVENT_CALENDAR = [
     ("sanciones_comerciales", "2018-07-06", "2020-01-15", 2.0, "US-China tariff war"),
     ("sanciones_comerciales", "2022-02-25", "2022-12-31", 2.0, "Russia sanctions peak impact"),
     ("sanciones_comerciales", "2023-01-01", "2023-12-31", 0.8, "Russia sanctions adapted, reduced impact"),
-    ("sanciones_comerciales", "2025-02-01", "2025-04-30", 1.5, "Trump universal tariffs 2025"),
+    ("sanciones_comerciales", "2025-02-01", "2025-04-01", 1.5, "Trump universal tariffs initial"),
+    ("sanciones_comerciales", "2025-04-02", "2025-05-12", 2.0, "Liberation Day tariffs 145% China"),
+    ("sanciones_comerciales", "2025-05-13", "2025-12-31", 1.5, "US-China tariff truce 30% + EU deal 15%"),
+    ("sanciones_comerciales", "2026-01-01", "2026-06-30", 1.5, "Global tariffs + SCOTUS IEEPA ruling Feb"),
 
     # =================================================================
     # TERRORISMO
@@ -117,6 +124,7 @@ EVENT_CALENDAR = [
     ("crecimiento_economico", "2017-01-01", "2019-06-30", 1.5, "Tax cuts + low unemployment"),
     ("crecimiento_economico", "2020-07-01", "2021-12-31", 2.0, "Post-COVID V-shape boom"),
     ("crecimiento_economico", "2023-04-01", "2024-12-31", 1.0, "Soft landing, employment resilient"),
+    ("crecimiento_economico", "2025-01-01", "2026-06-30", 0.8, "US growth resilient despite tariff drag"),
 
     # =================================================================
     # CRISIS BANCARIA
@@ -135,6 +143,8 @@ EVENT_CALENDAR = [
     ("inflacion_alta", "2022-07-01", "2022-12-31", 1.5, "Persistent core inflation"),
     ("inflacion_alta", "2023-01-01", "2023-03-31", 1.0, "CPI declining from 6.4%"),
     ("inflacion_alta", "2023-04-01", "2023-06-30", 0.5, "CPI rapid decline toward 3%"),
+    ("inflacion_alta", "2025-04-01", "2025-12-31", 1.0, "Tariff-driven inflation resurgence"),
+    ("inflacion_alta", "2026-01-01", "2026-06-30", 1.0, "Tariff inflation peak PCE rising"),
 
     # =================================================================
     # ESTIMULO FISCAL
@@ -190,6 +200,7 @@ EVENT_CALENDAR = [
     ("confianza_consumidor_alta", "2017-01-01", "2019-12-31", 1.0, "Trump era consumer high"),
     ("confianza_consumidor_alta", "2021-03-01", "2021-11-30", 1.5, "Post-vaccine reopening surge"),
     ("confianza_consumidor_alta", "2023-07-01", "2024-12-31", 1.0, "Soft landing confidence"),
+    ("confianza_consumidor_alta", "2025-01-01", "2026-06-30", 0.8, "Consumer spending resilient"),
 
     ("crisis_consumo", "2001-09-11", "2002-03-31", 1.5, "Post-9/11 consumer fear"),
     ("crisis_consumo", "2008-06-01", "2009-06-30", 2.0, "GFC consumer collapse"),
@@ -201,12 +212,14 @@ EVENT_CALENDAR = [
     # =================================================================
     ("innovacion_ai", "2022-11-30", "2023-05-23", 1.0, "ChatGPT early adoption phase"),
     ("innovacion_ai", "2023-05-24", "2023-12-31", 2.0, "Post-Nvidia AI infrastructure boom"),
-    ("innovacion_ai", "2024-01-01", "2025-12-31", 2.0, "AI infrastructure buildout"),
+    ("innovacion_ai", "2024-01-01", "2026-12-31", 2.0, "AI infrastructure buildout $475B capex"),
 
     ("regulacion_tech", "2017-09-01", "2017-11-30", 1.0, "EU Google antitrust fine"),
     ("regulacion_tech", "2019-06-01", "2019-12-31", 1.0, "DOJ/FTC Big Tech probes"),
     ("regulacion_tech", "2020-10-20", "2021-06-30", 1.5, "DOJ sues Google, FTC sues FB"),
     ("regulacion_tech", "2024-01-01", "2024-12-31", 1.0, "EU DMA + DOJ Google remedy"),
+    ("regulacion_tech", "2025-01-27", "2025-04-30", 1.0, "DeepSeek AI efficiency shock"),
+    ("regulacion_tech", "2026-02-01", "2026-06-30", 1.0, "AI code disruption fears software sector"),
 
     ("ciberseguridad", "2013-06-06", "2013-07-31", 1.0, "Snowden NSA revelations"),
     ("ciberseguridad", "2017-05-12", "2017-07-31", 1.5, "WannaCry + NotPetya attacks"),
@@ -220,6 +233,7 @@ EVENT_CALENDAR = [
     ("transicion_energetica", "2019-09-01", "2020-02-29", 0.8, "Greta / climate activism"),
     ("transicion_energetica", "2021-01-20", "2021-12-31", 1.5, "Biden clean energy push"),
     ("transicion_energetica", "2022-08-16", "2024-12-31", 2.0, "Inflation Reduction Act"),
+    ("transicion_energetica", "2025-01-01", "2026-12-31", 1.0, "IRA clean energy deployment ongoing"),
 
     # =================================================================
     # DESASTRES NATURALES
@@ -257,7 +271,7 @@ EVENT_CALENDAR = [
     # INFRAESTRUCTURA
     # =================================================================
     ("infraestructura", "2009-02-17", "2010-12-31", 1.5, "ARRA infrastructure spending"),
-    ("infraestructura", "2021-11-15", "2025-12-31", 2.0, "IIJA $1.2T infrastructure"),
+    ("infraestructura", "2021-11-15", "2026-12-31", 2.0, "IIJA $1.2T infrastructure"),
 
     # =================================================================
     # ACCIDENTES AVIACION
@@ -366,6 +380,7 @@ EVENT_CALENDAR = [
     ("contrato_defensa_mayor", "2001-10-26", "2002-03-31", 2.0, "F-35 JSF contract Lockheed $200B"),
     ("contrato_defensa_mayor", "2022-03-01", "2022-12-31", 2.0, "Ukraine war NATO rearmament surge"),
     ("contrato_defensa_mayor", "2023-01-01", "2024-12-31", 1.5, "AUKUS + Pacific defense buildup"),
+    ("contrato_defensa_mayor", "2025-01-01", "2026-12-31", 1.5, "European NATO rearmament Ukraine coalition"),
 
     # =================================================================
     # EXTRA: ciberseguridad adicional

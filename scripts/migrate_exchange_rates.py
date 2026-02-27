@@ -17,7 +17,8 @@ import pandas as pd
 # Currency symbols to migrate
 CURRENCY_SYMBOLS = [
     'EURUSD=X', 'GBPUSD=X', 'USDJPY=X', 'USDCHF=X',
-    'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'CADEUR=X', 'CHFEUR=X'
+    'AUDUSD=X', 'USDCAD=X', 'NZDUSD=X', 'CADEUR=X', 'CHFEUR=X',
+    'EURDKK=X'
 ]
 
 def main():

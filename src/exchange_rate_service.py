@@ -128,6 +128,15 @@ class ExchangeRateService:
         usd_chf = self.get_rate('USDCHF=X', target_date)
         return 1 / (usd_chf * eur_usd)
 
+    def get_dkk_eur(self, target_date: date) -> float:
+        """
+        Get DKK/EUR rate: how many EUR per 1 DKK.
+
+        Calculates from EURDKK=X (inverse).
+        """
+        eur_dkk = self.get_rate('EURDKK=X', target_date)
+        return 1 / eur_dkk
+
     def get_gbp_eur(self, target_date: date) -> float:
         """
         Get GBP/EUR rate: how many EUR per 1 GBP.
@@ -176,6 +185,10 @@ class ExchangeRateService:
         if currency == 'GBP':
             gbp_eur = self.get_gbp_eur(target_date)
             return amount * gbp_eur
+
+        if currency == 'DKK':
+            dkk_eur = self.get_dkk_eur(target_date)
+            return amount * dkk_eur
 
         raise ExchangeRateError(f"Unsupported currency: {currency}")
 
