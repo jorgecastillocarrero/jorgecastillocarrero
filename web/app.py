@@ -832,12 +832,14 @@ def get_account_totals_from_db(target_date: date):
             if value:
                 holding_value += value
 
-        # Get cash
+        # Get cash - convert all currencies to EUR
         cash_data = portfolio_service.get_cash_for_date(account, target_date)
         cash_eur = 0
         if cash_data:
-            cash_eur += cash_data.get('EUR', 0)
-            cash_eur += cash_data.get('USD', 0) / eur_usd
+            from src.exchange_rate_service import get_exchange_rate_service
+            rate_service = get_exchange_rate_service()
+            for currency, saldo in cash_data.items():
+                cash_eur += rate_service.convert_to_eur(saldo, currency, target_date)
 
         result[account] = holding_value + cash_eur
 

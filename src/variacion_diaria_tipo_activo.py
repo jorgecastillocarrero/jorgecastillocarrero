@@ -123,10 +123,13 @@ class VariacionDiariaTipoActivo:
 
     def get_all_exchange_rates(self, session, fecha: str) -> dict:
         """Get all required exchange rates for a date."""
+        eur_dkk = self.get_exchange_rate(session, 'EURDKK=X', fecha)
         return {
             'eur_usd': self.get_exchange_rate(session, 'EURUSD=X', fecha),
             'cad_eur': self.get_exchange_rate(session, 'CADEUR=X', fecha),
             'chf_eur': self.get_exchange_rate(session, 'CHFEUR=X', fecha),
+            'dkk_eur': (1 / eur_dkk) if eur_dkk else None,
+            'gbp_usd': self.get_exchange_rate(session, 'GBPUSD=X', fecha),
         }
 
     # =========================================================================
@@ -153,6 +156,10 @@ class VariacionDiariaTipoActivo:
             return 'EUR'
         elif '.SW' in symbol:
             return 'CHF'
+        elif '.CO' in symbol:
+            return 'DKK'
+        elif '.L' in symbol:
+            return 'GBP'
         else:
             return 'USD'
 
@@ -189,6 +196,24 @@ class VariacionDiariaTipoActivo:
         """), {'fecha': fecha})
         return result.fetchall()
 
+    @staticmethod
+    def _convert_to_eur(amount, currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd):
+        """Convert an amount from any currency to EUR."""
+        if currency == 'EUR':
+            return amount
+        elif currency == 'USD':
+            return amount / eur_usd
+        elif currency == 'CAD':
+            return amount * (cad_eur or 0.68)
+        elif currency == 'CHF':
+            return amount * (chf_eur or 1.08)
+        elif currency == 'DKK':
+            return amount * (dkk_eur or 0.134)
+        elif currency == 'GBP':
+            return amount * (gbp_usd or 1.26) / eur_usd
+        else:
+            return amount / eur_usd
+
     def calculate_position_by_strategy(self, session, fecha: str, rates: dict, asset_map: dict) -> dict:
         """
         Calculate position value by strategy for a date.
@@ -200,6 +225,8 @@ class VariacionDiariaTipoActivo:
         eur_usd = rates['eur_usd'] or 1.0
         cad_eur = rates['cad_eur'] or 0.68
         chf_eur = rates['chf_eur'] or 1.08
+        dkk_eur = rates['dkk_eur']
+        gbp_usd = rates['gbp_usd']
 
         holdings = self.get_holdings_for_date(session, fecha)
 
@@ -216,16 +243,7 @@ class VariacionDiariaTipoActivo:
 
             # Convert to EUR
             src_currency = self.get_source_currency(symbol)
-            if src_currency == 'EUR':
-                value_eur = value_local
-            elif src_currency == 'USD':
-                value_eur = value_local / eur_usd
-            elif src_currency == 'CAD':
-                value_eur = value_local * cad_eur
-            elif src_currency == 'CHF':
-                value_eur = value_local * chf_eur
-            else:
-                value_eur = value_local / eur_usd
+            value_eur = self._convert_to_eur(value_local, src_currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd)
 
             if strategy not in by_strategy:
                 by_strategy[strategy] = 0
@@ -289,16 +307,17 @@ class VariacionDiariaTipoActivo:
     def calculate_total_cash_eur(self, session, fecha: str, rates: dict) -> float:
         """Calculate total cash in EUR for a date."""
         eur_usd = rates['eur_usd'] or 1.0
+        cad_eur = rates['cad_eur']
+        chf_eur = rates['chf_eur']
+        dkk_eur = rates['dkk_eur']
+        gbp_usd = rates['gbp_usd']
 
         cash_data = self.get_cash_for_date(session, fecha)
         total_eur = 0
 
         for account, currencies in cash_data.items():
             for currency, saldo in currencies.items():
-                if currency == 'EUR':
-                    total_eur += saldo
-                elif currency == 'USD':
-                    total_eur += saldo / eur_usd
+                total_eur += self._convert_to_eur(saldo, currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd)
 
         return total_eur
 

@@ -130,10 +130,13 @@ class ValorActualCalculator:
         Returns:
             Dict with keys: eur_usd, cad_eur, chf_eur
         """
+        eur_dkk = self.get_exchange_rate(session, 'EURDKK=X', fecha)
         rates = {
             'eur_usd': self.get_exchange_rate(session, 'EURUSD=X', fecha),
             'cad_eur': self.get_exchange_rate(session, 'CADEUR=X', fecha),
             'chf_eur': self.get_exchange_rate(session, 'CHFEUR=X', fecha),
+            'dkk_eur': (1 / eur_dkk) if eur_dkk else None,
+            'gbp_usd': self.get_exchange_rate(session, 'GBPUSD=X', fecha),
         }
         return rates
 
@@ -164,8 +167,31 @@ class ValorActualCalculator:
             return 'EUR'
         elif '.SW' in symbol:
             return 'CHF'
+        elif '.CO' in symbol:
+            return 'DKK'
+        elif '.L' in symbol:
+            return 'GBP'
         else:
             return 'USD'
+
+    @staticmethod
+    def _convert_to_eur(amount, currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd):
+        """Convert an amount from any currency to EUR."""
+        if currency == 'EUR':
+            return amount
+        elif currency == 'USD':
+            return amount / eur_usd
+        elif currency == 'CAD':
+            return amount * (cad_eur or 0.68)
+        elif currency == 'CHF':
+            return amount * (chf_eur or 1.08)
+        elif currency == 'DKK':
+            return amount * (dkk_eur or 0.134)
+        elif currency == 'GBP':
+            return amount * (gbp_usd or 1.26) / eur_usd
+        else:
+            logger.warning(f"Unknown currency {currency}, treating as USD")
+            return amount / eur_usd
 
     # =========================================================================
     # HOLDING_DIARIO: Calculate holdings = yesterday + compras - ventas
@@ -489,6 +515,8 @@ class ValorActualCalculator:
             eur_usd = rates['eur_usd']
             cad_eur = rates['cad_eur']
             chf_eur = rates['chf_eur']
+            dkk_eur = rates['dkk_eur']
+            gbp_usd = rates['gbp_usd']
 
             if not eur_usd:
                 results['error'] = 'Missing EUR/USD exchange rate'
@@ -510,16 +538,7 @@ class ValorActualCalculator:
 
                 # Convert to EUR
                 currency = self.get_source_currency(symbol)
-                if currency == 'EUR':
-                    value_eur = value_local
-                elif currency == 'USD':
-                    value_eur = value_local / eur_usd
-                elif currency == 'CAD':
-                    value_eur = value_local * (cad_eur or 0.68)
-                elif currency == 'CHF':
-                    value_eur = value_local * (chf_eur or 1.08)
-                else:
-                    value_eur = value_local / eur_usd
+                value_eur = self._convert_to_eur(value_local, currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd)
 
                 total_holdings_eur += value_eur
 
@@ -533,12 +552,7 @@ class ValorActualCalculator:
             total_cash_eur = 0
 
             for (account, currency), saldo in cash.items():
-                if currency == 'EUR':
-                    cash_eur = saldo
-                elif currency == 'USD':
-                    cash_eur = saldo / eur_usd
-                else:
-                    cash_eur = saldo / eur_usd  # Default to USD
+                cash_eur = self._convert_to_eur(saldo, currency, eur_usd, cad_eur, chf_eur, dkk_eur, gbp_usd)
 
                 total_cash_eur += cash_eur
 

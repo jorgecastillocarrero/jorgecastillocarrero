@@ -349,6 +349,16 @@ class PortfolioDataService:
         rate_service = get_exchange_rate_service(self.db)
         return rate_service.get_chf_eur(target_date)
 
+    def get_dkk_eur_rate(self, target_date: date) -> float:
+        """Get DKK/EUR rate: how many EUR per 1 DKK."""
+        rate_service = get_exchange_rate_service(self.db)
+        return rate_service.get_dkk_eur(target_date)
+
+    def get_gbp_eur_rate(self, target_date: date) -> float:
+        """Get GBP/EUR rate: how many EUR per 1 GBP."""
+        rate_service = get_exchange_rate_service(self.db)
+        return rate_service.get_gbp_eur(target_date)
+
     # =========================================================================
     # PRICES - From price_history table
     # =========================================================================
@@ -432,6 +442,10 @@ class PortfolioDataService:
             source_currency = 'EUR'
         elif '.SW' in symbol:
             source_currency = 'CHF'
+        elif '.CO' in symbol:
+            source_currency = 'DKK'
+        elif '.L' in symbol:
+            source_currency = 'GBP'
         else:
             source_currency = 'USD'
 
@@ -454,6 +468,12 @@ class PortfolioDataService:
         elif source_currency == 'CHF' and target_currency == 'EUR':
             chf_eur = self.get_chf_eur_rate(target_date)
             return value_local * chf_eur
+        elif source_currency == 'DKK' and target_currency == 'EUR':
+            dkk_eur = self.get_dkk_eur_rate(target_date)
+            return value_local * dkk_eur
+        elif source_currency == 'GBP' and target_currency == 'EUR':
+            gbp_eur = self.get_gbp_eur_rate(target_date)
+            return value_local * gbp_eur
 
         return value_local
 
@@ -485,15 +505,13 @@ class PortfolioDataService:
         if 'Cash' not in values:
             values['Cash'] = 0
 
-        eur_usd = self.get_eur_usd_rate(fecha)
+        from .exchange_rate_service import get_exchange_rate_service
+        rate_service = get_exchange_rate_service(self.db)
         for account in ['CO3365', 'RCO951', 'IB', 'LACAIXA']:
             cash_data = self.get_cash_for_date(account, fecha)
             if cash_data:
                 for currency, amount in cash_data.items():
-                    if currency == 'EUR':
-                        values['Cash'] += amount
-                    elif currency == 'USD':
-                        values['Cash'] += amount / eur_usd
+                    values['Cash'] += rate_service.convert_to_eur(amount, currency, fecha)
 
         return values
 
