@@ -2971,14 +2971,14 @@ elif page == "Futuros":
 
         # Titulo
         elements.append(Paragraph("ANALISIS DE FUTUROS IB", title_style))
-        elements.append(Paragraph(f"Periodo: 01/01/2026 - 20/02/2026", ParagraphStyle('P', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, spaceAfter=5)))
+        elements.append(Paragraph(f"Periodo: 01/01/2026 - 26/02/2026", ParagraphStyle('P', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, spaceAfter=5)))
         elements.append(Paragraph(f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')} | EUR/USD: {data['eur_usd']:.4f}", ParagraphStyle('P2', parent=styles['Normal'], fontSize=10, alignment=TA_CENTER, spaceAfter=20, textColor=colors.grey)))
         elements.append(Spacer(1, 0.5*cm))
 
         # 1. Resultado Global
         elements.append(Paragraph("1. RESULTADO GLOBAL", subtitle_style))
         sign = '+' if data['total_pnl'] >= 0 else ''
-        comisiones = -591.74
+        comisiones = -844.00
         pnl_neto = data['total_pnl'] + comisiones
         avg_pnl = data['total_pnl'] / data['total_trades'] if data['total_trades'] > 0 else 0
         tbl = [
@@ -3059,9 +3059,9 @@ elif page == "Futuros":
         elements.append(Paragraph("5. POR FRANJA HORARIA", subtitle_style))
         tbl = [
             ['Franja Horaria', 'Trades', 'W/L', 'Win%', 'P&L USD'],
-            ['00:01-08:00 (Asia)', '17', '11/6', '65%', '+9.271,08'],
-            ['08:01-15:00 (Europa)', '13', '2/11', '15%', '-7.896,12'],
-            ['15:01-23:59 (US)', '16', '9/7', '56%', '+20.550,80'],
+            ['00:01-08:00 (Asia)', '18', '11/7', '61%', '+4.526,78'],
+            ['08:01-15:00 (Europa)', '16', '4/12', '25%', '+6.233,32'],
+            ['15:01-23:59 (US)', '18', '11/7', '61%', '+22.441,40'],
         ]
         t = Table(tbl, colWidths=[4.5*cm, 2*cm, 2*cm, 2*cm, 4*cm])
         s = table_style()
@@ -3077,8 +3077,8 @@ elif page == "Futuros":
         elements.append(Paragraph("6. POR TIPO DE POSICION", subtitle_style))
         tbl = [
             ['Posicion', 'Trades', 'Contratos', 'Win%', 'P&L USD'],
-            ['LONG', '26', '37', '62%', '+13.159,62'],
-            ['SHORT', '20', '76', '30%', '+8.766,14'],
+            ['LONG', '29', '127', '62%', '+29.482,02'],
+            ['SHORT', '23', '135', '30%', '+3.719,48'],
         ]
         t = Table(tbl, colWidths=[3*cm, 2.5*cm, 2.5*cm, 2.5*cm, 4*cm])
         s = table_style()
@@ -3156,6 +3156,12 @@ elif page == "Futuros":
             ['20/02', 'GCJ6', 'LONG', '1', '+2.925,06'],
             ['20/02', 'GCJ6', 'LONG', '1', '-4.034,94'],
             ['20/02', 'SIH6', 'LONG', '1', '+4.195,06'],
+            ['23/02', 'MGCJ6', 'SHORT', '45', '-4.744,30'],
+            ['23/02', 'MGCJ6', 'LONG', '30', '+14.431,80'],
+            ['23/02', 'MNQH6', 'SHORT', '7', '+1.445,82'],
+            ['24/02', 'MNQH6', 'SHORT', '7', '-1.748,18'],
+            ['25/02', 'MGCJ6', 'LONG', '30', '+919,80'],
+            ['26/02', 'MGCJ6', 'LONG', '30', '+970,80'],
         ]
         t = Table(trades_list, colWidths=[2*cm, 2.5*cm, 2*cm, 2*cm, 3.5*cm])
         s = table_style()
@@ -3174,11 +3180,11 @@ elif page == "Futuros":
         elements.append(Paragraph("TOP 5 MEJORES", ParagraphStyle('Sub', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold', spaceAfter=8)))
         best = [
             ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
-            ['1', 'ESH6', '10-12/02', '2.3 dias', '+6.370,50'],
-            ['2', 'GCJ6', '27/01', '2.9 hrs', '+5.515,06'],
-            ['3', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
+            ['1', 'MGCJ6', '23/02', '8.4 hrs', '+14.431,80'],
+            ['2', 'ESH6', '10-12/02', '2.3 dias', '+6.370,50'],
+            ['3', 'GCJ6', '27/01', '2.9 hrs', '+5.515,06'],
             ['4', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
-            ['5', 'SIH6', '20/02', '0.5 hrs', '+4.195,06'],
+            ['5', 'GCH6', '20-21/01', '3.2 hrs', '+4.445,06'],
         ]
         t = Table(best, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
         s = table_style()
@@ -3193,9 +3199,9 @@ elif page == "Futuros":
             ['#', 'Symbol', 'Fecha', 'Duracion', 'P&L USD'],
             ['1', 'GCJ6', '19/02', '3.1 hrs', '-5.289,88'],
             ['2', 'GCJ6', '11/02', '1.2 hrs', '-5.054,94'],
-            ['3', 'CLH6', '11/02', '8.0 hrs', '-4.592,14'],
-            ['4', 'GCJ6', '26/01', '9.1 hrs', '-4.054,94'],
-            ['5', 'GCJ6', '20/02', '0.3 hrs', '-4.034,94'],
+            ['3', 'MGCJ6', '23/02', '1.3 hrs', '-4.744,30'],
+            ['4', 'CLH6', '11/02', '8.0 hrs', '-4.592,14'],
+            ['5', 'GCJ6', '26/01', '9.1 hrs', '-4.054,94'],
         ]
         t = Table(worst, colWidths=[1*cm, 2.5*cm, 3*cm, 2.5*cm, 4*cm])
         s = table_style()
@@ -3211,7 +3217,7 @@ elif page == "Futuros":
     # ==========================================================================
     # ANÁLISIS FUTUROS IB (01/01 - 13/02/2026)
     # ==========================================================================
-    st.subheader("Análisis Futuros IB (01/01 - 20/02/2026)")
+    st.subheader("Análisis Futuros IB (01/01 - 26/02/2026)")
 
     # Obtener datos de ventas de futuros
     with db.get_session() as session:
@@ -3228,9 +3234,9 @@ elif page == "Futuros":
 
         # Calcular estadísticas
         CATEGORIES = {
-            'GC': 'Oro', 'SI': 'Plata',
+            'GC': 'Oro', 'MG': 'Oro', 'SI': 'Plata',
             'CL': 'Petróleo', 'NG': 'Gas Natural',
-            'ES': 'Índices', 'NQ': 'Índices', 'YM': 'Índices', 'RT': 'Índices',
+            'ES': 'Índices', 'NQ': 'Índices', 'MN': 'Índices', 'YM': 'Índices', 'RT': 'Índices',
             'HE': 'Ganado', 'LE': 'Ganado',
             'ZW': 'Agricultura', 'ZC': 'Agricultura', 'ZS': 'Agricultura',
             'HG': 'Cobre',
@@ -3349,7 +3355,7 @@ elif page == "Futuros":
     # Tabla 1: Resultado Global
     st.markdown("**📊 Resultado Global**")
 
-    comisiones = -591.74  # Comisiones del informe IB
+    comisiones = -844.00  # Comisiones del informe IB (actualizado 26/02)
     pnl_neto = total_pnl + comisiones
     avg_pnl = total_pnl / total_trades if total_trades > 0 else 0
     sign = '+' if total_pnl >= 0 else ''
@@ -3440,9 +3446,9 @@ elif page == "Futuros":
     with col_franja:
         st.markdown("**🕐 Por Franja Horaria**")
         franja_data = [
-            {'Franja': '00:01-08:00 (Asia)', 'Trades': 17, 'W/L': '11/6', 'Win%': '65%', 'P&L USD': '+9.271,08'},
-            {'Franja': '08:01-15:00 (Europa)', 'Trades': 13, 'W/L': '2/11', 'Win%': '15%', 'P&L USD': '-7.896,12'},
-            {'Franja': '15:01-23:59 (US)', 'Trades': 16, 'W/L': '9/7', 'Win%': '56%', 'P&L USD': '+20.550,80'},
+            {'Franja': '00:01-08:00 (Asia)', 'Trades': 18, 'W/L': '11/7', 'Win%': '61%', 'P&L USD': '+4.526,78'},
+            {'Franja': '08:01-15:00 (Europa)', 'Trades': 16, 'W/L': '4/12', 'Win%': '25%', 'P&L USD': '+6.233,32'},
+            {'Franja': '15:01-23:59 (US)', 'Trades': 18, 'W/L': '11/7', 'Win%': '61%', 'P&L USD': '+22.441,40'},
         ]
         st.dataframe(pd.DataFrame(franja_data), use_container_width=True, hide_index=True)
 
@@ -3450,9 +3456,10 @@ elif page == "Futuros":
     st.markdown("**📊 Por Activo + Posición (Operaciones agrupadas)**")
     st.caption("Trades agrupados por entrada simultánea (<10 min)")
     activo_pos_data = [
-        {'Tipo': 'Oro', 'Pos': 'LONG', 'Ops': 11, 'Contr.': 24, 'Win%': '45%', 'Importe/Op': '1.087.515', 'P&L USD': '+13.951,44', 'P&L/Op': '+1.268,31'},
+        {'Tipo': 'Oro', 'Pos': 'LONG', 'Ops': 14, 'Contr.': 114, 'Win%': '57%', 'Importe/Op': '1.190.011', 'P&L USD': '+30.273,84', 'P&L/Op': '+2.162,42'},
+        {'Tipo': 'Oro', 'Pos': 'SHORT', 'Ops': 1, 'Contr.': 45, 'Win%': '0%', 'Importe/Op': '2.327.378', 'P&L USD': '-4.744,30', 'P&L/Op': '-4.744,30'},
         {'Tipo': 'Plata', 'Pos': 'LONG', 'Ops': 1, 'Contr.': 1, 'Win%': '100%', 'Importe/Op': '420.725', 'P&L USD': '+4.195,06', 'P&L/Op': '+4.195,06'},
-        {'Tipo': 'Índices', 'Pos': 'SHORT', 'Ops': 14, 'Contr.': 17, 'Win%': '29%', 'Importe/Op': '555.749', 'P&L USD': '+5.541,00', 'P&L/Op': '+395,79'},
+        {'Tipo': 'Índices', 'Pos': 'SHORT', 'Ops': 16, 'Contr.': 31, 'Win%': '31%', 'Importe/Op': '529.835', 'P&L USD': '+5.238,64', 'P&L/Op': '+327,42'},
         {'Tipo': 'Ganado', 'Pos': 'SHORT', 'Ops': 2, 'Contr.': 46, 'Win%': '50%', 'Importe/Op': '862.500', 'P&L USD': '+2.976,76', 'P&L/Op': '+1.488,38'},
         {'Tipo': 'Petróleo', 'Pos': 'SHORT', 'Ops': 1, 'Contr.': 13, 'Win%': '100%', 'Importe/Op': '823.530', 'P&L USD': '+248,38', 'P&L/Op': '+248,38'},
         {'Tipo': 'Petróleo', 'Pos': 'LONG', 'Ops': 1, 'Contr.': 12, 'Win%': '0%', 'Importe/Op': '779.690', 'P&L USD': '-4.986,88', 'P&L/Op': '-4.986,88'},
@@ -3469,8 +3476,8 @@ elif page == "Futuros":
     with col_pos:
         st.markdown("**📊 Por Tipo de Posición**")
         pos_data = [
-            {'Posición': 'LONG', 'Trades': 26, 'Contr.': 37, 'Win%': '62%', 'P&L USD': '+13.159,62'},
-            {'Posición': 'SHORT', 'Trades': 20, 'Contr.': 76, 'Win%': '30%', 'P&L USD': '+8.766,14'},
+            {'Posición': 'LONG', 'Trades': 29, 'Contr.': 127, 'Win%': '62%', 'P&L USD': '+29.482,02'},
+            {'Posición': 'SHORT', 'Trades': 23, 'Contr.': 135, 'Win%': '30%', 'P&L USD': '+3.719,48'},
         ]
         st.dataframe(pd.DataFrame(pos_data), use_container_width=True, hide_index=True)
 
@@ -3536,6 +3543,12 @@ elif page == "Futuros":
         {'Fecha': '20/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+2.925,06'},
         {'Fecha': '20/02', 'Symbol': 'GCJ6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '-4.034,94'},
         {'Fecha': '20/02', 'Symbol': 'SIH6', 'Tipo': 'LONG', 'Contr.': 1, 'P&L USD': '+4.195,06'},
+        {'Fecha': '23/02', 'Symbol': 'MGCJ6', 'Tipo': 'SHORT', 'Contr.': 45, 'P&L USD': '-4.744,30'},
+        {'Fecha': '23/02', 'Symbol': 'MGCJ6', 'Tipo': 'LONG', 'Contr.': 30, 'P&L USD': '+14.431,80'},
+        {'Fecha': '23/02', 'Symbol': 'MNQH6', 'Tipo': 'SHORT', 'Contr.': 7, 'P&L USD': '+1.445,82'},
+        {'Fecha': '24/02', 'Symbol': 'MNQH6', 'Tipo': 'SHORT', 'Contr.': 7, 'P&L USD': '-1.748,18'},
+        {'Fecha': '25/02', 'Symbol': 'MGCJ6', 'Tipo': 'LONG', 'Contr.': 30, 'P&L USD': '+919,80'},
+        {'Fecha': '26/02', 'Symbol': 'MGCJ6', 'Tipo': 'LONG', 'Contr.': 30, 'P&L USD': '+970,80'},
     ]
     trades_df = pd.DataFrame(trades_list)
 
@@ -3566,11 +3579,11 @@ elif page == "Futuros":
     with col_best:
         st.markdown("**🏆 Top 5 Mejores**")
         best_trades = [
-            {'#': 1, 'Symbol': 'ESH6', 'Fecha': '10-12/02', 'Duración': '2.3 días', 'P&L USD': '+6.370,50'},
-            {'#': 2, 'Symbol': 'GCJ6', 'Fecha': '27/01', 'Duración': '2.9 hrs', 'P&L USD': '+5.515,06'},
-            {'#': 3, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
+            {'#': 1, 'Symbol': 'MGCJ6', 'Fecha': '23/02', 'Duración': '8.4 hrs', 'P&L USD': '+14.431,80'},
+            {'#': 2, 'Symbol': 'ESH6', 'Fecha': '10-12/02', 'Duración': '2.3 días', 'P&L USD': '+6.370,50'},
+            {'#': 3, 'Symbol': 'GCJ6', 'Fecha': '27/01', 'Duración': '2.9 hrs', 'P&L USD': '+5.515,06'},
             {'#': 4, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
-            {'#': 5, 'Symbol': 'SIH6', 'Fecha': '20/02', 'Duración': '0.5 hrs', 'P&L USD': '+4.195,06'},
+            {'#': 5, 'Symbol': 'GCH6', 'Fecha': '20-21/01', 'Duración': '3.2 hrs', 'P&L USD': '+4.445,06'},
         ]
         st.dataframe(pd.DataFrame(best_trades), use_container_width=True, hide_index=True)
 
@@ -3579,9 +3592,9 @@ elif page == "Futuros":
         worst_trades = [
             {'#': 1, 'Symbol': 'GCJ6', 'Fecha': '19/02', 'Duración': '3.1 hrs', 'P&L USD': '-5.289,88'},
             {'#': 2, 'Symbol': 'GCJ6', 'Fecha': '11/02', 'Duración': '1.2 hrs', 'P&L USD': '-5.054,94'},
-            {'#': 3, 'Symbol': 'CLH6', 'Fecha': '11/02', 'Duración': '8.0 hrs', 'P&L USD': '-4.592,14'},
-            {'#': 4, 'Symbol': 'GCJ6', 'Fecha': '26/01', 'Duración': '9.1 hrs', 'P&L USD': '-4.054,94'},
-            {'#': 5, 'Symbol': 'GCJ6', 'Fecha': '20/02', 'Duración': '0.3 hrs', 'P&L USD': '-4.034,94'},
+            {'#': 3, 'Symbol': 'MGCJ6', 'Fecha': '23/02', 'Duración': '1.3 hrs', 'P&L USD': '-4.744,30'},
+            {'#': 4, 'Symbol': 'CLH6', 'Fecha': '11/02', 'Duración': '8.0 hrs', 'P&L USD': '-4.592,14'},
+            {'#': 5, 'Symbol': 'GCJ6', 'Fecha': '26/01', 'Duración': '9.1 hrs', 'P&L USD': '-4.054,94'},
         ]
         st.dataframe(pd.DataFrame(worst_trades), use_container_width=True, hide_index=True)
 
