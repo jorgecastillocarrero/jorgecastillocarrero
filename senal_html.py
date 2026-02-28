@@ -163,7 +163,7 @@ weekly_events = build_weekly_events('2000-01-01', '2026-02-28')
 # ================================================================
 # SENAL - Regimen desde CSV (fuente de verdad: regimenes_historico.py)
 # ================================================================
-target_date = pd.Timestamp('2026-02-26')
+target_date = pd.Timestamp('2026-02-27')
 all_dates = dd_wide.index[dd_wide.index <= target_date]
 signal_date = all_dates[-1]
 

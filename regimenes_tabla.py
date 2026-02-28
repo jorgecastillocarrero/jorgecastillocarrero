@@ -67,7 +67,7 @@ td.left { text-align: left; }
 <body>
 
 <h1>Regimenes de Mercado - Historico Semanal</h1>
-<p class="subtitle">1313 semanas | Enero 2001 - Febrero 2026 | Senal viernes/jueves &rarr; Trading lunes/viernes</p>
+<p class="subtitle">1313 semanas | Enero 2001 - Febrero 2026 | Se&ntilde;al: jueves cierre &rarr; jueves cierre | Trading: viernes apertura &rarr; viernes apertura</p>
 
 <h2>Resumen por Regimen</h2>
 <table class="summary-table">

@@ -1,10 +1,10 @@
 """
-Calculo historico de regimenes semanales + rentabilidad SPY (Mon->Mon)
+Calculo historico de regimenes semanales + rentabilidad SPY (Fri->Fri)
 Desde 2001 hasta 2026. Sin backtest, solo datos para verificar.
 
 Flujo por semana:
-  Senal:   Vie W-1 close -> Vie W close (datos para calcular regimen)
-  Trading: Lun W+1 open  -> Lun W+2 open (rentabilidad real)
+  Senal:   Jue W cierre (datos para calcular regimen)
+  Trading: Vie W open -> Vie W+1 open (rentabilidad real)
 """
 import pandas as pd
 import numpy as np
@@ -77,11 +77,12 @@ spy_daily['dist_ma200'] = (spy_daily['close'] / spy_daily['ma200'] - 1) * 100
 spy_w = spy_daily.resample('W-FRI').last().dropna(subset=['ma200'])
 spy_w['mom_10w'] = spy_w['close'].pct_change(10) * 100
 
-# SPY lunes open para rentabilidad trading
-spy_mon = spy_daily[['open']].copy()
-spy_mon = spy_mon[spy_mon.index.dayofweek == 0]  # solo lunes
-# Si no hay lunes (festivo), usar martes
-spy_weekly_open = spy_daily[['open']].resample('W-MON').first().dropna()
+# SPY viernes open para rentabilidad trading
+# Si viernes es festivo, usa el siguiente dia habil (lunes)
+spy_fri = spy_daily[['open']].copy()
+spy_fri_only = spy_fri[spy_fri.index.dayofweek == 4]  # solo viernes
+# Resample W-FRI para cubrir festivos (toma el primer open de la semana terminando viernes)
+spy_weekly_fri_open = spy_daily[['open']].resample('W-FRI').first().dropna()
 
 # --- VIX ---
 vix_df = pd.read_sql("""
@@ -91,16 +92,23 @@ vix_df = pd.read_sql("""
 vix_df['date'] = pd.to_datetime(vix_df['date'])
 vix_df = vix_df.set_index('date').sort_index()
 
-# --- Mapeo viernes -> lunes trading ---
-# Para cada viernes W, entrada = lunes W+1, salida = lunes W+2
-# Buscamos los opens de lunes mas cercanos
-mon_dates = spy_weekly_open.index.tolist()
+# --- Mapeo senal -> viernes trading ---
+# Senal: jueves cierre (o dia anterior si festivo)
+# Trading: viernes open (o dia siguiente si festivo) -> siguiente viernes open
+# En los datos, fecha_senal es viernes (W-FRI resample), trading = ese viernes open -> siguiente viernes open
 
-def find_nearest_mon(target, tolerance=3):
-    """Busca el lunes mas cercano a target dentro de tolerance dias."""
-    diffs = [(abs((d - target).days), d) for d in mon_dates if abs((d - target).days) <= tolerance]
-    if diffs:
-        return min(diffs, key=lambda x: x[0])[1]
+def find_nearest_trading_day(target, direction='forward', tolerance=4):
+    """Busca el dia de trading mas cercano a target.
+    direction='forward': busca target o dias posteriores (para entrada)
+    direction='backward': busca target o dias anteriores (para senal)
+    """
+    all_dates = spy_daily.index.tolist()
+    if direction == 'forward':
+        candidates = [(abs((d - target).days), d) for d in all_dates if d >= target and (d - target).days <= tolerance]
+    else:
+        candidates = [(abs((d - target).days), d) for d in all_dates if d <= target and (target - d).days <= tolerance]
+    if candidates:
+        return min(candidates, key=lambda x: x[0])[1]
     return None
 
 # --- Calcular regimen para cada viernes desde 2001 ---
@@ -206,20 +214,20 @@ for i, fri in enumerate(fridays):
         regime = 'RECOVERY'
     prev_vix_val = vix_val
 
-    # Rentabilidad SPY Mon->Mon
-    # Entrada: lunes siguiente al viernes de senal (fri + 3 dias aprox)
-    # Salida: lunes siguiente (fri + 10 dias aprox)
-    mon_entry_target = fri + pd.Timedelta(days=3)
-    mon_exit_target = fri + pd.Timedelta(days=10)
-    mon_entry = find_nearest_mon(mon_entry_target)
-    mon_exit = find_nearest_mon(mon_exit_target)
+    # Rentabilidad SPY Fri->Fri
+    # Senal: jueves cierre (fecha_senal es viernes del resample)
+    # Entrada: viernes open (mismo dia que fecha_senal, o siguiente habil si festivo)
+    # Salida: siguiente viernes open (fri + 7 dias, o siguiente habil si festivo)
+    fri_entry = find_nearest_trading_day(fri, direction='forward', tolerance=4)
+    fri_exit_target = fri + pd.Timedelta(days=7)
+    fri_exit = find_nearest_trading_day(fri_exit_target, direction='forward', tolerance=4)
 
     spy_ret = None
     spy_entry = None
     spy_exit = None
-    if mon_entry and mon_exit and mon_entry in spy_weekly_open.index and mon_exit in spy_weekly_open.index:
-        spy_entry = spy_weekly_open.loc[mon_entry, 'open']
-        spy_exit = spy_weekly_open.loc[mon_exit, 'open']
+    if fri_entry and fri_exit and fri_entry in spy_daily.index and fri_exit in spy_daily.index:
+        spy_entry = spy_daily.loc[fri_entry, 'open']
+        spy_exit = spy_daily.loc[fri_exit, 'open']
         spy_ret = (spy_exit / spy_entry - 1) * 100
 
     results.append({
@@ -247,8 +255,8 @@ for i, fri in enumerate(fridays):
         'total': total,
         'regime': regime,
         'vix_veto': vix_veto,
-        'mon_entry': mon_entry,
-        'mon_exit': mon_exit,
+        'fri_entry': fri_entry,
+        'fri_exit': fri_exit,
         'spy_entry_open': spy_entry,
         'spy_exit_open': spy_exit,
         'spy_ret_pct': spy_ret,
@@ -266,7 +274,7 @@ print(f"\nGuardado en {csv_path}")
 
 # --- Resumen por regimen ---
 print(f"\n{'='*100}")
-print(f"  RESUMEN POR REGIMEN - SPY Rent. Mon->Mon")
+print(f"  RESUMEN POR REGIMEN - SPY Rent. Fri->Fri")
 print(f"{'='*100}")
 print(f"  {'Regimen':<12} {'N':>5} {'%Sem':>6} | {'Avg%':>7} {'Med%':>7} {'Std%':>7} {'WR%':>6} | {'Total%':>8}")
 print(f"  {'-'*12} {'-'*5} {'-'*6} | {'-'*7} {'-'*7} {'-'*7} {'-'*6} | {'-'*8}")
@@ -294,7 +302,7 @@ print(f"  {'TOTAL':<12} {total_n:>5} {'100%':>6} | {total_avg:>+7.2f} {'':>7} {'
 
 # --- Resumen por anio ---
 print(f"\n{'='*100}")
-print(f"  RESUMEN POR AÑO - SPY Rent. Mon->Mon")
+print(f"  RESUMEN POR AÑO - SPY Rent. Fri->Fri")
 print(f"{'='*100}")
 print(f"  {'Año':>4} | {'N':>4} | {'Avg%':>7} {'Sum%':>8} {'WR%':>6} | {'BUB':>3} {'GOL':>3} {'ALC':>3} {'NEU':>3} {'CAU':>3} {'BEA':>3} {'CRI':>3} {'PAN':>3} {'CAP':>3}")
 print(f"  {'-'*4} | {'-'*4} | {'-'*7} {'-'*8} {'-'*6} | {'-'*3} {'-'*3} {'-'*3} {'-'*3} {'-'*3} {'-'*3} {'-'*3} {'-'*3} {'-'*3}")
@@ -329,15 +337,15 @@ print(f"  PRIMERAS 5 SEMANAS (verificacion)")
 print(f"{'='*100}")
 print(f"  {'Fecha':>10} {'Sem':>3} | {'DD_H':>4} {'%':>5} {'DD_D':>4} {'%':>5} {'RSI':>4} {'%':>5} | {'SPY':>7} {'Dist':>6} {'Mom':>6} {'VIX':>5} | {'BDD':>4} {'BRS':>4} {'DDP':>4} {'SPY':>4} {'MOM':>4} {'TOT':>5} | {'REG':>10} | {'Entrada':>10} {'Salida':>10} {'Ret%':>7}")
 for _, r in df.head(5).iterrows():
-    entry_str = r['mon_entry'].strftime('%d/%m/%Y') if pd.notna(r.get('mon_entry')) and r['mon_entry'] is not None else '---'
-    exit_str = r['mon_exit'].strftime('%d/%m/%Y') if pd.notna(r.get('mon_exit')) and r['mon_exit'] is not None else '---'
+    entry_str = r['fri_entry'].strftime('%d/%m/%Y') if pd.notna(r.get('fri_entry')) and r['fri_entry'] is not None else '---'
+    exit_str = r['fri_exit'].strftime('%d/%m/%Y') if pd.notna(r.get('fri_exit')) and r['fri_exit'] is not None else '---'
     ret_str = f"{r['spy_ret_pct']:>+7.2f}" if pd.notna(r['spy_ret_pct']) else '    ---'
     print(f"  {r['fecha_senal'].strftime('%d/%m/%Y'):>10} {r['sem']:>3} | {r['dd_h']:>4} {r['pct_dd_h']:>5.1f} {r['dd_d']:>4} {r['pct_dd_d']:>5.1f} {r['rsi55']:>4} {r['pct_rsi']:>5.1f} | {r['spy_close']:>7.1f} {r['spy_dist']:>+6.1f} {r['spy_mom']:>+6.1f} {r['vix']:>5.1f} | {r['s_bdd']:>+4.1f} {r['s_brsi']:>+4.1f} {r['s_ddp']:>+4.1f} {r['s_spy']:>+4.1f} {r['s_mom']:>+4.1f} {r['total']:>+5.1f} | {r['regime']:>10} | {entry_str:>10} {exit_str:>10} {ret_str}")
 
 print(f"\n  ULTIMAS 5 SEMANAS (2026)")
 print(f"  {'Fecha':>10} {'Sem':>3} | {'DD_H':>4} {'%':>5} {'DD_D':>4} {'%':>5} {'RSI':>4} {'%':>5} | {'SPY':>7} {'Dist':>6} {'Mom':>6} {'VIX':>5} | {'BDD':>4} {'BRS':>4} {'DDP':>4} {'SPY':>4} {'MOM':>4} {'TOT':>5} | {'REG':>10} | {'Entrada':>10} {'Salida':>10} {'Ret%':>7}")
 for _, r in df.tail(5).iterrows():
-    entry_str = r['mon_entry'].strftime('%d/%m/%Y') if pd.notna(r.get('mon_entry')) and r['mon_entry'] is not None else '---'
-    exit_str = r['mon_exit'].strftime('%d/%m/%Y') if pd.notna(r.get('mon_exit')) and r['mon_exit'] is not None else '---'
+    entry_str = r['fri_entry'].strftime('%d/%m/%Y') if pd.notna(r.get('fri_entry')) and r['fri_entry'] is not None else '---'
+    exit_str = r['fri_exit'].strftime('%d/%m/%Y') if pd.notna(r.get('fri_exit')) and r['fri_exit'] is not None else '---'
     ret_str = f"{r['spy_ret_pct']:>+7.2f}" if pd.notna(r['spy_ret_pct']) else '    ---'
     print(f"  {r['fecha_senal'].strftime('%d/%m/%Y'):>10} {r['sem']:>3} | {r['dd_h']:>4} {r['pct_dd_h']:>5.1f} {r['dd_d']:>4} {r['pct_dd_d']:>5.1f} {r['rsi55']:>4} {r['pct_rsi']:>5.1f} | {r['spy_close']:>7.1f} {r['spy_dist']:>+6.1f} {r['spy_mom']:>+6.1f} {r['vix']:>5.1f} | {r['s_bdd']:>+4.1f} {r['s_brsi']:>+4.1f} {r['s_ddp']:>+4.1f} {r['s_spy']:>+4.1f} {r['s_mom']:>+4.1f} {r['total']:>+5.1f} | {r['regime']:>10} | {entry_str:>10} {exit_str:>10} {ret_str}")
