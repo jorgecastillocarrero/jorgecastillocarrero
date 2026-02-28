@@ -360,3 +360,175 @@ Comandos utiles:
 - Dashboard local sin Docker: `py -3 -m streamlit run web/app.py`
 - Dashboard con Docker: `docker-compose up --build`
 - Railway CLI: `C:\Users\usuario\financial-data-project\railway.exe` (requiere login)
+
+---
+
+## Sistema Trading Semanal S&P 500
+
+### Concepto
+
+Sistema que analiza el mercado cada viernes, clasifica el regimen de mercado y opera
+la semana siguiente. Se basa en subsectores del S&P 500 (industrias con >= 3 acciones).
+
+### Flujo temporal (CRITICO - no cambiar)
+
+```
+Semana W:
+  Vie W-1 close ──► Vie W close    = SENAL (datos para calcular regimen)
+                                      Con los datos del Vie W se calcula:
+                                      - Indicadores breadth (DD, RSI de subsectores)
+                                      - SPY vs MA200, momentum, distancia
+                                      - VIX
+                                      → Score total → Regimen de mercado
+
+  Vie W close ──► Lun W+1 open     = GAP fin de semana (no se opera, se asume)
+
+  Lun W+1 open ──► Lun W+2 open    = TRADING (rentabilidad real del trade)
+                                      Entrada: apertura lunes siguiente a la senal
+                                      Salida: apertura lunes una semana despues
+```
+
+Ejemplo semana 1 de 2026:
+- Senal: Vie 26/12/2025 close (690.31) → Vie 02/01/2026 close (683.17) = -1.03%
+- Regimen calculado con datos del 02/01/2026 → NEUTRAL (score +3.5)
+- Trading: Lun 05/01/2026 open (686.54) → Lun 12/01/2026 open (690.68) = +0.60%
+
+IMPORTANTE: El retorno de la senal (Vie→Vie) NO es el retorno del trade.
+El retorno real es Lun open → Lun open, con el gap del fin de semana incluido.
+
+### Clasificacion de regimen de mercado
+
+5 indicadores → score individual → suma total → regimen:
+
+#### 1. BDD - Breadth Drawdown (rango: -3.0 a +2.0)
+Que mide: % de subsectores con drawdown 52w > -10% (saludables)
+```
+>= 75% → +2.0    >= 60% → +1.0    >= 45% → 0.0
+>= 30% → -1.0    >= 15% → -2.0    < 15%  → -3.0
+```
+
+#### 2. BRSI - Breadth RSI (rango: -3.0 a +2.0)
+Que mide: % de subsectores con RSI 14 semanas > 55
+```
+>= 75% → +2.0    >= 60% → +1.0    >= 45% → 0.0
+>= 30% → -1.0    >= 15% → -2.0    < 15%  → -3.0
+```
+
+#### 3. DDP - Deep Drawdown Percentage (rango: -2.5 a +1.5)
+Que mide: % de subsectores con drawdown 52w < -20% (profundos)
+```
+<= 5%  → +1.5    <= 15% → +0.5    <= 30% → -0.5
+<= 50% → -1.5    > 50%  → -2.5
+```
+
+#### 4. SPY - SPY vs MA200 (rango: -2.5 a +1.5)
+Que mide: posicion del SPY respecto a su media movil de 200 dias
+```
+> MA200 y dist > 5%   → +1.5    > MA200 y dist <= 5%  → +0.5
+< MA200 y dist > -5%  → -0.5    < MA200 y dist > -15% → -1.5
+< MA200 y dist <= -15% → -2.5
+```
+
+#### 5. MOM - Momentum SPY 10 semanas (rango: -1.5 a +1.0)
+Que mide: cambio % del SPY en las ultimas 10 semanas
+```
+> 5%   → +1.0    > 0%   → +0.5    > -5%  → -0.5
+> -15%  → -1.0    <= -15% → -1.5
+```
+
+#### Score total y regimenes
+Rango posible: -12.5 a +8.0
+```
+BURBUJA:    >= 8.0 (Y ademas DD_H >= 85% Y RSI>55 >= 90%)
+GOLDILOCKS: >= 7.0
+ALCISTA:    >= 4.0
+NEUTRAL:    >= 0.5
+CAUTIOUS:   >= -2.0
+BEARISH:    >= -5.0
+CRISIS:     >= -9.0
+PANICO:     < -9.0
+```
+
+#### VIX Veto (filtro de seguridad)
+- VIX >= 30: rebaja BURBUJA/GOLDILOCKS/ALCISTA → NEUTRAL
+- VIX >= 35: rebaja NEUTRAL → CAUTIOUS
+El VIX protege contra falsos positivos en mercados alcistas con alta volatilidad.
+
+### Rentabilidad SPY por regimen (2001-2026, Mon→Mon, 1311 semanas)
+
+| Regimen    |   N  |  %Sem  | Avg%   |  WR%  | Total% |
+|------------|------|--------|--------|-------|--------|
+| BURBUJA    |   21 |  1.6%  | +0.33% | 71.4% |   +7.0 |
+| GOLDILOCKS |  230 | 17.5%  | +0.47% | 68.3% | +107.9 |
+| ALCISTA    |  364 | 27.8%  | +0.32% | 62.9% | +116.7 |
+| NEUTRAL    |  256 | 19.5%  | +0.14% | 56.2% |  +36.9 |
+| CAUTIOUS   |  134 | 10.2%  | -0.19% | 47.8% |  -25.5 |
+| BEARISH    |  113 |  8.6%  | +0.04% | 52.2% |   +4.5 |
+| CRISIS     |  119 |  9.1%  | -0.42% | 49.6% |  -49.7 |
+| PANICO     |   74 |  5.6%  | +0.06% | 47.3% |   +4.5 |
+
+Los regimenes discriminan correctamente: GOLDILOCKS/ALCISTA positivos,
+CRISIS/CAUTIOUS negativos. PANICO es neutro (incluye rebotes violentos).
+
+### Mapeo de retornos en report_compound.py (CRITICO)
+
+```python
+# En df_monday: return_mon = open(this_mon) / open(prev_mon) - 1
+# Es backward-looking: almacenado en lunes W, representa retorno semana W-1→W
+
+# Para senal viernes W:
+#   Trading = Lun W+1 open → Lun W+2 open
+#   return_mon del Lun W+2 = open(W+2) / open(W+1) - 1 = retorno correcto
+#   fri + 10 dias = Lun W+2 (donde esta almacenado el retorno)
+
+target = fri + pd.Timedelta(days=10)  # CORRECTO
+# target = fri + pd.Timedelta(days=3)  # INCORRECTO - daba retorno ya conocido
+```
+
+### FV Scores - datos disponibles
+
+```python
+# Para calcular scores/rankings de subsectores se usa:
+prev_dates = dd_wide.index[dd_wide.index <= date]  # CORRECTO: incluye viernes senal
+# prev_dates = dd_wide.index[dd_wide.index < date]  # INCORRECTO: excluia datos del dia
+```
+
+El viernes de la senal sus datos ya son conocidos (close ya ocurrio),
+por lo tanto se deben incluir con <= date.
+
+### Datos de subsectores
+- Fuente: acciones S&P 500 agrupadas por `industry` (campo de fmp_profiles)
+- Filtro: solo subsectores con >= 3 acciones
+- Total: 66 subsectores validos
+- Precio subsector: media del close de todas las acciones del subsector (semanal viernes)
+- Metricas: drawdown 52w, RSI 14w, calculadas sobre el precio medio del subsector
+
+### Archivos del sistema
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `report_compound.py` | Backtest principal: calcula regimenes, selecciona subsectores, simula trades |
+| `analisis_transiciones.py` | Analisis de transiciones entre regimenes, genera HTML |
+| `analisis_transiciones.html` | Visualizacion de transiciones (rentabilidades Mon→Mon) |
+| `regimenes_historico.py` | Calcula regimenes + SPY ret para todas las semanas desde 2001 |
+| `regimenes_2026_tabla.py` | Tabla detallada de regimenes 2026 con todos los indicadores |
+| `semana1_completo.py` | Ejemplo completo del proceso para semana 1 de 2026 |
+| `senal_semana9_dual.py` | Genera senal semanal (picks para estrategia A y B) |
+| `data/regimenes_historico.csv` | CSV con todos los regimenes e indicadores (2001-2026) |
+| `data/vix_weekly.csv` | Datos VIX semanales |
+| `data/sp500_constituents.json` | Constituyentes actuales S&P 500 |
+| `data/sp500_historical_changes.json` | Cambios historicos S&P 500 |
+
+### Errores corregidos (27/02/2026)
+
+1. **Mapeo retornos fri+3 → fri+10**: El backtest usaba fri+3 que mapeaba al lunes siguiente
+   donde return_mon = retorno de la semana YA PASADA (dato conocido). Corregido a fri+10
+   que mapea al lunes de 2 semanas despues donde esta el retorno real del trade.
+   Impacto: resultados pasaron de $500K→$119M (falso) a $500K→$42K (real).
+
+2. **FV scores < date → <= date**: Los scores excluian los datos del viernes de senal.
+   Corregido a <= date porque el close del viernes ya es conocido al generar la senal.
+
+3. **analisis_transiciones.py Fri→Fri → Mon→Mon**: La tabla de retornos SPY por regimen
+   usaba Fri close → Fri close. Corregido a Mon open → Mon open (retorno real de trading).
+   PANICO paso de +0.98% (falso) a +0.06% (real).

@@ -161,13 +161,26 @@ elif total >= 4.0: regime = 'ALCISTA (4.0-5.5)'
 elif total >= 0.5: regime = 'NEUTRAL (0.5-4.0)'
 elif total >= -1.5: regime = 'CAUTIOUS (-1.5-0.5)'
 elif total >= -3.0: regime = 'BEARISH (-3.0 a -1.5)'
-else: regime = 'CRISIS (<-3.0)'
+elif total >= -9.0: regime = 'CRISIS (-9.0 a -3.0)'
+else: regime = 'PANICO (<-9.0)'
 
 override = ""
 if vix_val >= 30 and total >= 4.0:
     override = " -> NEUTRAL (VIX >= 30 override!)"
 elif vix_val >= 35 and total >= 0.5 and total < 4.0:
     override = " -> CAUTIOUS (VIX >= 35 override!)"
+
+# CAPITULACION: si estamos en PANICO y VIX bajó vs semana anterior
+if 'PANICO' in regime:
+    vix_dates_all = vix_df.index[vix_df.index <= pd.Timestamp.now()]
+    if len(vix_dates_all) >= 2:
+        prev_vix = vix_df.loc[vix_dates_all[-2], 'vix']
+        if pd.notna(prev_vix):
+            vix_delta = vix_val - prev_vix
+            if vix_delta < 0:
+                override += f" -> CAPITULACION (VIX delta={vix_delta:+.1f}, bajando)"
+            else:
+                override += f" (VIX delta={vix_delta:+.1f}, subiendo - PANICO activo)"
 
 print(f"\n  >>> REGIMEN: {regime}{override} <<<")
 

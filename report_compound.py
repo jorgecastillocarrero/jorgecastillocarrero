@@ -334,6 +334,16 @@ def classify_regime_market(date, dd_wide, rsi_wide, spy_w, vix_df):
     elif vix_val >= 35 and regime == 'NEUTRAL':
         regime = 'CAUTIOUS'
 
+    # VIX bajando vs semana anterior → señal de rebote/reversion
+    vix_dates_all = vix_df.index[vix_df.index <= date]
+    if len(vix_dates_all) >= 2:
+        prev_vix = vix_df.loc[vix_dates_all[-2], 'vix']
+        if pd.notna(prev_vix) and vix_val < prev_vix:
+            if regime == 'PANICO':
+                regime = 'CAPITULACION'
+            elif regime == 'BEARISH':
+                regime = 'RECOVERY'
+
     return regime, {'score_total': total}
 
 # ================================================================
@@ -416,17 +426,18 @@ rsi_wide = sub_weekly.pivot(index='date', columns='subsector', values='rsi_14w')
 atr_wide_lagged = atr_wide.shift(1)
 
 # Retornos lunes open -> lunes open (1 semana exacta de holding)
-# Flujo: senal viernes W-1 -> compra lunes W open -> venta lunes W+1 open
-# return_mon del lunes W+1 = open(lun W+1) / open(lun W) - 1 = retorno de semana W
-# Para viernes W (que es el ultimo dia de semana W), el retorno es:
-# return_mon del lunes de la SIGUIENTE semana (fri + 3 dias)
+# Flujo: senal viernes W -> compra lunes W+1 open -> venta lunes W+2 open
+# return_mon en df_monday = open(this_mon) / open(prev_mon) - 1  (backward-looking)
+# Para senal viernes W, el retorno de trading es return_mon del lunes W+2:
+#   open(lun W+2) / open(lun W+1) - 1 = retorno de la semana operada
+# fri + 10 dias = lunes de 2 semanas despues = donde esta almacenado el retorno correcto
 returns_mon_wide = sub_monday.pivot(index='date', columns='subsector', values='avg_return_mon')
 mon_dates = returns_mon_wide.index.tolist()
 fri_dates = returns_wide.index.tolist()
 
 fri_to_mon_ret = {}
 for fri in fri_dates:
-    target = fri + pd.Timedelta(days=3)  # viernes + 3 = lunes siguiente
+    target = fri + pd.Timedelta(days=10)  # viernes + 10 = lunes W+2 (donde esta el retorno del trade)
     diffs = [abs((d - target).days) for d in mon_dates]
     if diffs:
         closest_mon = mon_dates[diffs.index(min(diffs))]
@@ -489,7 +500,7 @@ for date in returns_wide.index:
         continue
 
     scores_evt = score_fair(active)
-    prev_dates = dd_wide.index[dd_wide.index < date]
+    prev_dates = dd_wide.index[dd_wide.index <= date]
     dd_row = dd_wide.loc[prev_dates[-1]] if len(prev_dates) > 0 else None
     rsi_row = rsi_wide.loc[prev_dates[-1]] if len(prev_dates) > 0 else None
     scores_v3 = adjust_score_by_price(scores_evt, dd_row, rsi_row)
@@ -514,6 +525,8 @@ for date in returns_wide.index:
     elif regime == 'ALCISTA':    nl, ns = 3, 0   # longs standard
     elif regime == 'GOLDILOCKS':       nl, ns = 3, 0   # longs standard
     elif regime == 'BURBUJA':       nl, ns = 3, 0   # longs agresivos (override abajo)
+    elif regime == 'CAPITULACION':  nl, ns = 3, 0   # longs agresivos (rebote desde panico)
+    elif regime == 'RECOVERY': nl, ns = 3, 0   # longs (reversion desde bearish)
     else:                           nl, ns = 3, 0
 
     longs = [s for s, _ in longs_pool[:nl]]
@@ -587,6 +600,18 @@ for date in returns_wide.index:
             pnl_unit = calc_pnl_meanrev([], shorts_pan, weights_pan, ret_row, 1.0)
         else:
             pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
+    elif regime == 'CAPITULACION':
+        # Top3 FairValue: rebote desde panico, longs agresivos
+        top3_cap = sorted([(s, sc) for s, sc in scores_v3.items() if sc > 5.5], key=lambda x: -x[1])[:3]
+        longs = [s for s, _ in top3_cap]
+        shorts = []
+        pnl_unit = calc_pnl(longs, [], scores_v3, ret_row, 1.0)
+    elif regime == 'RECOVERY':
+        # Top3 FairValue: reversion desde bearish, longs
+        top3_br = sorted([(s, sc) for s, sc in scores_v3.items() if sc > 5.5], key=lambda x: -x[1])[:3]
+        longs = [s for s, _ in top3_br]
+        shorts = []
+        pnl_unit = calc_pnl(longs, [], scores_v3, ret_row, 1.0)
     else:
         pnl_unit = calc_pnl(longs, shorts, scores_v3, ret_row, 1.0)
 
@@ -675,6 +700,8 @@ for year in sorted(df_ret['date'].dt.year.unique()):
         'bear': rc.get('BEARISH', 0),
         'cris': rc.get('CRISIS', 0),
         'pani': rc.get('PANICO', 0),
+        'capi': rc.get('CAPITULACION', 0),
+        'reco': rc.get('RECOVERY', 0),
     })
 
 df_r = pd.DataFrame(results)
@@ -699,8 +726,8 @@ print("=" * 120)
 
 print(f"\n{'Ano':>5} {'Cap.Inicio':>12} {'S&P500':>8} {'Sist%':>8} {'Alpha':>8} "
       f"{'P&L Neto':>12} {'Costes':>10} {'Cap.Final':>14}  "
-      f"{'BURB':>5} {'ALCI':>5} {'GOLD':>5} {'NEUT':>5} {'CAUT':>5} {'BEAR':>5} {'CRIS':>5} {'PANI':>5}  {'SPY Cap':>14}")
-print("-" * 170)
+      f"{'BURB':>5} {'ALCI':>5} {'GOLD':>5} {'NEUT':>5} {'CAUT':>5} {'BEAR':>5} {'RECO':>5} {'CRIS':>5} {'PANI':>5} {'CAPI':>5}  {'SPY Cap':>14}")
+print("-" * 180)
 
 for _, row in df_r.iterrows():
     alpha = row['rent_net'] - row['spy_ret']
@@ -708,7 +735,7 @@ for _, row in df_r.iterrows():
           f"{row['rent_net']:>7.1f}% {alpha:>+7.1f}% "
           f"${row['pnl_net']:>11,.0f} ${row['cost']:>9,.0f} ${row['capital_fin']:>13,.0f}  "
           f"{int(row['burb']):>5} {int(row['alci']):>5} {int(row['gold']):>5} "
-          f"{int(row['neut']):>5} {int(row['caut']):>5} {int(row['bear']):>5} {int(row['cris']):>5} {int(row['pani']):>5}  "
+          f"{int(row['neut']):>5} {int(row['caut']):>5} {int(row['bear']):>5} {int(row['reco']):>5} {int(row['cris']):>5} {int(row['pani']):>5} {int(row['capi']):>5}  "
           f"${row['spy_capital']:>13,.0f}")
 
 # Resumen final
@@ -721,12 +748,12 @@ total_costs = df_r['cost'].sum()
 multiple_sys = capital_final / CAPITAL_INICIAL
 multiple_spy = spy_final / CAPITAL_INICIAL
 
-print("-" * 145)
+print("-" * 180)
 
 # Estadisticas por regimen
 print(f"\n{'Regimen':<16} {'Semanas':>7} {'Avg ret%':>10} {'WinRate':>8} {'Config':>8}")
 print("-" * 55)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('RECOVERY', '3L+0S'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*'), ('CAPITULACION', '3L+0S')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -750,7 +777,7 @@ print(f"\n{'IMPACTO POR REGIMEN (base $500K)':>45}")
 print("-" * 75)
 print(f"  {'Regimen':<16} {'N':>5} {'Avg bruto':>12} {'Avg neto':>12} {'Coste/sem':>10} {'Margen':>12}")
 print("-" * 75)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('RECOVERY', '3L+0S'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*'), ('CAPITULACION', '3L+0S')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -905,7 +932,7 @@ print(f"\n{'DETALLE POR REGIMEN':>35}")
 print("-" * 95)
 print(f"  {'Regimen':<16} {'N':>5} {'Avg%':>7} {'Med%':>7} {'Std%':>7} {'WR%':>6} {'Sharpe':>7} {'Best%':>8} {'Worst%':>8} {'PF':>6}")
 print("-" * 95)
-for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*')]:
+for reg, cfg in [('BURBUJA', '3L+0S*'), ('GOLDILOCKS', '3L+0S'), ('ALCISTA', '3L+0S'), ('NEUTRAL', 'oversold'), ('CAUTIOUS', 'oversold'), ('BEARISH', '0L+3S*'), ('RECOVERY', '3L+0S'), ('CRISIS', '0L+3S*'), ('PANICO', '0L+3S*'), ('CAPITULACION', '3L+0S')]:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -928,7 +955,7 @@ print("-" * 85)
 print(f"  {'Regimen':<16} {'N':>5}  {'Avg L%':>8} {'WR L%':>7}  {'Avg S%':>8} {'WR S%':>7}  {'L $/sem':>10} {'S $/sem':>10}")
 print("-" * 85)
 BASE = 500_000
-for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS', 'PANICO']:
+for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'RECOVERY', 'CRISIS', 'PANICO', 'CAPITULACION']:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
@@ -944,7 +971,7 @@ for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH'
 # Caracteristicas detalladas LONGS y SHORTS por regimen
 print(f"\n{'CARACTERISTICAS DETALLADAS POR LADO Y REGIMEN':>50}")
 print("=" * 100)
-for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'CRISIS', 'PANICO']:
+for reg in ['BURBUJA', 'GOLDILOCKS', 'ALCISTA', 'NEUTRAL', 'CAUTIOUS', 'BEARISH', 'RECOVERY', 'CRISIS', 'PANICO', 'CAPITULACION']:
     mask = df_ret['regime'] == reg
     if mask.sum() == 0:
         continue
