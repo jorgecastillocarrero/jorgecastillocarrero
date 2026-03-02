@@ -137,13 +137,24 @@ for i in range(0, len(all_tickers_to_load), batch_size):
         print(f"    Lote {i//batch_size+1}: {sum(len(f) for f in frames)} registros acumulados")
 df_all = pd.concat(frames, ignore_index=True)
 df_all['date'] = pd.to_datetime(df_all['date'])
+# Optimizar tipos de datos para reducir memoria
+df_all['open'] = df_all['open'].astype('float32')
+df_all['close'] = df_all['close'].astype('float32')
+df_all['high'] = df_all['high'].astype('float32')
+df_all['low'] = df_all['low'].astype('float32')
+df_all['symbol'] = df_all['symbol'].astype('category')
 # Subsector: usar mapa existente, 'other' para historicos sin mapa
-df_all['subsector'] = df_all['symbol'].map(lambda s: ticker_to_sub.get(s, 'other'))
+df_all['subsector'] = df_all['symbol'].map(lambda s: ticker_to_sub.get(s, 'other')).astype('category')
 loaded_symbols = set(df_all['symbol'].unique())
 print(f"  Total precios: {len(df_all)} registros ({len(loaded_symbols)} simbolos con datos)")
 
+# Weekly aggregation por symbol (sin Grouper para evitar memory error)
+print("  Agregando semanal...")
+df_all['week_fri'] = df_all['date'].dt.to_period('W-FRI').dt.end_time.dt.normalize()
 df_weekly = df_all.sort_values('date').groupby(
-    ['symbol', pd.Grouper(key='date', freq='W-FRI')]).last().reset_index()
+    ['symbol', 'week_fri'], observed=True)[['open', 'close', 'high', 'low']].last().reset_index()
+df_weekly = df_weekly.rename(columns={'week_fri': 'date'})
+df_weekly['symbol'] = df_weekly['symbol'].astype(str)
 df_weekly = df_weekly.dropna(subset=['close']).sort_values(['symbol', 'date'])
 df_weekly['prev_close'] = df_weekly.groupby('symbol')['close'].shift(1)
 df_weekly['return'] = df_weekly['close'] / df_weekly['prev_close'] - 1
@@ -166,23 +177,42 @@ print("Calculando metricas acciones...")
 df_weekly = df_weekly.groupby('symbol', group_keys=False).apply(calc_stock_metrics)
 
 # Fri open -> Fri open returns per stock
+# Usamos df_weekly que ya tiene open del ultimo dia de la semana (viernes)
 print("Calculando retornos acciones (Fri open -> Fri open)...")
-df_daily = df_all[['symbol', 'date', 'open']].dropna(subset=['open']).copy()
-df_daily = df_daily.set_index('date').sort_index()
-stock_fri = df_daily.groupby([pd.Grouper(freq='W-FRI'), 'symbol'])['open'].last().reset_index()
-stock_fri.columns = ['date', 'symbol', 'open_fri']
+stock_fri = df_weekly[['symbol', 'date', 'open']].dropna(subset=['open']).copy()
+stock_fri = stock_fri.rename(columns={'open': 'open_fri'})
 stock_fri = stock_fri.sort_values(['symbol', 'date'])
 stock_fri['next_open'] = stock_fri.groupby('symbol')['open_fri'].shift(-1)
 stock_fri['ret_pct'] = (stock_fri['next_open'] / stock_fri['open_fri'] - 1) * 100
+# Detectar tickers con datos corruptos (saltos >10x entre semanas consecutivas)
+stock_fri['ratio'] = stock_fri['next_open'] / stock_fri['open_fri']
+bad_tickers = set(stock_fri[(stock_fri['ratio'] > 10) | (stock_fri['ratio'] < 0.1)]['symbol'].unique())
+if bad_tickers:
+    print(f"  Tickers con datos corruptos excluidos ({len(bad_tickers)}): {sorted(bad_tickers)[:20]}...")
+    stock_fri.loc[stock_fri['symbol'].isin(bad_tickers), 'ret_pct'] = np.nan
+# Capear retornos restantes a ±100%
+n_capped = ((stock_fri['ret_pct'] > 100) | (stock_fri['ret_pct'] < -100)).sum()
+stock_fri['ret_pct'] = stock_fri['ret_pct'].clip(-100, 100)
+if n_capped > 0:
+    print(f"  Retornos capeados a ±100%: {n_capped}")
 stock_ret_wide = stock_fri.pivot(index='date', columns='symbol', values='ret_pct')
+stock_open_wide = stock_fri.pivot(index='date', columns='symbol', values='open_fri')
+stock_next_open_wide = stock_fri.pivot(index='date', columns='symbol', values='next_open')
 print(f"  Stock returns: {stock_ret_wide.shape}")
 
 # Subsector metrics for FV scoring (excluir 'other')
-df_all_known = df_all[df_all['subsector'] != 'other']
+# Calcular ANTES de liberar df_all
+df_all_known = df_all[df_all['subsector'] != 'other'].copy()
+del df_all
+import gc; gc.collect()
+print("  Memoria liberada (df_all)")
+df_all_known['week_fri'] = df_all_known['date'].dt.to_period('W-FRI').dt.end_time.dt.normalize()
+df_all_known['subsector'] = df_all_known['subsector'].astype(str)
 sub_agg = df_all_known.sort_values('date').groupby(
-    ['subsector', pd.Grouper(key='date', freq='W-FRI')]).agg(
+    ['subsector', 'week_fri'], observed=True).agg(
     avg_close=('close', 'mean'), avg_high=('high', 'mean'),
     avg_low=('low', 'mean')).reset_index().dropna(subset=['avg_close'])
+sub_agg = sub_agg.rename(columns={'week_fri': 'date'})
 sub_agg = sub_agg.sort_values(['subsector', 'date'])
 
 def calc_sub_metrics(g):
@@ -235,22 +265,24 @@ for idx, (_, reg_row) in enumerate(reg_df.iterrows()):
     rsi_row_prev = rsi_wide.loc[prev_dates[-1]] if len(prev_dates) > 0 else None
     scores_adj = adjust_score_by_price(scores_evt, dd_row_prev, rsi_row_prev)
 
-    # Latest stock data
-    stock_data = df_weekly[df_weekly['date'] <= signal_date].sort_values(['symbol', 'date'])
-    latest = stock_data.groupby('symbol').last().reset_index()
+    # Latest stock data: solo acciones que cotizaron en la semana de senal
+    latest = df_weekly[df_weekly['date'] == signal_date].copy()
 
     # Filtrar por composicion historica del S&P 500
     sp500_at_date = get_sp500_members(signal_date.strftime('%Y-%m-%d'))
     latest = latest[latest['symbol'].isin(sp500_at_date & loaded_symbols)]
 
-    # Returns
+    # Returns and prices
     ret_row = stock_ret_wide.loc[signal_date] if signal_date in stock_ret_wide.index else None
+    open_row = stock_open_wide.loc[signal_date] if signal_date in stock_open_wide.index else None
+    nopen_row = stock_next_open_wide.loc[signal_date] if signal_date in stock_next_open_wide.index else None
 
     # Score ALL stocks
     stocks = []
     for _, stk in latest.iterrows():
         sym = stk['symbol']
         if sym not in ticker_to_idx: continue
+        if sym in bad_tickers: continue  # excluir tickers con datos corruptos
         sub = ticker_to_sub.get(sym)
         if sub is None: sub = 'other'
 
@@ -258,7 +290,15 @@ for idx, (_, reg_row) in enumerate(reg_df.iterrows()):
         mom = float(stk['mom_12w']) if pd.notna(stk.get('mom_12w')) else 0
         rsi = float(stk['rsi_14w']) if pd.notna(stk.get('rsi_14w')) else 50
         dd = float(stk['dd_52w']) if pd.notna(stk.get('dd_52w')) else 0
-        price = float(stk['close']) if pd.notna(stk.get('close')) else 0
+
+        # Precios open viernes
+        o_fri = None
+        if open_row is not None and sym in open_row.index and pd.notna(open_row[sym]):
+            o_fri = round(float(open_row[sym]), 2)
+        n_fri = None
+        if nopen_row is not None and sym in nopen_row.index and pd.notna(nopen_row[sym]):
+            n_fri = round(float(nopen_row[sym]), 2)
+        if o_fri is None or o_fri <= 0: continue  # excluir acciones sin cotización válida
 
         composite = (np.clip((fv - 5.0) / 4.0, 0, 1) * 3.0 +
                      np.clip((mom + 20) / 60, 0, 1) * 3.0 +
@@ -272,7 +312,7 @@ for idx, (_, reg_row) in enumerate(reg_df.iterrows()):
         tidx = ticker_to_idx[sym]
         stocks.append([tidx, round(composite, 1), round(fv, 1),
                        int(round(mom)), int(round(rsi)), int(round(dd)),
-                       int(round(price)), ret])
+                       o_fri, n_fri, ret])
 
     stocks.sort(key=lambda x: -x[1])
 
@@ -318,7 +358,7 @@ for week in all_weeks:
         group_data[regime] = {}
 
     for rank_idx, stk in enumerate(week['s']):
-        ret = stk[7]
+        ret = stk[8]
         if ret is None: continue
         pos = rank_idx + 1  # 1-based
 
@@ -370,7 +410,7 @@ for week in all_weeks:
     if regime not in rank_data:
         rank_data[regime] = {}
     for rank_idx, stk in enumerate(week['s'][:20]):
-        ret = stk[7]
+        ret = stk[8]
         if ret is None: continue
         pos = rank_idx + 1
         if pos not in rank_data[regime]:
@@ -389,6 +429,52 @@ for regime in rank_data:
             }
 
 # ================================================================
+# Estadisticas anuales (SPY) por año y por régimen dentro de cada año
+# ================================================================
+print("Calculando estadisticas anuales...")
+yearly_stats = {}  # year -> {total: {ret, n, wr}, regimes: {regime: {ret, n, wr}}}
+
+from collections import defaultdict
+year_weeks = defaultdict(list)  # year -> [(spy_ret, regime)]
+for week in all_weeks:
+    if week['sr'] is not None:
+        year_weeks[week['y']].append((week['sr'], week['r']))
+
+for year in sorted(year_weeks.keys()):
+    entries = year_weeks[year]
+    rets_all = [e[0] for e in entries]
+    # Retorno compuesto anual
+    compound = 1.0
+    for r in rets_all:
+        compound *= (1 + r / 100)
+    yearly_stats[year] = {
+        'total': {
+            'r': round((compound - 1) * 100, 2),
+            'n': len(rets_all),
+            'a': round(float(np.mean(rets_all)), 3),
+            'w': round(sum(1 for r in rets_all if r > 0) / len(rets_all) * 100, 1),
+        },
+        'regimes': {}
+    }
+    # Por regimen dentro del año
+    reg_rets = defaultdict(list)
+    for ret, reg in entries:
+        reg_rets[reg].append(ret)
+    for reg in reg_rets:
+        rr = reg_rets[reg]
+        comp_r = 1.0
+        for r in rr:
+            comp_r *= (1 + r / 100)
+        yearly_stats[year]['regimes'][reg] = {
+            'r': round((comp_r - 1) * 100, 2),
+            'n': len(rr),
+            'a': round(float(np.mean(rr)), 3),
+            'w': round(sum(1 for r in rr if r > 0) / len(rr) * 100, 1),
+        }
+
+print(f"  Años: {min(yearly_stats.keys())}-{max(yearly_stats.keys())}")
+
+# ================================================================
 # HTML
 # ================================================================
 print("Generando HTML...")
@@ -399,6 +485,7 @@ weeks_json = json.dumps(all_weeks)
 rank_json = json.dumps(rank_stats)
 group_json = json.dumps(group_stats)
 rc_json = json.dumps(REGIME_COLORS)
+yearly_json = json.dumps(yearly_stats)
 
 print(f"  weeks JSON: {len(weeks_json)/1024/1024:.1f} MB")
 
@@ -457,11 +544,13 @@ td.left {{ text-align: left; }}
 <div class="yb" id="rb" style="margin-top:4px;"></div>
 </div>
 <div id="ct"></div>
+<div id="yt"></div>
 <script>
 const T={tickers_json};
 const W={weeks_json};
 const RC={rc_json};
 const RS={rank_json};
+const YS={yearly_json};
 const GS={group_json};
 const sel=document.getElementById('ws');
 W.forEach((w,i)=>{{const o=document.createElement('option');o.value=i;const r=w.sr!==null?(w.sr>=0?'+':'')+w.sr.toFixed(2)+'%':'-';o.text=w.y+' S'+w.w+' ('+w.d+') '+w.r+' '+r;sel.appendChild(o);}});
@@ -491,13 +580,15 @@ let h='<div style="text-align:center;margin:10px 0;"><span class="rb" style="bac
 h+='<div class="sbox"><div class="sc"><h4>SPY</h4><div class="v">$'+w.sp+'</div></div><div class="sc"><h4>VIX</h4><div class="v">'+w.v+'</div></div><div class="sc"><h4>Acciones</h4><div class="v">'+w.s.length+'</div></div></div>';
 h+='<h2>Ranking Acciones ('+w.s.length+')</h2>';
 h+='<div style="margin-bottom:6px;"><input type="text" id="ss" placeholder="Buscar ticker..." onkeyup="fS()"></div>';
-h+='<div class="st"><table id="sT"><tr><th onclick="sC(0)">#</th><th>Chg</th><th onclick="sC(2)">Ticker</th><th onclick="sC(3)">Subsector</th><th onclick="sC(4)">Score</th><th onclick="sC(5)">FV</th><th onclick="sC(6)">Mom</th><th onclick="sC(7)">RSI</th><th onclick="sC(8)">DD</th><th onclick="sC(9)">$</th><th onclick="sC(10)">Ret%</th></tr>';
+h+='<div class="st"><table id="sT"><tr><th onclick="sC(0)">#</th><th>Chg</th><th onclick="sC(2)">Ticker</th><th onclick="sC(3)">Subsector</th><th onclick="sC(4)">Score</th><th onclick="sC(5)">FV</th><th onclick="sC(6)">Mom</th><th onclick="sC(7)">RSI</th><th onclick="sC(8)">DD</th><th onclick="sC(9)">Open Fri</th><th onclick="sC(10)">Open Fri+1</th><th onclick="sC(11)">Ret%</th></tr>';
 w.s.forEach((s,i)=>{{
 const ti=T[s[0]];const fc=s[2]>=5.5?' class="fh"':s[2]<4.5?' class="fl"':'';
-const rt=s[7]!==null?'<span class="'+vc(s[7])+'">'+fm(s[7],2)+'%</span>':'<span class="neutral">-</span>';
+const rt=s[8]!==null?'<span class="'+vc(s[8])+'">'+fm(s[8],2)+'%</span>':'<span class="neutral">-</span>';
+const op=s[6]!==null?'$'+s[6].toFixed(2):'<span class="neutral">-</span>';
+const np=s[7]!==null?'$'+s[7].toFixed(2):'<span class="neutral">-</span>';
 let cg='<span class="cs">-</span>';const cv=w.c[String(s[0])];
 if(cv!==undefined){{if(cv>0)cg='<span class="cu">&#x25B2;'+cv+'</span>';else if(cv<0)cg='<span class="cd">&#x25BC;'+Math.abs(cv)+'</span>';else cg='<span class="cs">=</span>';}}
-h+='<tr'+fc+' data-t="'+ti.t.toLowerCase()+'" data-r="'+(s[7]!==null?s[7]:-999)+'"><td>'+(i+1)+'</td><td>'+cg+'</td><td><b>'+ti.t+'</b></td><td class="left" style="font-size:10px;">'+ti.s+'</td><td><b>'+s[1]+'</b></td><td class="'+vc(s[2]-5)+'">'+s[2]+'</td><td class="'+vc(s[3])+'">'+fm(s[3],0)+'%</td><td>'+s[4]+'</td><td class="'+vc(s[5])+'">'+fm(s[5],0)+'%</td><td>$'+s[6]+'</td><td>'+rt+'</td></tr>';
+h+='<tr'+fc+' data-t="'+ti.t.toLowerCase()+'" data-r="'+(s[8]!==null?s[8]:-999)+'"><td>'+(i+1)+'</td><td>'+cg+'</td><td><b>'+ti.t+'</b></td><td class="left" style="font-size:10px;">'+ti.s+'</td><td><b>'+s[1]+'</b></td><td class="'+vc(s[2]-5)+'">'+s[2]+'</td><td class="'+vc(s[3])+'">'+fm(s[3],0)+'%</td><td>'+s[4]+'</td><td class="'+vc(s[5])+'">'+fm(s[5],0)+'%</td><td>'+op+'</td><td>'+np+'</td><td>'+rt+'</td></tr>';
 }});
 h+='</table></div>';
 // Group stats (groups of 10)
@@ -531,6 +622,23 @@ document.getElementById('ct').innerHTML=h;
 function fS(){{const q=document.getElementById('ss').value.toLowerCase();document.querySelectorAll('#sT tr[data-t]').forEach(r=>{{r.style.display=q===''||r.dataset.t.includes(q)?'':'none';}});}}
 let sD={{}};
 function sC(c){{const t=document.getElementById('sT');if(!t)return;const rows=Array.from(t.querySelectorAll('tr[data-t]'));const d=sD[c]=!(sD[c]||false);rows.sort((a,b)=>{{let va=a.cells[c].textContent.replace(/[\\$%+=\\-\\u25B2\\u25BC]/g,'').trim();let vb=b.cells[c].textContent.replace(/[\\$%+=\\-\\u25B2\\u25BC]/g,'').trim();let na=parseFloat(va),nb=parseFloat(vb);if(!isNaN(na)&&!isNaN(nb))return d?na-nb:nb-na;return d?va.localeCompare(vb):vb.localeCompare(va);}});rows.forEach((r,i)=>{{r.cells[0].textContent=i+1;t.appendChild(r);}});}}
+// Yearly stats table
+(function(){{
+const RO=['BURBUJA','GOLDILOCKS','ALCISTA','NEUTRAL','CAUTIOUS','BEARISH','RECOVERY','CRISIS','PANICO','CAPITULACION'];
+const yrs=Object.keys(YS).sort();
+let h='<h2>Rendimiento Anual SPY (compuesto semanal)</h2>';
+h+='<div class="note">Retorno compuesto de las semanas de cada a&ntilde;o (Fri open &rarr; Fri open). Desglose por r&eacute;gimen dentro de cada a&ntilde;o.</div>';
+h+='<table class="qt"><tr><th>A&ntilde;o</th><th>Sem</th><th>Ret Compuesto</th><th>Ret Medio/Sem</th><th>Win Rate</th></tr>';
+yrs.forEach(y=>{{
+const d=YS[y].total;
+const bg=d.r>=0?'background:#e8f5e9;':'background:#ffebee;';
+h+='<tr style="'+bg+'font-weight:bold;"><td>'+y+'</td><td>'+d.n+'</td><td class="'+vc(d.r)+'">'+fm(d.r,2)+'%</td><td class="'+vc(d.a)+'">'+fm(d.a,3)+'%</td><td>'+(d.w>=55?'<span class="pos">':d.w<48?'<span class="neg">':'<span>')+d.w.toFixed(1)+'%</span></td></tr>';
+const regs=YS[y].regimes;
+RO.forEach(r=>{{if(regs[r]){{const rd=regs[r];h+='<tr><td style="padding-left:20px;color:'+(RC[r]||'#666')+';font-size:11px;">'+r+'</td><td style="font-size:11px;">'+rd.n+'</td><td style="font-size:11px;" class="'+vc(rd.r)+'">'+fm(rd.r,2)+'%</td><td style="font-size:11px;" class="'+vc(rd.a)+'">'+fm(rd.a,3)+'%</td><td style="font-size:11px;">'+(rd.w>=55?'<span class="pos">':rd.w<48?'<span class="neg">':'<span>')+rd.w.toFixed(1)+'%</span></td></tr>';}}}});
+}});
+h+='</table>';
+document.getElementById('yt').innerHTML=h;
+}})();
 </script></body></html>"""
 
 with open('acciones_navegable.html', 'w', encoding='utf-8') as f:
