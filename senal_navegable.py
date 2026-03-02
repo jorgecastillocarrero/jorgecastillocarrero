@@ -140,7 +140,7 @@ df_all_daily = df_all[['symbol', 'date', 'open', 'subsector']].dropna(subset=['o
 df_all_daily = df_all_daily.set_index('date').sort_index()
 
 # Para cada viernes del resample, buscar el open del dia (o siguiente habil)
-sub_fri_open = df_all_daily.groupby([pd.Grouper(freq='W-FRI'), 'subsector'])['open'].mean()
+sub_fri_open = df_all_daily.groupby([pd.Grouper(freq='W-FRI'), 'subsector'])['open'].last()
 sub_fri_open = sub_fri_open.reset_index()
 sub_fri_open.columns = ['date', 'subsector', 'avg_open']
 sub_fri_open = sub_fri_open.sort_values(['subsector', 'date'])

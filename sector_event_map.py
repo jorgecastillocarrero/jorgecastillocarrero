@@ -15,26 +15,40 @@ SUBSECTORS = {
     "semiconductors": {
         "etf": "XLK", "label": "Semiconductors",
         "tickers": ["NVDA", "AVGO", "AMD", "INTC", "QCOM", "TXN", "AMAT", "LRCX",
-                     "KLAC", "MCHP", "ADI", "NXPI", "ON", "MPWR", "SWKS", "QRVO", "MRVL", "GFS"],
+                     "KLAC", "MCHP", "ADI", "NXPI", "ON", "MPWR", "SWKS", "QRVO", "MRVL", "GFS",
+                     "MU", "TER", "Q"],
     },
     "software_app": {
         "etf": "XLK", "label": "Software Application",
         "tickers": ["CRM", "ADSK", "CDNS", "SNPS", "FICO", "DDOG", "APP", "INTU",
-                     "ANSS", "PLTR", "TTWO", "EA", "ORCL", "NOW"],
+                     "ANSS", "PLTR", "TTWO", "EA", "ORCL", "NOW",
+                     "UBER", "WDAY", "TTD", "TYL", "PAYC", "MTCH"],
     },
     "software_infra": {
         "etf": "XLK", "label": "Software Infrastructure",
         "tickers": ["MSFT", "ADBE", "CRWD", "PANW", "FTNT", "GEN", "FFIV", "AKAM",
-                     "CPAY", "ROP", "TOST", "GDDY", "PTC", "MANH", "NICE"],
+                     "CPAY", "ROP", "TOST", "GDDY", "PTC", "MANH", "NICE",
+                     "VRSN", "XYZ"],
     },
     "hardware": {
         "etf": "XLK", "label": "Hardware & Equipment",
         "tickers": ["AAPL", "DELL", "HPQ", "ANET", "NTAP", "STX", "WDC", "SMCI",
-                     "APH", "GLW", "JBL", "KEYS", "GRMN", "TDY", "ZBRA", "FTV", "CSCO", "MSI"],
+                     "APH", "GLW", "JBL", "KEYS", "GRMN", "TDY", "ZBRA", "FTV", "CSCO", "MSI",
+                     "TEL", "TRMB", "SNDK", "CIEN", "HUBB"],
     },
     "it_services": {
         "etf": "XLK", "label": "IT Services",
-        "tickers": ["ACN", "IBM", "CDW", "CTSH", "FIS", "FISV", "BR", "EPAM", "LDOS", "IT", "HPE"],
+        "tickers": ["ACN", "IBM", "CDW", "CTSH", "FIS", "FISV", "BR", "EPAM", "LDOS", "IT", "HPE",
+                     "JKHY"],
+    },
+    "internet_media": {
+        "etf": "XLC", "label": "Internet & Media",
+        "tickers": ["META", "GOOGL", "GOOG", "DASH", "NFLX", "DIS", "FOX", "FOXA",
+                     "NWS", "NWSA", "WBD", "LYV", "TKO", "PSKY", "OMC"],
+    },
+    "telecom": {
+        "etf": "XLC", "label": "Telecommunications",
+        "tickers": ["T", "VZ", "TMUS", "CMCSA", "CHTR"],
     },
 
     # ── XLV - Healthcare ───────────────────────────
@@ -44,17 +58,19 @@ SUBSECTORS = {
     },
     "biotech": {
         "etf": "XLV", "label": "Biotech",
-        "tickers": ["MRNA", "REGN", "VRTX", "INCY", "TECH"],
+        "tickers": ["MRNA", "REGN", "VRTX", "INCY", "TECH", "ZTS", "VTRS"],
     },
     "medical_devices": {
         "etf": "XLV", "label": "Medical Devices & Instruments",
         "tickers": ["ABT", "MDT", "BSX", "SYK", "ISRG", "EW", "DXCM", "ALGN",
-                     "BDX", "BAX", "COO", "HOLX", "RMD", "ZBH"],
+                     "BDX", "BAX", "COO", "HOLX", "RMD", "ZBH",
+                     "PODD", "STE", "WST"],
     },
     "health_services": {
         "etf": "XLV", "label": "Health Services & Plans",
         "tickers": ["UNH", "CI", "ELV", "CNC", "HUM", "MOH", "CVS", "HCA", "DVA",
-                     "UHS", "GEHC", "CAH", "COR", "MCK", "HSIC"],
+                     "UHS", "GEHC", "CAH", "COR", "MCK", "HSIC",
+                     "SOLV"],
     },
     "diagnostics_research": {
         "etf": "XLV", "label": "Diagnostics & Research",
@@ -74,13 +90,15 @@ SUBSECTORS = {
         "etf": "XLF", "label": "Insurance",
         "tickers": ["BRK-B", "PGR", "CB", "ALL", "MET", "AIG", "AFL", "TRV", "HIG",
                      "PRU", "GL", "CINF", "L", "EG", "AIZ", "ERIE",
-                     "AON", "AJG", "WTW", "BRO", "MRSH", "PFG"],
+                     "AON", "AJG", "WTW", "BRO", "MRSH", "PFG",
+                     "ACGL", "WRB"],
     },
     "capital_markets": {
         "etf": "XLF", "label": "Capital Markets & Exchanges",
         "tickers": ["GS", "MS", "SCHW", "RJF", "HOOD", "BLK", "BX", "KKR", "APO",
                      "ARES", "BK", "BEN", "TROW", "IVZ", "NTRS",
-                     "CME", "ICE", "CBOE", "NDAQ", "MCO", "SPGI", "MSCI", "FDS", "COIN", "IBKR"],
+                     "CME", "ICE", "CBOE", "NDAQ", "MCO", "SPGI", "MSCI", "FDS", "COIN", "IBKR",
+                     "AMP", "STT"],
     },
     "credit_payments": {
         "etf": "XLF", "label": "Credit & Payments",
@@ -94,7 +112,8 @@ SUBSECTORS = {
     },
     "oil_exploration": {
         "etf": "XLE", "label": "Oil & Gas E&P",
-        "tickers": ["COP", "EOG", "PXD", "DVN", "FANG", "MRO", "APA", "CTRA", "EQT", "OVV"],
+        "tickers": ["COP", "EOG", "PXD", "DVN", "FANG", "MRO", "APA", "CTRA", "EQT", "OVV",
+                     "OXY", "EXE", "TPL"],
     },
     "oil_midstream": {
         "etf": "XLE", "label": "Oil & Gas Midstream",
@@ -117,7 +136,7 @@ SUBSECTORS = {
     "aerospace_defense": {
         "etf": "XLI", "label": "Aerospace & Defense",
         "tickers": ["RTX", "LMT", "BA", "GD", "NOC", "LHX", "GE", "HII",
-                     "TDG", "HWM", "LDOS", "AXON"],
+                     "TDG", "HWM", "LDOS", "AXON", "TXT"],
     },
     "airlines": {
         "etf": "XLI", "label": "Airlines",
@@ -126,7 +145,8 @@ SUBSECTORS = {
     "machinery": {
         "etf": "XLI", "label": "Industrial Machinery",
         "tickers": ["CAT", "DE", "CMI", "EMR", "ETN", "ROK", "DOV", "ITW",
-                     "AME", "IR", "PH", "OTIS", "XYL", "NDSN", "IEX", "PNR", "AOS", "PCAR"],
+                     "AME", "IR", "PH", "OTIS", "XYL", "NDSN", "IEX", "PNR", "AOS", "PCAR",
+                     "GNRC", "VLTO"],
     },
     "construction": {
         "etf": "XLI", "label": "Construction & Building",
@@ -139,7 +159,8 @@ SUBSECTORS = {
     "professional_services": {
         "etf": "XLI", "label": "Professional & Business Services",
         "tickers": ["ADP", "PAYX", "CTAS", "WM", "RSG", "URI", "GPN", "VRSK", "EFX",
-                     "SNA", "SWK", "FAST", "GWW", "POOL", "ALLE"],
+                     "SNA", "SWK", "FAST", "GWW", "POOL", "ALLE",
+                     "HON", "MMM", "AVY", "ROL"],
     },
     "engineering": {
         "etf": "XLI", "label": "Engineering & Construction",
@@ -149,7 +170,7 @@ SUBSECTORS = {
     # ── XLY - Consumer Discretionary ───────────────
     "ecommerce_retail": {
         "etf": "XLY", "label": "E-Commerce & Specialty Retail",
-        "tickers": ["AMZN", "EBAY", "ORLY", "AZO", "BBY", "ULTA", "GPC", "TSCO", "KMX"],
+        "tickers": ["AMZN", "EBAY", "ORLY", "AZO", "BBY", "ULTA", "GPC", "TSCO", "KMX", "WSM"],
     },
     "home_improvement": {
         "etf": "XLY", "label": "Home Improvement",
@@ -205,7 +226,7 @@ SUBSECTORS = {
         "etf": "XLU", "label": "Regulated Electric Utilities",
         "tickers": ["NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "WEC",
                      "ES", "ED", "DTE", "XEL", "PEG", "EIX", "ETR", "AEE",
-                     "CMS", "PPL", "FE", "EVRG", "CNP", "AES", "PNW", "LNT", "NI"],
+                     "CMS", "PPL", "FE", "EVRG", "CNP", "AES", "PNW", "LNT", "NI", "PCG"],
     },
     "power_producers": {
         "etf": "XLU", "label": "Independent Power & Renewables",
@@ -240,6 +261,40 @@ SUBSECTORS = {
     "ag_inputs": {
         "etf": "XLB", "label": "Agricultural Inputs (Fertilizers)",
         "tickers": ["CF", "MOS", "CTVA"],
+    },
+    "packaging": {
+        "etf": "XLB", "label": "Packaging & Containers",
+        "tickers": ["AMCR", "BALL", "IP", "PKG", "SW"],
+    },
+
+    # ── XLRE - Real Estate ────────────────────────────
+    "reit_residential": {
+        "etf": "XLRE", "label": "REIT Residential",
+        "tickers": ["AVB", "EQR", "ESS", "MAA", "UDR", "CPT", "INVH"],
+    },
+    "reit_industrial": {
+        "etf": "XLRE", "label": "REIT Industrial & Storage",
+        "tickers": ["PLD", "PSA", "EXR"],
+    },
+    "reit_retail": {
+        "etf": "XLRE", "label": "REIT Retail",
+        "tickers": ["SPG", "O", "KIM", "REG", "FRT"],
+    },
+    "reit_office_data": {
+        "etf": "XLRE", "label": "REIT Office & Data Centers",
+        "tickers": ["DLR", "EQIX", "BXP", "ARE"],
+    },
+    "reit_specialty": {
+        "etf": "XLRE", "label": "REIT Specialty & Towers",
+        "tickers": ["AMT", "CCI", "SBAC", "IRM", "VICI", "WY"],
+    },
+    "reit_healthcare": {
+        "etf": "XLRE", "label": "REIT Healthcare & Hotels",
+        "tickers": ["WELL", "VTR", "DOC", "HST"],
+    },
+    "real_estate_services": {
+        "etf": "XLRE", "label": "Real Estate Services",
+        "tickers": ["CBRE", "CSGP"],
     },
 }
 
@@ -344,6 +399,14 @@ EVENT_SUBSECTOR_MAP = {
             "biotech": -1,                       # Growth penalizado
             "medical_devices": -1,               # Growth names (ISRG)
             "gold": -1,                          # Tipos reales altos = oro baja
+            "reit_residential": -2,              # Hipotecas caras = menos demanda
+            "reit_industrial": -1,               # Yield competition
+            "reit_retail": -2,                   # Yield + consumo cae
+            "reit_office_data": -1,              # Yield competition
+            "reit_specialty": -1,                # Yield competition
+            "reit_healthcare": -1,               # Yield competition
+            "internet_media": -1,                # Growth penalizado (META, NFLX)
+            "telecom": +1,                       # Defensivo, dividendo
         }
     },
 
@@ -365,6 +428,13 @@ EVENT_SUBSECTOR_MAP = {
             "travel_leisure": +1,                # Gasto discrecional sube
             "airlines": +1,                      # Financiacion flota
             "banks_major": -1, "banks_regional": -2,  # Menor margen
+            "reit_residential": +2,              # Hipotecas baratas = demanda
+            "reit_industrial": +1,               # Yield attractive
+            "reit_retail": +1,                   # Consumo sube
+            "reit_office_data": +1,              # Yield attractive
+            "reit_specialty": +1,                # Yield attractive
+            "reit_healthcare": +1,               # Yield attractive
+            "internet_media": +1,                # Growth favorecido
         }
     },
 
@@ -427,6 +497,13 @@ EVENT_SUBSECTOR_MAP = {
             "copper": -2,                        # Demanda industrial cae (-54% Q4'08)
             "chemicals": -1,
             "construction_materials": -1,        # Demanda cae (-25% Q1'09)
+            "reit_residential": -2,              # Morosidad alquileres
+            "reit_retail": -2,                   # Ocupacion cae
+            "reit_office_data": -1,              # Vacancia sube
+            "reit_industrial": -1,               # Demanda logistica cae
+            "reit_specialty": -1,                # Mixto
+            "internet_media": -1,                # Publicidad cae
+            "telecom": +1,                       # Esencial, defensivo
             "ag_inputs": -1,                     # Demanda cae (-47% Q4'08)
             # Tecnologia (capex cuts)
             "semiconductors": -1,                # Capex cuts (-30% Q4'08)
