@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>Analisis Predictivo - Transiciones de Regimen</title>
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #fafafa; max-width: 1400px; margin: 0 auto; padding: 20px; }
+h1 { color: #333; border-bottom: 3px solid #333; padding-bottom: 10px; }
+h2 { color: #555; margin-top: 40px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+h3 { color: #666; }
+.intro { background: white; padding: 15px; border-radius: 8px; margin: 15px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+table { border-collapse: collapse; margin: 15px 0; }
+th { background: #333; color: white; padding: 10px 14px; text-align: center; font-size: 13px; }
+td { padding: 8px 12px; text-align: center; border: 1px solid #e0e0e0; font-size: 13px; }
+.matrix-table td { min-width: 70px; }
+.pct-high { background: #1b5e20; color: white; font-weight: bold; }
+.pct-med { background: #4caf50; color: white; }
+.pct-low { background: #c8e6c9; }
+.pct-zero { background: #f5f5f5; color: #ccc; }
+.pct-self { border: 3px solid #333; }
+.stat-card { display: inline-block; background: white; padding: 15px 25px; margin: 8px; border-radius: 8px;
+             box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; min-width: 120px; }
+.stat-value { font-size: 28px; font-weight: bold; }
+.stat-label { font-size: 12px; color: #888; margin-top: 4px; }
+.regime-section { background: white; padding: 20px; margin: 15px 0; border-radius: 8px;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.bar-container { display: flex; align-items: center; margin: 4px 0; }
+.bar-label { width: 90px; font-size: 12px; font-weight: bold; text-align: right; padding-right: 8px; }
+.bar { height: 24px; border-radius: 3px; display: flex; align-items: center; padding-left: 6px;
+       font-size: 11px; color: white; font-weight: bold; min-width: 2px; }
+.bar-value { font-size: 12px; margin-left: 6px; color: #666; }
+.persistence-table td { text-align: center; }
+.zone-badge { display: inline-block; padding: 4px 12px; border-radius: 15px; font-weight: bold;
+              font-size: 13px; color: white; margin: 2px; }
+.insight { background: #e3f2fd; padding: 12px 16px; border-radius: 6px; margin: 10px 0;
+           border-left: 4px solid #1976d2; font-size: 14px; }
+.warning { background: #fff3e0; border-left-color: #f57c00; }
+</style></head><body>
+
+<h1>Analisis Predictivo: Transiciones de Regimen de Mercado</h1>
+<div class="intro">
+<p><b>Pregunta:</b> Si el viernes al cierre el regimen es X, que probabilidad hay de que la semana siguiente sea cada regimen?</p>
+<p>Basado en <b>1311 semanas</b> de datos (2001-2026). Cada celda muestra P(siguiente | actual).</p>
+</div>
+
+<h2>1. Vista Simplificada: Transiciones por Zona</h2>
+<table class="matrix-table"><tr><th></th><th colspan="3">Semana Siguiente</th></tr>
+<tr><th>Viernes actual</th>
+<th style="background:#33cc33">ALCISTA</th>
+<th style="background:#888888">NEUTRAL</th>
+<th style="background:#cc3333">BAJISTA</th>
+<th>N</th></tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td>
+<td class="pct-high pct-self">84.6%<br><small>(468)</small></td>
+<td class="pct-low">14.5%<br><small>(80)</small></td>
+<td class="pct-low">0.9%<br><small>(5)</small></td>
+<td><b>553</b></td></tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td>
+<td class="pct-low">29.9%<br><small>(83)</small></td>
+<td class="pct-med pct-self">54.3%<br><small>(151)</small></td>
+<td class="pct-low">15.8%<br><small>(44)</small></td>
+<td><b>278</b></td></tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BAJISTA</td>
+<td class="pct-low">0.6%<br><small>(3)</small></td>
+<td class="pct-low">9.8%<br><small>(47)</small></td>
+<td class="pct-high pct-self">89.6%<br><small>(430)</small></td>
+<td><b>480</b></td></tr>
+</table>
+<div class="insight">Si estamos en zona <b>ALCISTA</b>, hay un <b>85%</b> de probabilidad de seguir en la misma zona la semana siguiente.</div>
+<div class="insight">Si estamos en zona <b>NEUTRAL</b>, hay un <b>54%</b> de probabilidad de seguir en la misma zona la semana siguiente.</div>
+<div class="insight">Si estamos en zona <b>BAJISTA</b>, hay un <b>90%</b> de probabilidad de seguir en la misma zona la semana siguiente.</div>
+<h2>2. Matriz Completa: 8 Regimenes</h2>
+<p>Cada fila muestra: dado el regimen actual (viernes), probabilidad de cada regimen la semana siguiente.</p>
+<table class="matrix-table"><tr><th rowspan="2">Viernes<br>actual</th><th colspan="8">Regimen semana siguiente</th><th rowspan="2">N</th></tr><tr>
+<th style="background:#ff6600">BURB</th>
+<th style="background:#00aa00">GOLD</th>
+<th style="background:#33cc33">ALCI</th>
+<th style="background:#888888">NEUT</th>
+<th style="background:#cc9900">CAUT</th>
+<th style="background:#cc3333">BEAR</th>
+<th style="background:#990000">CRIS</th>
+<th style="background:#660066">PANI</th>
+</tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td>
+<td class="pct-med pct-self">22%<br><small>(2)</small></td>
+<td class="pct-high">78%<br><small>(7)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td><b>9</b></td></tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td>
+<td class="pct-low">4%<br><small>(7)</small></td>
+<td class="pct-high pct-self">66%<br><small>(112)</small></td>
+<td class="pct-med">25%<br><small>(42)</small></td>
+<td class="pct-low">4%<br><small>(6)</small></td>
+<td class="pct-low">1%<br><small>(2)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td><b>169</b></td></tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-low">13%<br><small>(50)</small></td>
+<td class="pct-high pct-self">66%<br><small>(248)</small></td>
+<td class="pct-low">20%<br><small>(74)</small></td>
+<td class="pct-low">-<br><small>(1)</small></td>
+<td class="pct-low">-<br><small>(1)</small></td>
+<td class="pct-low">-<br><small>(1)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td><b>375</b></td></tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-med">30%<br><small>(83)</small></td>
+<td class="pct-high pct-self">54%<br><small>(151)</small></td>
+<td class="pct-low">10%<br><small>(29)</small></td>
+<td class="pct-low">5%<br><small>(15)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td><b>278</b></td></tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-low">2%<br><small>(3)</small></td>
+<td class="pct-med">27%<br><small>(35)</small></td>
+<td class="pct-med pct-self">41%<br><small>(52)</small></td>
+<td class="pct-med">24%<br><small>(31)</small></td>
+<td class="pct-low">5%<br><small>(7)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td><b>128</b></td></tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-low">10%<br><small>(12)</small></td>
+<td class="pct-med">30%<br><small>(37)</small></td>
+<td class="pct-med pct-self">40%<br><small>(49)</small></td>
+<td class="pct-med">20%<br><small>(25)</small></td>
+<td class="pct-low">-<br><small>(1)</small></td>
+<td><b>124</b></td></tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-low">5%<br><small>(7)</small></td>
+<td class="pct-med">20%<br><small>(27)</small></td>
+<td class="pct-high pct-self">58%<br><small>(77)</small></td>
+<td class="pct-low">16%<br><small>(21)</small></td>
+<td><b>132</b></td></tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-zero">-<br><small>(0)</small></td>
+<td class="pct-med">23%<br><small>(22)</small></td>
+<td class="pct-high pct-self">77%<br><small>(74)</small></td>
+<td><b>96</b></td></tr>
+</table>
+<h2>3. Detalle por Regimen: Probabilidades de Transicion</h2>
+<div class="regime-section" style="border-left: 5px solid #ff6600">
+<h3 style="color:#ff6600;margin-top:0">BURBUJA (9 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#ff6600">22%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">100%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">0%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">0%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">+0.61%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">1.3</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#ff6600">BURBUJA</div><div class="bar" style="width:88.88888888888889px;background:#ff6600">22%</div><div class="bar-value">(2 sem) SPY +1.10%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#00aa00">GOLDILOCKS</div><div class="bar" style="width:311.11111111111114px;background:#00aa00">78%</div><div class="bar-value">(7 sem) SPY +0.47%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#00aa00">GOLDILOCKS</b> (78% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 1 sem, media 1.3 sem, max 2 sem (7 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #00aa00">
+<h3 style="color:#00aa00;margin-top:0">GOLDILOCKS (169 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#00aa00">66%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">95%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">4%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">1%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">+0.53%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">3.0</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#ff6600">BURBUJA</div><div class="bar" style="width:16.56804733727811px;background:#ff6600">4%</div><div class="bar-value">(7 sem) SPY +1.72%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#00aa00">GOLDILOCKS</div><div class="bar" style="width:265.08875739644975px;background:#00aa00">66%</div><div class="bar-value">(112 sem) SPY +0.64%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#33cc33">ALCISTA</div><div class="bar" style="width:99.40828402366864px;background:#33cc33">25%</div><div class="bar-value">(42 sem) SPY +0.41%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#888888">NEUTRAL</div><div class="bar" style="width:14.201183431952662px;background:#888888">4%</div><div class="bar-value">(6 sem) SPY -0.29%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:4.733727810650888px;background:#cc9900">1%</div><div class="bar-value">(2 sem) SPY -4.69%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#33cc33">ALCISTA</b> (25% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 2 sem, media 3.0 sem, max 14 sem (57 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #33cc33">
+<h3 style="color:#33cc33;margin-top:0">ALCISTA (375 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">66%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">79%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">20%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">1%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">+0.51%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">2.9</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#00aa00">GOLDILOCKS</div><div class="bar" style="width:53.333333333333336px;background:#00aa00">13%</div><div class="bar-value">(50 sem) SPY +0.55%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#33cc33">ALCISTA</div><div class="bar" style="width:264.5333333333333px;background:#33cc33">66%</div><div class="bar-value">(248 sem) SPY +0.66%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#888888">NEUTRAL</div><div class="bar" style="width:78.93333333333334px;background:#888888">20%</div><div class="bar-value">(74 sem) SPY +0.07%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:2px;background:#cc9900">0%</div><div class="bar-value">(1 sem) SPY -1.17%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc3333">BEARISH</div><div class="bar" style="width:2px;background:#cc3333">0%</div><div class="bar-value">(1 sem) SPY -3.18%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#990000">CRISIS</div><div class="bar" style="width:2px;background:#990000">0%</div><div class="bar-value">(1 sem) SPY -3.74%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#888888">NEUTRAL</b> (20% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 2 sem, media 2.9 sem, max 13 sem (128 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #888888">
+<h3 style="color:#888888;margin-top:0">NEUTRAL (278 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#888888">54%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">30%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">54%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">16%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">+0.09%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">2.2</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#33cc33">ALCISTA</div><div class="bar" style="width:119.42446043165467px;background:#33cc33">30%</div><div class="bar-value">(83 sem) SPY +0.32%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#888888">NEUTRAL</div><div class="bar" style="width:217.2661870503597px;background:#888888">54%</div><div class="bar-value">(151 sem) SPY +0.04%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:41.726618705035975px;background:#cc9900">10%</div><div class="bar-value">(29 sem) SPY -0.22%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc3333">BEARISH</div><div class="bar" style="width:21.58273381294964px;background:#cc3333">5%</div><div class="bar-value">(15 sem) SPY -0.08%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#33cc33">ALCISTA</b> (30% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 2 sem, media 2.2 sem, max 9 sem (127 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #cc9900">
+<h3 style="color:#cc9900;margin-top:0">CAUTIOUS (128 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#cc9900">41%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">2%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">27%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">70%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">+0.04%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">1.7</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#33cc33">ALCISTA</div><div class="bar" style="width:9.375px;background:#33cc33">2%</div><div class="bar-value">(3 sem) SPY +0.69%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#888888">NEUTRAL</div><div class="bar" style="width:109.375px;background:#888888">27%</div><div class="bar-value">(35 sem) SPY +0.45%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:162.5px;background:#cc9900">41%</div><div class="bar-value">(52 sem) SPY +0.17%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc3333">BEARISH</div><div class="bar" style="width:96.875px;background:#cc3333">24%</div><div class="bar-value">(31 sem) SPY -0.38%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#990000">CRISIS</div><div class="bar" style="width:21.875px;background:#990000">5%</div><div class="bar-value">(7 sem) SPY -1.49%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#888888">NEUTRAL</b> (27% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 1 sem, media 1.7 sem, max 5 sem (76 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #cc3333">
+<h3 style="color:#cc3333;margin-top:0">BEARISH (124 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">40%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">0%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">10%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">90%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">-0.15%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">1.7</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#888888">NEUTRAL</div><div class="bar" style="width:38.70967741935484px;background:#888888">10%</div><div class="bar-value">(12 sem) SPY -0.09%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:119.35483870967742px;background:#cc9900">30%</div><div class="bar-value">(37 sem) SPY +0.68%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc3333">BEARISH</div><div class="bar" style="width:158.06451612903226px;background:#cc3333">40%</div><div class="bar-value">(49 sem) SPY -0.29%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#990000">CRISIS</div><div class="bar" style="width:80.64516129032258px;background:#990000">20%</div><div class="bar-value">(25 sem) SPY -1.05%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#660066">PANICO</div><div class="bar" style="width:3.225806451612903px;background:#660066">1%</div><div class="bar-value">(1 sem) SPY -1.96%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#cc9900">CAUTIOUS</b> (30% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 1 sem, media 1.7 sem, max 6 sem (75 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #990000">
+<h3 style="color:#990000;margin-top:0">CRISIS (132 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#990000">58%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">0%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">0%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">100%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">-0.47%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">2.4</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#cc9900">CAUTIOUS</div><div class="bar" style="width:21.21212121212121px;background:#cc9900">5%</div><div class="bar-value">(7 sem) SPY +1.62%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#cc3333">BEARISH</div><div class="bar" style="width:81.81818181818183px;background:#cc3333">20%</div><div class="bar-value">(27 sem) SPY -0.13%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#990000">CRISIS</div><div class="bar" style="width:233.33333333333334px;background:#990000">58%</div><div class="bar-value">(77 sem) SPY -0.48%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#660066">PANICO</div><div class="bar" style="width:63.63636363636363px;background:#660066">16%</div><div class="bar-value">(21 sem) SPY -1.59%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#cc3333">BEARISH</b> (20% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 2 sem, media 2.4 sem, max 11 sem (55 episodios).</div>
+</div>
+<div class="regime-section" style="border-left: 5px solid #660066">
+<h3 style="color:#660066;margin-top:0">PANICO (96 semanas)</h3>
+<div>
+<div class="stat-card"><div class="stat-value" style="color:#660066">77%</div><div class="stat-label">Persistencia</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#33cc33">0%</div><div class="stat-label">Prob. Alcista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#888">0%</div><div class="stat-label">Prob. Neutral</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">100%</div><div class="stat-label">Prob. Bajista</div></div>
+<div class="stat-card"><div class="stat-value" style="color:#cc3333">-0.43%</div><div class="stat-label">SPY avg (L-L)</div></div>
+<div class="stat-card"><div class="stat-value">4.4</div><div class="stat-label">Duracion media (sem)</div></div>
+</div>
+<div style="margin-top:15px">
+<div class="bar-container"><div class="bar-label" style="color:#990000">CRISIS</div><div class="bar" style="width:91.66666666666666px;background:#990000">23%</div><div class="bar-value">(22 sem) SPY +1.31%</div></div>
+<div class="bar-container"><div class="bar-label" style="color:#660066">PANICO</div><div class="bar" style="width:308.33333333333337px;background:#660066">77%</div><div class="bar-value">(74 sem) SPY -0.94%</div></div>
+</div>
+<div class="insight">Si cambia, lo mas probable es pasar a <b style="color:#990000">CRISIS</b> (23% de las veces).</div>
+<div class="insight">Duracion de episodios: mediana 2 sem, media 4.4 sem, max 30 sem (22 episodios).</div>
+</div>
+<h2>4. Persistencia y Duracion de Episodios</h2>
+<table class="persistence-table"><tr><th>Regimen</th><th>Persistencia</th><th>Episodios</th><th>Duracion media</th><th>Duracion mediana</th><th>Max</th><th>1 sem</th><th>2-4 sem</th><th>5-10 sem</th><th>10+ sem</th></tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td><td><b>22%</b></td><td>7</td><td>1.3</td><td>1</td><td>2</td><td>5</td><td>2</td><td>0</td><td>0</td></tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td><td><b>66%</b></td><td>57</td><td>3.0</td><td>2</td><td>14</td><td>25</td><td>19</td><td>11</td><td>2</td></tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td><td><b>66%</b></td><td>128</td><td>2.9</td><td>2</td><td>13</td><td>46</td><td>57</td><td>23</td><td>2</td></tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td><td><b>54%</b></td><td>127</td><td>2.2</td><td>2</td><td>9</td><td>61</td><td>56</td><td>10</td><td>0</td></tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td><td><b>41%</b></td><td>76</td><td>1.7</td><td>1</td><td>5</td><td>47</td><td>27</td><td>2</td><td>0</td></tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td><td><b>40%</b></td><td>75</td><td>1.7</td><td>1</td><td>6</td><td>45</td><td>28</td><td>2</td><td>0</td></tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td><td><b>58%</b></td><td>55</td><td>2.4</td><td>2</td><td>11</td><td>26</td><td>22</td><td>6</td><td>1</td></tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td><td><b>77%</b></td><td>22</td><td>4.4</td><td>2</td><td>30</td><td>8</td><td>9</td><td>3</td><td>2</td></tr>
+</table>
+<h2>5. Probabilidad a 2, 3 y 4 Semanas Vista</h2>
+<p>Si hoy es viernes y el regimen es X, cual es la distribucion de probabilidad en 2/3/4 semanas?</p>
+<h3>En 2 semanas:</h3>
+<table class="matrix-table"><tr><th>Desde</th>
+<th style="background:#ff6600">BURB</th>
+<th style="background:#00aa00">GOLD</th>
+<th style="background:#33cc33">ALCI</th>
+<th style="background:#888888">NEUT</th>
+<th style="background:#cc9900">CAUT</th>
+<th style="background:#cc3333">BEAR</th>
+<th style="background:#990000">CRIS</th>
+<th style="background:#660066">PANI</th>
+</tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td>
+<td class="pct-low pct-self">8%</td>
+<td class="pct-high">69%</td>
+<td class="pct-low">19%</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td>
+<td class="pct-low">4%</td>
+<td class="pct-high pct-self">50%</td>
+<td class="pct-med">34%</td>
+<td class="pct-low">10%</td>
+<td class="pct-low">2%</td>
+<td class="pct-low">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td>
+<td class="pct-low">-</td>
+<td class="pct-low">18%</td>
+<td class="pct-high pct-self">53%</td>
+<td class="pct-med">24%</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">1%</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">4%</td>
+<td class="pct-med">36%</td>
+<td class="pct-med pct-self">39%</td>
+<td class="pct-low">12%</td>
+<td class="pct-low">8%</td>
+<td class="pct-low">2%</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">11%</td>
+<td class="pct-med">29%</td>
+<td class="pct-med pct-self">27%</td>
+<td class="pct-med">22%</td>
+<td class="pct-low">10%</td>
+<td class="pct-low">1%</td>
+</tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">4%</td>
+<td class="pct-low">17%</td>
+<td class="pct-med">26%</td>
+<td class="pct-med pct-self">27%</td>
+<td class="pct-med">22%</td>
+<td class="pct-low">4%</td>
+</tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">11%</td>
+<td class="pct-med">21%</td>
+<td class="pct-med pct-self">42%</td>
+<td class="pct-med">22%</td>
+</tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">1%</td>
+<td class="pct-low">5%</td>
+<td class="pct-med">31%</td>
+<td class="pct-high pct-self">63%</td>
+</tr>
+</table>
+<h3>En 3 semanas:</h3>
+<table class="matrix-table"><tr><th>Desde</th>
+<th style="background:#ff6600">BURB</th>
+<th style="background:#00aa00">GOLD</th>
+<th style="background:#33cc33">ALCI</th>
+<th style="background:#888888">NEUT</th>
+<th style="background:#cc9900">CAUT</th>
+<th style="background:#cc3333">BEAR</th>
+<th style="background:#990000">CRIS</th>
+<th style="background:#660066">PANI</th>
+</tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td>
+<td class="pct-low pct-self">5%</td>
+<td class="pct-high">55%</td>
+<td class="pct-med">31%</td>
+<td class="pct-low">8%</td>
+<td class="pct-low">2%</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td>
+<td class="pct-low">3%</td>
+<td class="pct-med pct-self">41%</td>
+<td class="pct-med">38%</td>
+<td class="pct-low">14%</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">1%</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td>
+<td class="pct-low">-</td>
+<td class="pct-low">19%</td>
+<td class="pct-med pct-self">47%</td>
+<td class="pct-med">25%</td>
+<td class="pct-low">4%</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">7%</td>
+<td class="pct-med">37%</td>
+<td class="pct-med pct-self">32%</td>
+<td class="pct-low">11%</td>
+<td class="pct-low">8%</td>
+<td class="pct-low">3%</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">2%</td>
+<td class="pct-low">16%</td>
+<td class="pct-med">27%</td>
+<td class="pct-med pct-self">21%</td>
+<td class="pct-low">19%</td>
+<td class="pct-low">12%</td>
+<td class="pct-low">3%</td>
+</tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">8%</td>
+<td class="pct-low">20%</td>
+<td class="pct-med">22%</td>
+<td class="pct-med pct-self">23%</td>
+<td class="pct-med">20%</td>
+<td class="pct-low">7%</td>
+</tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">1%</td>
+<td class="pct-low">7%</td>
+<td class="pct-low">14%</td>
+<td class="pct-low">20%</td>
+<td class="pct-med pct-self">34%</td>
+<td class="pct-med">24%</td>
+</tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">-</td>
+<td class="pct-low">4%</td>
+<td class="pct-low">8%</td>
+<td class="pct-med">34%</td>
+<td class="pct-high pct-self">54%</td>
+</tr>
+</table>
+<h3>En 4 semanas:</h3>
+<table class="matrix-table"><tr><th>Desde</th>
+<th style="background:#ff6600">BURB</th>
+<th style="background:#00aa00">GOLD</th>
+<th style="background:#33cc33">ALCI</th>
+<th style="background:#888888">NEUT</th>
+<th style="background:#cc9900">CAUT</th>
+<th style="background:#cc3333">BEAR</th>
+<th style="background:#990000">CRIS</th>
+<th style="background:#660066">PANI</th>
+</tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td>
+<td class="pct-low pct-self">3%</td>
+<td class="pct-med">44%</td>
+<td class="pct-med">36%</td>
+<td class="pct-low">13%</td>
+<td class="pct-low">2%</td>
+<td class="pct-low">1%</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td>
+<td class="pct-low">2%</td>
+<td class="pct-med pct-self">34%</td>
+<td class="pct-med">40%</td>
+<td class="pct-low">17%</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">2%</td>
+<td class="pct-low">-</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td>
+<td class="pct-low">-</td>
+<td class="pct-low">20%</td>
+<td class="pct-med pct-self">43%</td>
+<td class="pct-med">25%</td>
+<td class="pct-low">6%</td>
+<td class="pct-low">4%</td>
+<td class="pct-low">1%</td>
+<td class="pct-zero">-</td>
+</tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">10%</td>
+<td class="pct-med">36%</td>
+<td class="pct-med pct-self">29%</td>
+<td class="pct-low">11%</td>
+<td class="pct-low">9%</td>
+<td class="pct-low">4%</td>
+<td class="pct-low">-</td>
+</tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">20%</td>
+<td class="pct-med">26%</td>
+<td class="pct-low pct-self">18%</td>
+<td class="pct-low">17%</td>
+<td class="pct-low">13%</td>
+<td class="pct-low">4%</td>
+</tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">1%</td>
+<td class="pct-low">12%</td>
+<td class="pct-med">21%</td>
+<td class="pct-low">19%</td>
+<td class="pct-low pct-self">19%</td>
+<td class="pct-low">19%</td>
+<td class="pct-low">9%</td>
+</tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">3%</td>
+<td class="pct-low">10%</td>
+<td class="pct-low">14%</td>
+<td class="pct-low">19%</td>
+<td class="pct-med pct-self">30%</td>
+<td class="pct-med">24%</td>
+</tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-zero">-</td>
+<td class="pct-low">2%</td>
+<td class="pct-low">6%</td>
+<td class="pct-low">11%</td>
+<td class="pct-med">34%</td>
+<td class="pct-med pct-self">47%</td>
+</tr>
+</table>
+<h2>6. Retorno SPY por Regimen (Lunes open &rarr; Lunes open)</h2>
+<p>Retorno real de trading: senal viernes &rarr; compra lunes open &rarr; venta lunes open (+1 semana). Incluye gap fin de semana.</p>
+<table><tr><th>Regimen actual</th><th>N</th><th>SPY avg %</th><th>SPY med %</th><th>SPY std %</th><th>% semanas SPY+</th><th>Mejor</th><th>Peor</th></tr>
+<tr><td style="background:#ff6600;color:white;font-weight:bold">BURBUJA</td><td>9</td><td style="color:#33cc33;font-weight:bold">+0.61%</td><td>+0.78%</td><td>0.97%</td><td>89%</td><td>+1.8%</td><td>-1.7%</td></tr>
+<tr><td style="background:#00aa00;color:white;font-weight:bold">GOLDILOCKS</td><td>169</td><td style="color:#33cc33;font-weight:bold">+0.53%</td><td>+0.58%</td><td>1.34%</td><td>73%</td><td>+5.1%</td><td>-8.0%</td></tr>
+<tr><td style="background:#33cc33;color:white;font-weight:bold">ALCISTA</td><td>375</td><td style="color:#33cc33;font-weight:bold">+0.51%</td><td>+0.51%</td><td>1.42%</td><td>66%</td><td>+5.4%</td><td>-3.8%</td></tr>
+<tr><td style="background:#888888;color:white;font-weight:bold">NEUTRAL</td><td>278</td><td style="color:#33cc33;font-weight:bold">+0.09%</td><td>+0.16%</td><td>1.69%</td><td>56%</td><td>+5.9%</td><td>-5.0%</td></tr>
+<tr><td style="background:#cc9900;color:white;font-weight:bold">CAUTIOUS</td><td>128</td><td style="color:#33cc33;font-weight:bold">+0.04%</td><td>+0.05%</td><td>1.99%</td><td>52%</td><td>+6.2%</td><td>-4.5%</td></tr>
+<tr><td style="background:#cc3333;color:white;font-weight:bold">BEARISH</td><td>124</td><td style="color:#cc3333;font-weight:bold">-0.15%</td><td>-0.19%</td><td>2.80%</td><td>48%</td><td>+6.8%</td><td>-8.5%</td></tr>
+<tr><td style="background:#990000;color:white;font-weight:bold">CRISIS</td><td>132</td><td style="color:#cc3333;font-weight:bold">-0.47%</td><td>-0.35%</td><td>3.38%</td><td>46%</td><td>+6.8%</td><td>-11.3%</td></tr>
+<tr><td style="background:#660066;color:white;font-weight:bold">PANICO</td><td>96</td><td style="color:#cc3333;font-weight:bold">-0.43%</td><td>-0.57%</td><td>5.37%</td><td>44%</td><td>+13.4%</td><td>-13.9%</td></tr>
+</table>
+<div class="insight warning">Nota: Retorno real operativo Mon open &rarr; Mon open. Incluye el gap del fin de semana entre la senal (viernes) y la ejecucion (lunes).</div>
+</body></html>

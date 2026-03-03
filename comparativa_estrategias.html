@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Comparativa: SPY vs Subsectores vs 10 Acciones por Regimen</title>
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #0a0e17; color: #e0e0e0; margin: 0; padding: 20px; }
+h1 { text-align: center; color: #00d4ff; font-size: 24px; margin-bottom: 5px; }
+h2 { color: #ff9500; font-size: 18px; margin-top: 30px; border-bottom: 2px solid #333; padding-bottom: 5px; }
+h3 { color: #aaa; font-size: 14px; text-align: center; margin-top: 0; }
+.container { max-width: 1300px; margin: 0 auto; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0 20px 0; font-size: 13px; }
+th { background: #1a2035; color: #00d4ff; padding: 8px 6px; text-align: center; border: 1px solid #2a3050; font-weight: 600; }
+td { padding: 6px; text-align: center; border: 1px solid #1a2035; }
+tr:nth-child(even) { background: #0d1220; }
+tr:nth-child(odd) { background: #111827; }
+tr:hover { background: #1a2840; }
+.pos { color: #00e676; font-weight: 600; }
+.neg { color: #ff5252; font-weight: 600; }
+.neutral { color: #aaa; }
+.highlight { background: #1a3020 !important; }
+.regime-bur { background: #4a0028; color: #ff4081; font-weight: 700; }
+.regime-gol { background: #3a2800; color: #ffd740; font-weight: 700; }
+.regime-alc { background: #002a00; color: #69f0ae; font-weight: 700; }
+.regime-neu { background: #1a1a2e; color: #82b1ff; font-weight: 700; }
+.regime-cau { background: #2a1a00; color: #ffab40; font-weight: 700; }
+.regime-bea { background: #2a0a00; color: #ff6e40; font-weight: 700; }
+.regime-cri { background: #3a0000; color: #ff5252; font-weight: 700; }
+.regime-pan { background: #4a0000; color: #ff1744; font-weight: 700; }
+.winner { background: #1a3a1a; border: 1px solid #00e676; }
+.loser { opacity: 0.6; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+.kpi-box { background: #111827; border: 1px solid #2a3050; border-radius: 8px; padding: 15px; text-align: center; }
+.kpi-box .value { font-size: 28px; font-weight: 700; }
+.kpi-box .label { font-size: 12px; color: #888; margin-top: 5px; }
+.bar-container { display: flex; align-items: center; }
+.bar { height: 16px; border-radius: 3px; min-width: 2px; }
+.bar-pos { background: linear-gradient(90deg, #00e676, #69f0ae); }
+.bar-neg { background: linear-gradient(90deg, #ff5252, #ff8a80); }
+.insight-box { background: #111827; border-left: 4px solid #ff9500; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+.insight-box strong { color: #ff9500; }
+.footnote { font-size: 11px; color: #666; margin-top: 5px; }
+.section-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+td.left { text-align: left; padding-left: 10px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Comparativa: SPY vs Estrategia Subsectores vs 10 Acciones</h1>
+<h3>PatrimonioSmart - Semanal_Subsectores | 2001-2025 | 8 Regimenes de Mercado</h3>
+
+<!-- KPIs -->
+<div class="kpi-grid">
+  <div class="kpi-box">
+    <div class="value" style="color:#aaa">$1.6M</div>
+    <div class="label">SPY Buy & Hold<br>3.3x | CAGR 4.9%</div>
+  </div>
+  <div class="kpi-box">
+    <div class="value" style="color:#00e676">$121M</div>
+    <div class="label">Estrategia Subsectores<br>243x | CAGR 23.5%</div>
+  </div>
+  <div class="kpi-box">
+    <div class="value" style="color:#00d4ff">$63M</div>
+    <div class="label">10 Acciones Individuales<br>126x | CAGR 21.3%</div>
+  </div>
+  <div class="kpi-box">
+    <div class="value" style="color:#ff9500">+0.77%</div>
+    <div class="label">Alpha semanal SubSec vs SPY<br>(+$193K/ano sobre $500K)</div>
+  </div>
+</div>
+
+<!-- HALLAZGO 1 -->
+<h2>1. Retorno semanal medio por regimen: SPY vs Estrategia Subsectores</h2>
+<div class="insight-box">
+  <strong>Hallazgo:</strong> La estrategia de subsectores genera alpha positivo en los 8 regimenes.
+  El mayor alpha esta en PANICO (+3.18%), BEARISH (+1.06%) y CRISIS (+1.03%) - los regimenes donde SPY cae.
+  La seleccion FV invierte la direccion del mercado: cuando SPY pierde -1.39%, la estrategia gana +1.79%.
+</div>
+<table>
+<tr>
+  <th>Regimen</th><th>N</th><th>Dir</th>
+  <th colspan="3" style="background:#0a3040">SPY (Buy & Hold)</th>
+  <th colspan="3" style="background:#0a4020">Estrategia Subsectores</th>
+  <th>Alpha</th><th>$/ano</th>
+</tr>
+<tr>
+  <th></th><th></th><th></th>
+  <th>Avg %</th><th>Med %</th><th>Win Rate</th>
+  <th>Avg %</th><th>Med %</th><th>Win Rate</th>
+  <th></th><th>(base $500K)</th>
+</tr>
+<tr>
+  <td class="regime-bur">BURBUJA</td><td>8</td><td>3L</td>
+  <td class="pos">+0.73%</td><td class="pos">+0.66%</td><td>75.0%</td>
+  <td class="pos">+0.80%</td><td class="pos">+0.27%</td><td>62.5%</td>
+  <td class="pos">+0.07%</td><td>$117</td>
+</tr>
+<tr>
+  <td class="regime-gol">GOLDILOCKS</td><td>159</td><td>3L</td>
+  <td class="pos">+0.72%</td><td class="pos">+0.76%</td><td>75.5%</td>
+  <td class="pos">+1.04%</td><td class="pos">+1.05%</td><td>70.4%</td>
+  <td class="pos">+0.32%</td><td>$10,270</td>
+</tr>
+<tr>
+  <td class="regime-alc">ALCISTA</td><td>363</td><td>3L</td>
+  <td class="pos">+0.58%</td><td class="pos">+0.57%</td><td>66.9%</td>
+  <td class="pos">+1.11%</td><td class="pos">+1.03%</td><td>68.3%</td>
+  <td class="pos">+0.53%</td><td>$38,485</td>
+</tr>
+<tr>
+  <td class="regime-neu">NEUTRAL</td><td>268</td><td>OvSld</td>
+  <td class="pos">+0.03%</td><td class="neg">-0.05%</td><td>49.6%</td>
+  <td class="pos">+0.50%</td><td>+0.00%</td><td>48.5%</td>
+  <td class="pos">+0.47%</td><td>$25,131</td>
+</tr>
+<tr>
+  <td class="regime-cau">CAUTIOUS</td><td>121</td><td>OvSld</td>
+  <td class="pos">+0.21%</td><td class="pos">+0.08%</td><td>52.1%</td>
+  <td class="pos">+0.60%</td><td>+0.00%</td><td>47.1%</td>
+  <td class="pos">+0.39%</td><td>$9,477</td>
+</tr>
+<tr>
+  <td class="regime-bea">BEARISH</td><td>121</td><td>0L+3S</td>
+  <td class="neg">-0.27%</td><td class="neg">-0.20%</td><td>45.5%</td>
+  <td class="pos">+0.79%</td><td class="pos">+1.00%</td><td>62.0%</td>
+  <td class="pos" style="font-size:15px">+1.06%</td><td class="pos">$25,676</td>
+</tr>
+<tr>
+  <td class="regime-cri">CRISIS</td><td>127</td><td>0L+3S</td>
+  <td class="neg">-0.41%</td><td class="neg">-0.69%</td><td>40.9%</td>
+  <td class="pos">+0.63%</td><td class="pos">+0.35%</td><td>56.7%</td>
+  <td class="pos" style="font-size:15px">+1.03%</td><td class="pos">$26,280</td>
+</tr>
+<tr class="highlight">
+  <td class="regime-pan">PANICO</td><td>90</td><td>0L+3S</td>
+  <td class="neg">-1.39%</td><td class="neg">-1.35%</td><td>34.4%</td>
+  <td class="pos">+1.79%</td><td class="pos">+1.15%</td><td>57.8%</td>
+  <td class="pos" style="font-size:18px;font-weight:900">+3.18%</td><td class="pos" style="font-weight:700">$57,279</td>
+</tr>
+<tr style="background:#1a2840;font-weight:700">
+  <td>TOTAL</td><td>1,257</td><td></td>
+  <td class="pos">+0.12%</td><td></td><td></td>
+  <td class="pos">+0.89%</td><td></td><td></td>
+  <td class="pos">+0.77%</td><td class="pos">$192,715</td>
+</tr>
+</table>
+
+<!-- HALLAZGO 2 -->
+<h2>2. Retorno semanal medio por regimen: SPY vs 10 Acciones Individuales</h2>
+<div class="insight-box">
+  <strong>Hallazgo:</strong> Las 10 acciones individuales generan alpha en regimenes negativos (BEARISH +0.37%, CRISIS +0.81%, PANICO +3.15%)
+  pero pierden vs SPY en regimenes positivos. La diversificacion del subsector (media de 10-20 stocks) supera la seleccion individual en 7 de 8 regimenes.
+</div>
+<table>
+<tr>
+  <th>Regimen</th><th>N</th><th>Alloc</th>
+  <th colspan="3" style="background:#0a3040">SPY (Buy & Hold)</th>
+  <th colspan="3" style="background:#0a2040">10 Acciones</th>
+  <th>Alpha</th><th>$/ano</th>
+</tr>
+<tr>
+  <th></th><th></th><th></th>
+  <th>Avg %</th><th>Med %</th><th>Win Rate</th>
+  <th>Avg %</th><th>Med %</th><th>Win Rate</th>
+  <th></th><th>(base $500K)</th>
+</tr>
+<tr>
+  <td class="regime-bur">BURBUJA</td><td>8</td><td>10L+0S</td>
+  <td class="pos">+0.73%</td><td class="pos">+0.66%</td><td>75.0%</td>
+  <td class="pos">+0.18%</td><td class="pos">+0.15%</td><td>62.5%</td>
+  <td class="neg">-0.55%</td><td class="neg">-$873</td>
+</tr>
+<tr>
+  <td class="regime-gol">GOLDILOCKS</td><td>158</td><td>7L+3S</td>
+  <td class="pos">+0.72%</td><td class="pos">+0.77%</td><td>75.9%</td>
+  <td class="pos">+0.58%</td><td class="pos">+0.53%</td><td>60.8%</td>
+  <td class="neg">-0.14%</td><td class="neg">-$4,448</td>
+</tr>
+<tr>
+  <td class="regime-alc">ALCISTA</td><td>363</td><td>7L+3S</td>
+  <td class="pos">+0.58%</td><td class="pos">+0.57%</td><td>66.7%</td>
+  <td class="pos">+0.57%</td><td class="pos">+0.52%</td><td>65.0%</td>
+  <td class="neutral">-0.01%</td><td class="neutral">-$527</td>
+</tr>
+<tr>
+  <td class="regime-neu">NEUTRAL</td><td>268</td><td>5L+5S</td>
+  <td class="pos">+0.04%</td><td class="neg">-0.01%</td><td>50.0%</td>
+  <td class="neg">-0.01%</td><td class="pos">+0.09%</td><td>50.7%</td>
+  <td class="neutral">-0.05%</td><td class="neg">-$2,923</td>
+</tr>
+<tr>
+  <td class="regime-cau">CAUTIOUS</td><td>122</td><td>5L+5S</td>
+  <td class="pos">+0.21%</td><td class="pos">+0.08%</td><td>51.6%</td>
+  <td class="pos">+0.12%</td><td class="pos">+0.22%</td><td>54.1%</td>
+  <td class="neutral">-0.08%</td><td class="neg">-$2,063</td>
+</tr>
+<tr>
+  <td class="regime-bea">BEARISH</td><td>121</td><td>3L+7S</td>
+  <td class="neg">-0.27%</td><td class="neg">-0.20%</td><td>45.5%</td>
+  <td class="pos">+0.11%</td><td class="pos">+0.16%</td><td>51.2%</td>
+  <td class="pos">+0.37%</td><td class="pos">$9,024</td>
+</tr>
+<tr>
+  <td class="regime-cri">CRISIS</td><td>127</td><td>0L+10S</td>
+  <td class="neg">-0.41%</td><td class="neg">-0.69%</td><td>40.9%</td>
+  <td class="pos">+0.40%</td><td class="pos">+0.72%</td><td>54.3%</td>
+  <td class="pos">+0.81%</td><td class="pos">$20,550</td>
+</tr>
+<tr class="highlight">
+  <td class="regime-pan">PANICO</td><td>90</td><td>0L+10S</td>
+  <td class="neg">-1.39%</td><td class="neg">-1.35%</td><td>34.4%</td>
+  <td class="pos">+1.76%</td><td class="pos">+0.28%</td><td>52.2%</td>
+  <td class="pos" style="font-size:18px;font-weight:900">+3.15%</td><td class="pos" style="font-weight:700">$56,680</td>
+</tr>
+<tr style="background:#1a2840;font-weight:700">
+  <td>TOTAL</td><td>1,257</td><td></td>
+  <td class="pos">+0.12%</td><td></td><td></td>
+  <td class="pos">+0.42%</td><td></td><td></td>
+  <td class="pos">+0.30%</td><td class="pos">$75,420</td>
+</tr>
+</table>
+
+<!-- HALLAZGO 3 -->
+<h2>3. Comparativa directa: Subsectores vs 10 Acciones vs SPY</h2>
+<div class="insight-box">
+  <strong>Conclusion:</strong> La estrategia de subsectores gana en los 8 regimenes. El promedio de 10-20 acciones por subsector
+  reduce ruido idiosincratico y produce retornos mas estables. Picking individual de 10 acciones
+  pierde diversificacion pero mantiene alpha positivo en regimenes negativos.
+</div>
+<table>
+<tr>
+  <th>Regimen</th><th>N</th>
+  <th style="background:#0a3040">SPY avg</th>
+  <th style="background:#0a4020">SubSec avg</th>
+  <th style="background:#0a2040">10 Acciones avg</th>
+  <th>Alpha SubSec</th>
+  <th>Alpha 10Acc</th>
+  <th>Ganador</th>
+</tr>
+<tr>
+  <td class="regime-bur">BURBUJA</td><td>8</td>
+  <td class="pos">+0.73%</td><td class="pos">+0.80%</td><td class="pos">+0.18%</td>
+  <td class="pos">+0.07%</td><td class="neg">-0.55%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-gol">GOLDILOCKS</td><td>159</td>
+  <td class="pos">+0.72%</td><td class="pos">+1.04%</td><td class="pos">+0.58%</td>
+  <td class="pos">+0.32%</td><td class="neg">-0.14%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-alc">ALCISTA</td><td>363</td>
+  <td class="pos">+0.58%</td><td class="pos">+1.11%</td><td class="pos">+0.57%</td>
+  <td class="pos">+0.53%</td><td class="neutral">-0.01%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-neu">NEUTRAL</td><td>268</td>
+  <td class="pos">+0.04%</td><td class="pos">+0.50%</td><td class="neg">-0.01%</td>
+  <td class="pos">+0.46%</td><td class="neutral">-0.05%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-cau">CAUTIOUS</td><td>122</td>
+  <td class="pos">+0.21%</td><td class="pos">+0.60%</td><td class="pos">+0.12%</td>
+  <td class="pos">+0.39%</td><td class="neutral">-0.08%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-bea">BEARISH</td><td>121</td>
+  <td class="neg">-0.27%</td><td class="pos">+0.79%</td><td class="pos">+0.11%</td>
+  <td class="pos">+1.06%</td><td class="pos">+0.37%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-cri">CRISIS</td><td>127</td>
+  <td class="neg">-0.41%</td><td class="pos">+0.63%</td><td class="pos">+0.40%</td>
+  <td class="pos">+1.04%</td><td class="pos">+0.81%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-pan">PANICO</td><td>90</td>
+  <td class="neg">-1.39%</td><td class="pos">+1.79%</td><td class="pos">+1.76%</td>
+  <td class="pos">+3.18%</td><td class="pos">+3.15%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr style="background:#1a2840;font-weight:700">
+  <td>TOTAL</td><td>1,257</td>
+  <td class="pos">+0.12%</td><td class="pos">+0.89%</td><td class="pos">+0.42%</td>
+  <td class="pos">+0.77%</td><td class="pos">+0.30%</td>
+  <td style="background:#0a4020;color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+</table>
+
+<!-- HALLAZGO 4: Sharpe -->
+<h2>4. Eficiencia Riesgo-Retorno (Sharpe Anualizado)</h2>
+<table>
+<tr><th>Regimen</th><th>N</th><th>SPY Sharpe</th><th>SubSec Sharpe</th><th>10Acc Sharpe</th><th>Ganador</th></tr>
+<tr>
+  <td class="regime-bur">BURBUJA</td><td>8</td>
+  <td>+7.88</td><td class="pos">+2.22</td><td>+0.63</td>
+  <td>SPY*</td>
+</tr>
+<tr>
+  <td class="regime-gol">GOLDILOCKS</td><td>159</td>
+  <td>+4.29</td><td class="pos">+3.09</td><td>+2.12</td>
+  <td>SPY</td>
+</tr>
+<tr>
+  <td class="regime-alc">ALCISTA</td><td>363</td>
+  <td>+3.04</td><td class="pos">+2.86</td><td>+2.23</td>
+  <td>SPY</td>
+</tr>
+<tr>
+  <td class="regime-neu">NEUTRAL</td><td>268</td>
+  <td>+0.14</td><td class="pos">+0.81</td><td>-0.04</td>
+  <td style="color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-cau">CAUTIOUS</td><td>122</td>
+  <td>+0.67</td><td class="pos">+0.98</td><td>+0.40</td>
+  <td style="color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-bea">BEARISH</td><td>121</td>
+  <td class="neg">-0.72</td><td class="pos">+1.82</td><td>+0.34</td>
+  <td style="color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-cri">CRISIS</td><td>127</td>
+  <td class="neg">-0.95</td><td class="pos">+1.11</td><td>+0.65</td>
+  <td style="color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr>
+  <td class="regime-pan">PANICO</td><td>90</td>
+  <td class="neg">-1.85</td><td class="pos">+2.22</td><td class="pos">+2.03</td>
+  <td style="color:#69f0ae;font-weight:700">SubSec</td>
+</tr>
+<tr style="background:#1a2840;font-weight:700">
+  <td>GLOBAL</td><td>1,257</td>
+  <td>+0.37</td><td class="pos" style="font-size:16px">+0.93</td><td class="pos">+1.08</td>
+  <td style="color:#00d4ff;font-weight:700">10Acc</td>
+</tr>
+</table>
+<p class="footnote">* BURBUJA: N=8 (muestra insuficiente). SPY gana Sharpe en positivos porque no asume riesgo de seleccion.</p>
+
+<!-- HALLAZGO 5: Correlacion -->
+<h2>5. Correlacion con SPY: La clave de los shorts</h2>
+<div class="insight-box">
+  <strong>Hallazgo critico:</strong> En regimenes negativos, la correlacion se invierte a -0.76/-0.88.
+  Esto significa que cuando SPY cae, los shorts de la estrategia ganan. Es la prueba de que el sistema
+  NO esta apostando contra el mercado, sino capitalizando la caida selectiva de subsectores debiles.
+</div>
+<table>
+<tr>
+  <th>Regimen</th><th>N</th>
+  <th colspan="2">Estrategia Subsectores</th>
+  <th colspan="2">10 Acciones</th>
+</tr>
+<tr>
+  <th></th><th></th>
+  <th>Corr vs SPY</th><th>Cuando SPY cae</th>
+  <th>Corr vs SPY</th><th>Cuando SPY cae</th>
+</tr>
+<tr>
+  <td class="regime-bur">BURBUJA</td><td>8</td>
+  <td class="pos">+0.66</td><td class="neg">-1.70%</td>
+  <td class="pos">+0.76</td><td class="neg">-1.79%</td>
+</tr>
+<tr>
+  <td class="regime-gol">GOLDILOCKS</td><td>159</td>
+  <td class="pos">+0.61</td><td class="neg">-0.67%</td>
+  <td class="pos">+0.37</td><td class="neg">-0.33%</td>
+</tr>
+<tr>
+  <td class="regime-alc">ALCISTA</td><td>363</td>
+  <td class="pos">+0.53</td><td class="neg">-0.51%</td>
+  <td class="pos">+0.36</td><td class="neg">-0.09%</td>
+</tr>
+<tr>
+  <td class="regime-neu">NEUTRAL</td><td>268</td>
+  <td class="pos">+0.43</td><td class="neg">-0.64%</td>
+  <td class="neutral">+0.04</td><td class="neg">-0.12%</td>
+</tr>
+<tr>
+  <td class="regime-cau">CAUTIOUS</td><td>122</td>
+  <td class="pos">+0.60</td><td class="neg">-1.44%</td>
+  <td class="neg">-0.21</td><td class="pos">+0.42%</td>
+</tr>
+<tr>
+  <td class="regime-bea">BEARISH</td><td>121</td>
+  <td class="neg" style="font-weight:700">-0.80</td><td class="pos" style="font-weight:700">+2.68%</td>
+  <td class="neg">-0.64</td><td class="pos">+1.00%</td>
+</tr>
+<tr>
+  <td class="regime-cri">CRISIS</td><td>127</td>
+  <td class="neg" style="font-weight:700">-0.85</td><td class="pos" style="font-weight:700">+3.01%</td>
+  <td class="neg" style="font-weight:700">-0.88</td><td class="pos" style="font-weight:700">+2.99%</td>
+</tr>
+<tr>
+  <td class="regime-pan">PANICO</td><td>90</td>
+  <td class="neg" style="font-weight:700">-0.76</td><td class="pos" style="font-weight:700">+4.26%</td>
+  <td class="neg" style="font-weight:700">-0.78</td><td class="pos" style="font-weight:700">+4.22%</td>
+</tr>
+</table>
+
+<!-- HALLAZGO 6: Capital final -->
+<h2>6. Resultado final: $500K invertidos durante 25 anos</h2>
+<div class="section-split">
+<table>
+<tr><th colspan="4" style="background:#0a4020">Estrategia Subsectores (3 posiciones)</th></tr>
+<tr><th>Metrica</th><th>Sistema</th><th>SPY</th><th>Diferencia</th></tr>
+<tr><td class="left">Capital Final</td><td class="pos">$121,500,000</td><td>$1,646,000</td><td class="pos">+$119,854,000</td></tr>
+<tr><td class="left">Multiplicador</td><td class="pos">243x</td><td>3.3x</td><td></td></tr>
+<tr><td class="left">CAGR</td><td class="pos">23.5%</td><td>4.9%</td><td class="pos">+18.6%</td></tr>
+<tr><td class="left">Sharpe</td><td class="pos">0.93</td><td>0.37</td><td class="pos">+0.56</td></tr>
+<tr><td class="left">Anos positivos</td><td>21/25</td><td>17/25</td><td></td></tr>
+<tr><td class="left">Alpha semanal</td><td class="pos" colspan="3">+0.77% vs SPY (todos regimenes positivos)</td></tr>
+</table>
+<table>
+<tr><th colspan="4" style="background:#0a2040">10 Acciones Individuales</th></tr>
+<tr><th>Metrica</th><th>Sistema</th><th>SPY</th><th>Diferencia</th></tr>
+<tr><td class="left">Capital Final</td><td class="pos">$63,019,000</td><td>$1,644,000</td><td class="pos">+$61,375,000</td></tr>
+<tr><td class="left">Multiplicador</td><td class="pos">126x</td><td>3.3x</td><td></td></tr>
+<tr><td class="left">CAGR</td><td class="pos">21.3%</td><td>4.9%</td><td class="pos">+16.5%</td></tr>
+<tr><td class="left">Sharpe</td><td class="pos">1.08</td><td>0.37</td><td class="pos">+0.71</td></tr>
+<tr><td class="left">Anos positivos</td><td>24/25</td><td>17/25</td><td></td></tr>
+<tr><td class="left">Alpha semanal</td><td class="pos" colspan="3">+0.30% vs SPY (negativo en positivos, positivo en negativos)</td></tr>
+</table>
+</div>
+
+<!-- HALLAZGO 7: Acciones mas seleccionadas -->
+<h2>7. Acciones mas frecuentes en el portfolio de 10 (por regimen)</h2>
+<div class="section-split">
+<div>
+<table>
+<tr><th colspan="3" style="background:#002a00">Regimenes Positivos - LONGS</th></tr>
+<tr><th>Regimen</th><th>Top 5 Longs</th><th>Sector</th></tr>
+<tr><td class="regime-alc">ALCISTA</td><td class="left">BLDR(51), FCX(46), AXON(43), LII(43), FIX(38)</td><td class="left">Construcc, Cobre, Defensa, HVAC, Ingenieria</td></tr>
+<tr><td class="regime-gol">GOLDILOCKS</td><td class="left">FCX(29), AXON(25), STLD(23), PXD(18), JCI(17)</td><td class="left">Cobre, Defensa, Acero, Oil E&P, HVAC</td></tr>
+<tr><td class="regime-neu">NEUTRAL</td><td class="left">STLD(32), FIX(31), NVDA(29), AXON(29), BLDR(26)</td><td class="left">Acero, Ingenieria, Semis, Defensa, Construcc</td></tr>
+<tr><td class="regime-cau">CAUTIOUS</td><td class="left">AXON(14), NEM(13), STLD(13), NVDA(10), NUE(10)</td><td class="left">Defensa, Oro, Acero, Semis, Acero</td></tr>
+</table>
+</div>
+<div>
+<table>
+<tr><th colspan="3" style="background:#3a0000">Regimenes Negativos - SHORTS</th></tr>
+<tr><th>Regimen</th><th>Top 5 Shorts</th><th>Sector</th></tr>
+<tr><td class="regime-bea">BEARISH</td><td class="left">DECK(11), ON(10), C(9), FITB(9), VLO(9)</td><td class="left">Apparel, Semis, Bancos, Bancos, Refining</td></tr>
+<tr><td class="regime-cri">CRISIS</td><td class="left">DECK(14), FISV(13), RL(12), FCX(12), EOG(11)</td><td class="left">Apparel, IT, Apparel, Cobre, Oil E&P</td></tr>
+<tr><td class="regime-pan">PANICO</td><td class="left">FISV(16), ROST(14), NKE(12), USB(11), IT(9)</td><td class="left">IT, Retail, Apparel, Bancos, IT Services</td></tr>
+</table>
+</div>
+</div>
+
+<!-- CONCLUSIONES -->
+<h2>8. Conclusiones</h2>
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+<div class="insight-box" style="border-color:#00e676">
+  <strong style="color:#00e676">Por que gana Subsectores:</strong><br>
+  - Promedia 10-20 stocks por subsector = menos ruido<br>
+  - Ponderacion FV da mas peso a subsectores con mayor score<br>
+  - Alpha positivo en LOS 8 regimenes (no solo negativos)<br>
+  - Mejor Sharpe en 5 de 8 regimenes<br>
+  - $193K alpha/ano vs $75K de 10 acciones
+</div>
+<div class="insight-box" style="border-color:#00d4ff">
+  <strong style="color:#00d4ff">Donde brilla 10 Acciones:</strong><br>
+  - Sharpe global superior (1.08 vs 0.93)<br>
+  - 24/25 anos positivos (vs 21/25)<br>
+  - Acciones especificas capturan extremos mejor (PANICO +25% best week)<br>
+  - Menor correlacion con SPY en NEUTRAL (+0.04 vs +0.43)<br>
+  - Mas consistente ano a ano (menor dispersion)
+</div>
+</div>
+<div class="insight-box" style="border-color:#ff9500; margin-top:15px">
+  <strong>Recomendacion:</strong> El sistema de subsectores es superior para la Estrategia Semanal_Subsectores actual.
+  El picking de 10 acciones individuales seria mas adecuado para una segunda estrategia complementaria,
+  donde el volumen de capital es menor y se busca mayor concentracion. Ambos sistemas confirman que
+  la clasificacion en 8 regimenes y la seleccion por Fair Value macro genera alpha real y consistente.
+</div>
+
+<p style="text-align:center; color:#555; font-size:11px; margin-top:30px;">
+  PatrimonioSmart | Generado: Febrero 2026 | Datos: 2001-2025 | 419 acciones S&P 500 | 44 subsectores | 8 regimenes
+</p>
+
+</div>
+</body>
+</html>

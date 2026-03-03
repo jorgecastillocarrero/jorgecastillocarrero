@@ -1,0 +1,420 @@
+C:\Users\usuario\financial-data-project\resumen_regimenes.py:64: FutureWarning: DataFrameGroupBy.apply operated on the grouping columns. This behavior is deprecated, and in a future version of pandas the grouping columns will be excluded from the operation. Either pass `include_groups=False` to exclude the groupings or explicitly select the grouping columns after groupby to silence this warning.
+  sub_weekly = sub_weekly.groupby('subsector', group_keys=False).apply(calc_price_metrics)
+Cargando datos...
+Clasificando regimenes semana a semana...
+
+==================================================================================================================================
+  RESUMEN EJECUTIVO: REGIMENES DE MERCADO ANO A ANO (2001-2026)
+  Leyenda: B=BURBUJA G=GOLDILOCKS A=ALCISTA N=NEUTRAL c=CAUTIOUS b=BEARISH X=CRISIS !=PANICO
+==================================================================================================================================
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2001  |  SPY: -11.6% (129 -> 116)  |  Score: avg -5.5 [-12.5 a +1.0]  |  VIX avg: 25
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | b | b | X | ! | b | b | X | X | X | X | X | b |
+        |  52 semanas: NEUTRAL:1  CAUTIOUS:6  BEARISH:19  CRISIS:20  PANICO:6
+        |  Transiciones: 23/02: BEARISH->CRISIS   09/03: CRISIS->BEARISH   16/03: BEARISH->CRISIS   23/03: CRISIS->PANICO
+        |                30/03: PANICO->CRISIS   06/04: CRISIS->PANICO   20/04: PANICO->CRISIS   27/04: CRISIS->BEARISH
+        |                18/05: BEARISH->CAUTIOUS   15/06: CAUTIOUS->BEARISH   06/07: BEARISH->CRISIS   13/07: CRISIS->BEARISH
+        |                27/07: BEARISH->CRISIS   21/09: CRISIS->PANICO   12/10: PANICO->CRISIS   16/11: CRISIS->BEARISH
+        |                30/11: BEARISH->CRISIS   07/12: CRISIS->BEARISH   14/12: BEARISH->CAUTIOUS   21/12: CAUTIOUS->BEARISH
+        |                28/12: BEARISH->NEUTRAL   31/12: NEUTRAL->CAUTIOUS
+        |  Q1 (Ene-Mar): SPY  -9.7%  VIX   25  | BEARISH:7, CRISIS:4, PANICO:1
+        |  Q2 (Abr-Jun): SPY  -2.4%  VIX   23  | CAUTIOUS:4, BEARISH:6, CRISIS:1, PANICO:2
+        |  Q3 (Jul-Sep): SPY -20.7%  VIX   26  | BEARISH:2, CRISIS:9, PANICO:2
+        |  Q4 (Oct-Dic): SPY +11.7%  VIX   27  | NEUTRAL:1, CAUTIOUS:2, BEARISH:4, CRISIS:6, PANICO:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2002  |  SPY: -24.7% (118 -> 87)  |  Score: avg -6.0 [-12.5 a +3.5]  |  VIX avg: 27
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | c | c | N | c | c | X | ! | ! | ! | ! | X | X |
+        |  52 semanas: NEUTRAL:5  CAUTIOUS:12  BEARISH:3  CRISIS:17  PANICO:15
+        |  Transiciones: 08/02: CAUTIOUS->BEARISH   15/02: BEARISH->CAUTIOUS   22/02: CAUTIOUS->BEARISH   01/03: BEARISH->CAUTIOUS
+        |                08/03: CAUTIOUS->NEUTRAL   05/04: NEUTRAL->CAUTIOUS   19/04: CAUTIOUS->NEUTRAL   26/04: NEUTRAL->BEARISH
+        |                03/05: BEARISH->CAUTIOUS   10/05: CAUTIOUS->CRISIS   17/05: CRISIS->CAUTIOUS   07/06: CAUTIOUS->CRISIS
+        |                12/07: CRISIS->PANICO   25/10: PANICO->CRISIS
+        |  Q1 (Ene-Mar): SPY  -3.4%  VIX   21  | NEUTRAL:4, CAUTIOUS:6, BEARISH:2
+        |  Q2 (Abr-Jun): SPY -14.2%  VIX   22  | NEUTRAL:1, CAUTIOUS:6, BEARISH:1, CRISIS:5
+        |  Q3 (Jul-Sep): SPY -16.8%  VIX   35  | CRISIS:1, PANICO:12
+        |  Q4 (Oct-Dic): SPY  +3.0%  VIX   29  | CRISIS:11, PANICO:3
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2003  |  SPY: +25.5% (91 -> 110)  |  Score: avg +1.8 [-11.0 a +8.0]  |  VIX avg: 22
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | b | ! | ! | X | c | A | G | A | A | G | G | G |
+        |  52 semanas: BURBUJA:2  GOLDILOCKS:15  ALCISTA:15  NEUTRAL:2  CAUTIOUS:2  BEARISH:3  CRISIS:4  PANICO:9
+        |  Transiciones: 24/01: BEARISH->PANICO   21/03: PANICO->CRISIS   28/03: CRISIS->PANICO   04/04: PANICO->CRISIS
+        |                25/04: CRISIS->BEARISH   02/05: BEARISH->CAUTIOUS   16/05: CAUTIOUS->NEUTRAL   30/05: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  -4.7%  VIX   30  | BEARISH:2, CRISIS:1, PANICO:9
+        |  Q2 (Abr-Jun): SPY  +8.1%  VIX   21  | ALCISTA:5, NEUTRAL:2, CAUTIOUS:2, BEARISH:1, CRISIS:3
+        |  Q3 (Jul-Sep): SPY  -0.4%  VIX   19  | BURBUJA:1, GOLDILOCKS:6, ALCISTA:6
+        |  Q4 (Oct-Dic): SPY +10.2%  VIX   17  | BURBUJA:1, GOLDILOCKS:9, ALCISTA:4
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2004  |  SPY: +10.2% (111 -> 121)  |  Score: avg +4.0 [-4.0 a +8.0]  |  VIX avg: 15
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | G | N | A | c | N | N | N | N | N | G | G |
+        |  53 semanas: GOLDILOCKS:18  ALCISTA:8  NEUTRAL:19  CAUTIOUS:5  BEARISH:3
+        |  Transiciones: 19/03: ALCISTA->NEUTRAL   02/04: NEUTRAL->ALCISTA   16/04: ALCISTA->NEUTRAL   23/04: NEUTRAL->ALCISTA
+        |                30/04: ALCISTA->NEUTRAL   07/05: NEUTRAL->CAUTIOUS   21/05: CAUTIOUS->BEARISH   28/05: BEARISH->NEUTRAL
+        |                16/07: NEUTRAL->CAUTIOUS   23/07: CAUTIOUS->BEARISH   30/07: BEARISH->CAUTIOUS   06/08: CAUTIOUS->BEARISH
+        |                13/08: BEARISH->CAUTIOUS   20/08: CAUTIOUS->NEUTRAL   17/09: NEUTRAL->ALCISTA   24/09: ALCISTA->NEUTRAL
+        |                01/10: NEUTRAL->ALCISTA   08/10: ALCISTA->NEUTRAL   29/10: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +1.3%  VIX   16  | GOLDILOCKS:10, ALCISTA:1, NEUTRAL:2
+        |  Q2 (Abr-Jun): SPY  +5.0%  VIX   16  | ALCISTA:3, NEUTRAL:7, CAUTIOUS:2, BEARISH:1
+        |  Q3 (Jul-Sep): SPY  -1.9%  VIX   15  | ALCISTA:1, NEUTRAL:7, CAUTIOUS:3, BEARISH:2
+        |  Q4 (Oct-Dic): SPY  +7.3%  VIX   14  | GOLDILOCKS:8, ALCISTA:3, NEUTRAL:3
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2005  |  SPY: +3.0% (118 -> 125)  |  Score: avg +3.2 [-5.0 a +7.5]  |  VIX avg: 13
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | A | A | b | c | N | A | A | A | c | N | A |
+        |  52 semanas: GOLDILOCKS:2  ALCISTA:25  NEUTRAL:16  CAUTIOUS:5  BEARISH:4
+        |  Transiciones: 11/03: ALCISTA->NEUTRAL   18/03: NEUTRAL->ALCISTA   24/03: ALCISTA->NEUTRAL   15/04: NEUTRAL->BEARISH
+        |                06/05: BEARISH->CAUTIOUS   13/05: CAUTIOUS->BEARISH   20/05: BEARISH->CAUTIOUS   27/05: CAUTIOUS->NEUTRAL
+        |                08/07: NEUTRAL->ALCISTA   26/08: ALCISTA->NEUTRAL   02/09: NEUTRAL->ALCISTA   23/09: ALCISTA->NEUTRAL
+        |                30/09: NEUTRAL->ALCISTA   07/10: ALCISTA->NEUTRAL   14/10: NEUTRAL->CAUTIOUS   04/11: CAUTIOUS->NEUTRAL
+        |                25/11: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  -3.4%  VIX   13  | GOLDILOCKS:1, ALCISTA:9, NEUTRAL:2
+        |  Q2 (Abr-Jun): SPY  +1.7%  VIX   14  | NEUTRAL:7, CAUTIOUS:2, BEARISH:4
+        |  Q3 (Jul-Sep): SPY  +3.4%  VIX   12  | GOLDILOCKS:1, ALCISTA:10, NEUTRAL:3
+        |  Q4 (Oct-Dic): SPY  +1.3%  VIX   12  | ALCISTA:6, NEUTRAL:4, CAUTIOUS:3
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2006  |  SPY: +13.7% (128 -> 142)  |  Score: avg +2.8 [-6.0 a +8.0]  |  VIX avg: 13
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | A | N | N | c | b | c | b | N | A | G | G |
+        |  52 semanas: GOLDILOCKS:9  ALCISTA:15  NEUTRAL:13  CAUTIOUS:8  BEARISH:6  CRISIS:1
+        |  Transiciones: 10/02: ALCISTA->NEUTRAL   17/02: NEUTRAL->ALCISTA   03/03: ALCISTA->NEUTRAL   17/03: NEUTRAL->ALCISTA
+        |                31/03: ALCISTA->NEUTRAL   21/04: NEUTRAL->ALCISTA   28/04: ALCISTA->NEUTRAL   05/05: NEUTRAL->ALCISTA
+        |                12/05: ALCISTA->NEUTRAL   19/05: NEUTRAL->CAUTIOUS   02/06: CAUTIOUS->NEUTRAL   09/06: NEUTRAL->BEARISH
+        |                30/06: BEARISH->CAUTIOUS   14/07: CAUTIOUS->CRISIS   21/07: CRISIS->BEARISH   28/07: BEARISH->CAUTIOUS
+        |                04/08: CAUTIOUS->BEARISH   18/08: BEARISH->CAUTIOUS   01/09: CAUTIOUS->NEUTRAL   08/09: NEUTRAL->CAUTIOUS
+        |                15/09: CAUTIOUS->NEUTRAL   06/10: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +4.3%  VIX   12  | GOLDILOCKS:2, ALCISTA:7, NEUTRAL:4
+        |  Q2 (Abr-Jun): SPY  -1.4%  VIX   14  | ALCISTA:2, NEUTRAL:5, CAUTIOUS:3, BEARISH:3
+        |  Q3 (Jul-Sep): SPY  +5.0%  VIX   14  | NEUTRAL:4, CAUTIOUS:5, BEARISH:3, CRISIS:1
+        |  Q4 (Oct-Dic): SPY  +5.9%  VIX   11  | GOLDILOCKS:7, ALCISTA:6
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2007  |  SPY: +4.0% (141 -> 147)  |  Score: avg +2.6 [-5.5 a +7.5]  |  VIX avg: 18
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | A | N | A | A | G | A | c | N | A | c | b |
+        |  52 semanas: GOLDILOCKS:5  ALCISTA:22  NEUTRAL:10  CAUTIOUS:7  BEARISH:7  CRISIS:1
+        |  Transiciones: 02/03: GOLDILOCKS->NEUTRAL   23/03: NEUTRAL->ALCISTA   30/03: ALCISTA->NEUTRAL   05/04: NEUTRAL->ALCISTA
+        |                27/07: ALCISTA->CAUTIOUS   03/08: CAUTIOUS->BEARISH   10/08: BEARISH->CAUTIOUS   17/08: CAUTIOUS->CRISIS
+        |                24/08: CRISIS->CAUTIOUS   07/09: CAUTIOUS->BEARISH   14/09: BEARISH->NEUTRAL   05/10: NEUTRAL->ALCISTA
+        |                19/10: ALCISTA->NEUTRAL   26/10: NEUTRAL->ALCISTA   02/11: ALCISTA->NEUTRAL   09/11: NEUTRAL->CAUTIOUS
+        |                16/11: CAUTIOUS->BEARISH   30/11: BEARISH->CAUTIOUS   07/12: CAUTIOUS->NEUTRAL   14/12: NEUTRAL->CAUTIOUS
+        |                21/12: CAUTIOUS->BEARISH
+        |  Q1 (Ene-Mar): SPY  +1.3%  VIX   13  | GOLDILOCKS:1, ALCISTA:7, NEUTRAL:4
+        |  Q2 (Abr-Jun): SPY  +3.3%  VIX   13  | GOLDILOCKS:3, ALCISTA:10
+        |  Q3 (Jul-Sep): SPY  +1.7%  VIX   22  | GOLDILOCKS:1, ALCISTA:2, NEUTRAL:3, CAUTIOUS:4, BEARISH:2, CRISIS:1
+        |  Q4 (Oct-Dic): SPY  -3.7%  VIX   22  | ALCISTA:3, NEUTRAL:3, CAUTIOUS:3, BEARISH:5
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2008  |  SPY: -40.8% (141 -> 87)  |  Score: avg -8.5 [-12.5 a +1.0]  |  VIX avg: 33
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | ! | X | ! | X | c | b | X | X | ! | ! | ! | ! |
+        |  52 semanas: NEUTRAL:1  CAUTIOUS:4  BEARISH:5  CRISIS:16  PANICO:26
+        |  Transiciones: 18/01: CRISIS->PANICO   01/02: PANICO->CRISIS   08/02: CRISIS->PANICO   22/02: PANICO->CRISIS
+        |                07/03: CRISIS->PANICO   04/04: PANICO->CRISIS   18/04: CRISIS->BEARISH   25/04: BEARISH->CAUTIOUS
+        |                09/05: CAUTIOUS->BEARISH   16/05: BEARISH->NEUTRAL   23/05: NEUTRAL->CAUTIOUS   06/06: CAUTIOUS->BEARISH
+        |                27/06: BEARISH->CRISIS   25/07: CRISIS->PANICO   08/08: PANICO->CRISIS   05/09: CRISIS->PANICO
+        |                12/09: PANICO->CRISIS   26/09: CRISIS->PANICO
+        |  Q1 (Ene-Mar): SPY  -8.7%  VIX   27  | CRISIS:4, PANICO:8
+        |  Q2 (Abr-Jun): SPY  -2.6%  VIX   21  | NEUTRAL:1, CAUTIOUS:4, BEARISH:5, CRISIS:3
+        |  Q3 (Jul-Sep): SPY  -7.3%  VIX   24  | CRISIS:9, PANICO:4
+        |  Q4 (Oct-Dic): SPY -28.7%  VIX   58  | PANICO:14
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2009  |  SPY: +29.1% (93 -> 112)  |  Score: avg -2.3 [-12.5 a +8.0]  |  VIX avg: 31
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | ! | ! | ! | ! | X | c | b | c | A | G | A | G |
+        |  53 semanas: GOLDILOCKS:7  ALCISTA:9  NEUTRAL:4  CAUTIOUS:8  BEARISH:4  CRISIS:6  PANICO:15
+        |  Transiciones: 17/04: PANICO->CRISIS   08/05: CRISIS->BEARISH   15/05: BEARISH->CRISIS   29/05: CRISIS->BEARISH
+        |                05/06: BEARISH->CAUTIOUS   02/07: CAUTIOUS->BEARISH   10/07: BEARISH->CRISIS   17/07: CRISIS->BEARISH
+        |                24/07: BEARISH->CAUTIOUS   21/08: CAUTIOUS->NEUTRAL   11/09: NEUTRAL->ALCISTA   30/10: GOLDILOCKS->NEUTRAL
+        |                06/11: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  -4.6%  VIX   45  | PANICO:13
+        |  Q2 (Abr-Jun): SPY +13.7%  VIX   32  | CAUTIOUS:4, BEARISH:2, CRISIS:5, PANICO:2
+        |  Q3 (Jul-Sep): SPY +15.4%  VIX   25  | GOLDILOCKS:1, ALCISTA:2, NEUTRAL:3, CAUTIOUS:4, BEARISH:2, CRISIS:1
+        |  Q4 (Oct-Dic): SPY  +6.9%  VIX   23  | GOLDILOCKS:6, ALCISTA:7, NEUTRAL:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2010  |  SPY: +11.8% (111 -> 126)  |  Score: avg +2.0 [-10.5 a +8.0]  |  VIX avg: 23
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | N | A | G | b | X | X | b | N | A | A | G |
+        |  52 semanas: BURBUJA:1  GOLDILOCKS:9  ALCISTA:15  NEUTRAL:8  CAUTIOUS:4  BEARISH:9  CRISIS:5  PANICO:1
+        |  Transiciones: 22/01: GOLDILOCKS->NEUTRAL   05/02: NEUTRAL->CAUTIOUS   12/02: CAUTIOUS->NEUTRAL   19/02: NEUTRAL->ALCISTA
+        |                26/02: ALCISTA->NEUTRAL   05/03: NEUTRAL->ALCISTA   07/05: GOLDILOCKS->CAUTIOUS   14/05: CAUTIOUS->NEUTRAL
+        |                21/05: NEUTRAL->BEARISH   04/06: BEARISH->CRISIS   11/06: CRISIS->BEARISH   18/06: BEARISH->CAUTIOUS
+        |                25/06: CAUTIOUS->CRISIS   02/07: CRISIS->PANICO   09/07: PANICO->CRISIS   23/07: CRISIS->BEARISH
+        |                20/08: BEARISH->CRISIS   27/08: CRISIS->BEARISH   10/09: BEARISH->CAUTIOUS   17/09: CAUTIOUS->NEUTRAL
+        |                08/10: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +4.8%  VIX   21  | GOLDILOCKS:2, ALCISTA:5, NEUTRAL:4, CAUTIOUS:1
+        |  Q2 (Abr-Jun): SPY  -7.7%  VIX   27  | GOLDILOCKS:3, ALCISTA:2, NEUTRAL:1, CAUTIOUS:2, BEARISH:3, CRISIS:2
+        |  Q3 (Jul-Sep): SPY  +6.8%  VIX   24  | NEUTRAL:2, CAUTIOUS:1, BEARISH:6, CRISIS:3, PANICO:1
+        |  Q4 (Oct-Dic): SPY  +8.1%  VIX   19  | BURBUJA:1, GOLDILOCKS:4, ALCISTA:8, NEUTRAL:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2011  |  SPY: -0.2% (127 -> 126)  |  Score: avg +0.3 [-10.5 a +8.0]  |  VIX avg: 24
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | G | A | A | A | c | N | X | X | X | b | c |
+        |  52 semanas: GOLDILOCKS:11  ALCISTA:10  NEUTRAL:5  CAUTIOUS:9  BEARISH:4  CRISIS:9  PANICO:4
+        |  Transiciones: 03/06: ALCISTA->NEUTRAL   10/06: NEUTRAL->CAUTIOUS   17/06: CAUTIOUS->BEARISH   24/06: BEARISH->CAUTIOUS
+        |                01/07: CAUTIOUS->NEUTRAL   29/07: NEUTRAL->BEARISH   05/08: BEARISH->CRISIS   19/08: CRISIS->PANICO
+        |                26/08: PANICO->CRISIS   23/09: CRISIS->PANICO   14/10: PANICO->CRISIS   28/10: CRISIS->CAUTIOUS
+        |                04/11: CAUTIOUS->BEARISH   11/11: BEARISH->CAUTIOUS   18/11: CAUTIOUS->BEARISH   25/11: BEARISH->CRISIS
+        |                02/12: CRISIS->CAUTIOUS
+        |  Q1 (Ene-Mar): SPY  +4.5%  VIX   18  | GOLDILOCKS:9, ALCISTA:3
+        |  Q2 (Abr-Jun): SPY  -5.3%  VIX   18  | GOLDILOCKS:2, ALCISTA:7, NEUTRAL:1, CAUTIOUS:2, BEARISH:1
+        |  Q3 (Jul-Sep): SPY -10.3%  VIX   31  | NEUTRAL:4, BEARISH:1, CRISIS:6, PANICO:3
+        |  Q4 (Oct-Dic): SPY +11.2%  VIX   28  | CAUTIOUS:7, BEARISH:2, CRISIS:3, PANICO:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2012  |  SPY: +11.6% (128 -> 140)  |  Score: avg +2.8 [-6.0 a +8.0]  |  VIX avg: 17
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | N | A | A | A | N | b | c | A | G | A | N | N |
+        |  52 semanas: GOLDILOCKS:5  ALCISTA:19  NEUTRAL:17  CAUTIOUS:3  BEARISH:7  CRISIS:1
+        |  Transiciones: 03/02: NEUTRAL->ALCISTA   04/05: ALCISTA->NEUTRAL   18/05: NEUTRAL->BEARISH   01/06: BEARISH->CRISIS
+        |                08/06: CRISIS->BEARISH   13/07: BEARISH->CAUTIOUS   27/07: CAUTIOUS->NEUTRAL   17/08: NEUTRAL->ALCISTA
+        |                26/10: ALCISTA->NEUTRAL   02/11: NEUTRAL->ALCISTA   09/11: ALCISTA->NEUTRAL   16/11: NEUTRAL->CAUTIOUS
+        |                23/11: CAUTIOUS->NEUTRAL
+        |  Q1 (Ene-Mar): SPY  +9.9%  VIX   17  | ALCISTA:9, NEUTRAL:3
+        |  Q2 (Abr-Jun): SPY  -1.5%  VIX   20  | ALCISTA:4, NEUTRAL:2, BEARISH:6, CRISIS:1
+        |  Q3 (Jul-Sep): SPY  +5.7%  VIX   16  | GOLDILOCKS:4, ALCISTA:3, NEUTRAL:3, CAUTIOUS:2, BEARISH:1
+        |  Q4 (Oct-Dic): SPY  -4.5%  VIX   17  | GOLDILOCKS:1, ALCISTA:3, NEUTRAL:9, CAUTIOUS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2013  |  SPY: +31.3% (146 -> 184)  |  Score: avg +6.5 [+1.5 a +8.0]  |  VIX avg: 14
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | G | G | A | G | A | G | N | A | A | G | G |
+        |  52 semanas: BURBUJA:4  GOLDILOCKS:27  ALCISTA:17  NEUTRAL:4
+        |  Transiciones: 21/06: ALCISTA->NEUTRAL   28/06: NEUTRAL->ALCISTA   16/08: ALCISTA->NEUTRAL   06/09: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +6.0%  VIX   13  | BURBUJA:2, GOLDILOCKS:8, ALCISTA:2
+        |  Q2 (Abr-Jun): SPY  +2.5%  VIX   15  | GOLDILOCKS:7, ALCISTA:5, NEUTRAL:1
+        |  Q3 (Jul-Sep): SPY  +5.3%  VIX   14  | GOLDILOCKS:3, ALCISTA:7, NEUTRAL:3
+        |  Q4 (Oct-Dic): SPY  +9.8%  VIX   14  | BURBUJA:2, GOLDILOCKS:9, ALCISTA:3
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2014  |  SPY: +13.4% (183 -> 208)  |  Score: avg +5.0 [-4.5 a +8.0]  |  VIX avg: 14
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | A | G | A | A | A | G | N | A | N | A | A |
+        |  52 semanas: GOLDILOCKS:9  ALCISTA:31  NEUTRAL:10  BEARISH:2
+        |  Transiciones: 31/01: ALCISTA->NEUTRAL   14/02: NEUTRAL->ALCISTA   11/04: ALCISTA->NEUTRAL   25/04: NEUTRAL->ALCISTA
+        |                01/08: GOLDILOCKS->NEUTRAL   15/08: NEUTRAL->ALCISTA   26/09: ALCISTA->NEUTRAL   10/10: NEUTRAL->BEARISH
+        |                24/10: BEARISH->NEUTRAL   31/10: NEUTRAL->ALCISTA   12/12: ALCISTA->NEUTRAL   19/12: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +1.5%  VIX   15  | GOLDILOCKS:4, ALCISTA:6, NEUTRAL:2
+        |  Q2 (Abr-Jun): SPY  +0.2%  VIX   13  | GOLDILOCKS:1, ALCISTA:10, NEUTRAL:2
+        |  Q3 (Jul-Sep): SPY  -0.1%  VIX   13  | GOLDILOCKS:4, ALCISTA:6, NEUTRAL:3
+        |  Q4 (Oct-Dic): SPY  +6.4%  VIX   16  | ALCISTA:9, NEUTRAL:3, BEARISH:2
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2015  |  SPY: -1.3% (205 -> 206)  |  Score: avg +0.1 [-7.0 a +6.0]  |  VIX avg: 17
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | N | N | N | N | N | N | c | b | X | b | N | c |
+        |  53 semanas: ALCISTA:6  NEUTRAL:25  CAUTIOUS:11  BEARISH:8  CRISIS:3
+        |  Transiciones: 30/01: NEUTRAL->CAUTIOUS   06/02: CAUTIOUS->NEUTRAL   20/02: NEUTRAL->ALCISTA   06/03: ALCISTA->NEUTRAL
+        |                20/03: NEUTRAL->ALCISTA   27/03: ALCISTA->NEUTRAL   24/04: NEUTRAL->ALCISTA   01/05: ALCISTA->NEUTRAL
+        |                08/05: NEUTRAL->ALCISTA   22/05: ALCISTA->NEUTRAL   10/07: NEUTRAL->CAUTIOUS   17/07: CAUTIOUS->NEUTRAL
+        |                24/07: NEUTRAL->CAUTIOUS   14/08: CAUTIOUS->NEUTRAL   21/08: NEUTRAL->BEARISH   04/09: BEARISH->CRISIS
+        |                11/09: CRISIS->BEARISH   25/09: BEARISH->CRISIS   09/10: CRISIS->BEARISH   23/10: BEARISH->CAUTIOUS
+        |                06/11: CAUTIOUS->NEUTRAL   13/11: NEUTRAL->BEARISH   20/11: BEARISH->CAUTIOUS   27/11: CAUTIOUS->NEUTRAL
+        |                11/12: NEUTRAL->CAUTIOUS   18/12: CAUTIOUS->BEARISH   24/12: BEARISH->CAUTIOUS
+        |  Q1 (Ene-Mar): SPY  -1.1%  VIX   16  | ALCISTA:3, NEUTRAL:9, CAUTIOUS:1
+        |  Q2 (Abr-Jun): SPY  -0.5%  VIX   13  | ALCISTA:3, NEUTRAL:10
+        |  Q3 (Jul-Sep): SPY  -7.4%  VIX   19  | NEUTRAL:3, CAUTIOUS:4, BEARISH:4, CRISIS:2
+        |  Q4 (Oct-Dic): SPY  +5.8%  VIX   17  | NEUTRAL:3, CAUTIOUS:6, BEARISH:4, CRISIS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2016  |  SPY: +8.7% (204 -> 224)  |  Score: avg +0.9 [-9.0 a +7.0]  |  VIX avg: 16
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | X | X | b | A | N | N | N | A | N | N | N | A |
+        |  52 semanas: GOLDILOCKS:1  ALCISTA:13  NEUTRAL:24  CAUTIOUS:4  BEARISH:2  CRISIS:8
+        |  Transiciones: 04/03: CRISIS->BEARISH   18/03: BEARISH->NEUTRAL   01/04: NEUTRAL->CAUTIOUS   15/04: CAUTIOUS->ALCISTA
+        |                06/05: ALCISTA->NEUTRAL   24/06: NEUTRAL->CAUTIOUS   01/07: CAUTIOUS->NEUTRAL   15/07: NEUTRAL->ALCISTA
+        |                09/09: ALCISTA->NEUTRAL   04/11: NEUTRAL->CAUTIOUS   11/11: CAUTIOUS->NEUTRAL   09/12: NEUTRAL->ALCISTA
+        |                30/12: ALCISTA->NEUTRAL
+        |  Q1 (Ene-Mar): SPY  +1.4%  VIX   21  | NEUTRAL:2, BEARISH:2, CRISIS:8
+        |  Q2 (Abr-Jun): SPY  +0.2%  VIX   16  | ALCISTA:3, NEUTRAL:7, CAUTIOUS:3
+        |  Q3 (Jul-Sep): SPY  +6.3%  VIX   13  | GOLDILOCKS:1, ALCISTA:7, NEUTRAL:6
+        |  Q4 (Oct-Dic): SPY  +3.5%  VIX   14  | ALCISTA:3, NEUTRAL:9, CAUTIOUS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2017  |  SPY: +19.4% (227 -> 267)  |  Score: avg +5.5 [+0.5 a +8.0]  |  VIX avg: 11
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | G | A | A | A | A | A | N | N | A | G | G |
+        |  52 semanas: GOLDILOCKS:17  ALCISTA:25  NEUTRAL:10
+        |  Transiciones: 12/05: ALCISTA->NEUTRAL   26/05: NEUTRAL->ALCISTA   09/06: ALCISTA->NEUTRAL   16/06: NEUTRAL->ALCISTA
+        |                30/06: ALCISTA->NEUTRAL   07/07: NEUTRAL->ALCISTA   11/08: ALCISTA->NEUTRAL   22/09: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +5.4%  VIX   11  | GOLDILOCKS:8, ALCISTA:5
+        |  Q2 (Abr-Jun): SPY  +3.5%  VIX   11  | ALCISTA:9, NEUTRAL:4
+        |  Q3 (Jul-Sep): SPY  +3.9%  VIX   11  | ALCISTA:7, NEUTRAL:6
+        |  Q4 (Oct-Dic): SPY  +6.1%  VIX   10  | GOLDILOCKS:9, ALCISTA:4
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2018  |  SPY: -7.2% (273 -> 248)  |  Score: avg +0.9 [-11.0 a +8.0]  |  VIX avg: 17
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | B | A | A | c | N | N | A | A | A | b | b | ! |
+        |  52 semanas: BURBUJA:2  GOLDILOCKS:2  ALCISTA:16  NEUTRAL:12  CAUTIOUS:6  BEARISH:7  CRISIS:4  PANICO:3
+        |  Transiciones: 09/02: GOLDILOCKS->CAUTIOUS   16/02: CAUTIOUS->ALCISTA   02/03: ALCISTA->NEUTRAL   09/03: NEUTRAL->ALCISTA
+        |                23/03: ALCISTA->BEARISH   29/03: BEARISH->CAUTIOUS   20/04: CAUTIOUS->NEUTRAL   27/04: NEUTRAL->CAUTIOUS
+        |                04/05: CAUTIOUS->BEARISH   11/05: BEARISH->NEUTRAL   08/06: NEUTRAL->ALCISTA   15/06: ALCISTA->NEUTRAL
+        |                06/07: NEUTRAL->ALCISTA   10/08: ALCISTA->NEUTRAL   24/08: NEUTRAL->ALCISTA   05/10: ALCISTA->NEUTRAL
+        |                12/10: NEUTRAL->BEARISH   26/10: BEARISH->CRISIS   02/11: CRISIS->BEARISH   09/11: BEARISH->CAUTIOUS
+        |                16/11: CAUTIOUS->BEARISH   23/11: BEARISH->CRISIS   30/11: CRISIS->BEARISH   07/12: BEARISH->CRISIS
+        |                21/12: CRISIS->PANICO
+        |  Q1 (Ene-Mar): SPY -11.0%  VIX   17  | BURBUJA:2, GOLDILOCKS:2, ALCISTA:4, NEUTRAL:1, CAUTIOUS:2, BEARISH:1
+        |  Q2 (Abr-Jun): SPY  +3.1%  VIX   15  | ALCISTA:1, NEUTRAL:8, CAUTIOUS:3, BEARISH:1
+        |  Q3 (Jul-Sep): SPY  +7.0%  VIX   13  | ALCISTA:11, NEUTRAL:2
+        |  Q4 (Oct-Dic): SPY -12.2%  VIX   21  | NEUTRAL:1, CAUTIOUS:1, BEARISH:5, CRISIS:4, PANICO:3
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2019  |  SPY: +30.3% (252 -> 323)  |  Score: avg +2.6 [-7.5 a +8.0]  |  VIX avg: 15
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | X | c | N | A | N | N | A | N | N | N | A | G |
+        |  52 semanas: GOLDILOCKS:5  ALCISTA:18  NEUTRAL:18  CAUTIOUS:6  BEARISH:2  CRISIS:3
+        |  Transiciones: 01/02: CRISIS->CAUTIOUS   08/02: CAUTIOUS->BEARISH   15/02: BEARISH->CAUTIOUS   22/02: CAUTIOUS->NEUTRAL
+        |                08/03: NEUTRAL->CAUTIOUS   15/03: CAUTIOUS->NEUTRAL   22/03: NEUTRAL->ALCISTA   10/05: ALCISTA->NEUTRAL
+        |                31/05: NEUTRAL->BEARISH   07/06: BEARISH->NEUTRAL   28/06: NEUTRAL->ALCISTA   02/08: ALCISTA->NEUTRAL
+        |                23/08: NEUTRAL->CAUTIOUS   30/08: CAUTIOUS->NEUTRAL   06/09: NEUTRAL->ALCISTA   13/09: ALCISTA->NEUTRAL
+        |                27/09: NEUTRAL->CAUTIOUS   11/10: CAUTIOUS->NEUTRAL   01/11: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY +11.4%  VIX   16  | ALCISTA:2, NEUTRAL:3, CAUTIOUS:3, BEARISH:1, CRISIS:3
+        |  Q2 (Abr-Jun): SPY  +4.5%  VIX   15  | ALCISTA:6, NEUTRAL:6, BEARISH:1
+        |  Q3 (Jul-Sep): SPY  +1.0%  VIX   16  | ALCISTA:5, NEUTRAL:6, CAUTIOUS:2
+        |  Q4 (Oct-Dic): SPY  +9.6%  VIX   13  | GOLDILOCKS:5, ALCISTA:5, NEUTRAL:3, CAUTIOUS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2020  |  SPY: +14.3% (322 -> 369)  |  Score: avg +0.2 [-12.5 a +8.0]  |  VIX avg: 29
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | A | ! | ! | X | c | N | A | N | N | N | A |
+        |  53 semanas: GOLDILOCKS:3  ALCISTA:18  NEUTRAL:13  CAUTIOUS:3  BEARISH:3  CRISIS:6  PANICO:7
+        |  Transiciones: 31/01: ALCISTA->NEUTRAL   07/02: NEUTRAL->ALCISTA   28/02: ALCISTA->CRISIS   13/03: CRISIS->PANICO
+        |                17/04: PANICO->CRISIS   24/04: CRISIS->PANICO   08/05: PANICO->CRISIS   29/05: CRISIS->BEARISH
+        |                05/06: BEARISH->NEUTRAL   12/06: NEUTRAL->BEARISH   19/06: BEARISH->CAUTIOUS   10/07: CAUTIOUS->NEUTRAL
+        |                17/07: NEUTRAL->ALCISTA   31/07: ALCISTA->NEUTRAL   07/08: NEUTRAL->ALCISTA   04/09: ALCISTA->NEUTRAL
+        |                09/10: NEUTRAL->ALCISTA   23/10: ALCISTA->NEUTRAL   30/10: NEUTRAL->BEARISH   06/11: BEARISH->NEUTRAL
+        |                27/11: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY -21.1%  VIX   30  | GOLDILOCKS:3, ALCISTA:4, NEUTRAL:1, CRISIS:2, PANICO:3
+        |  Q2 (Abr-Jun): SPY  +3.9%  VIX   34  | NEUTRAL:1, CAUTIOUS:2, BEARISH:2, CRISIS:4, PANICO:4
+        |  Q3 (Jul-Sep): SPY  +2.6%  VIX   25  | ALCISTA:6, NEUTRAL:6, CAUTIOUS:1
+        |  Q4 (Oct-Dic): SPY +12.9%  VIX   25  | ALCISTA:8, NEUTRAL:5, BEARISH:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2021  |  SPY: +28.7% (374 -> 475)  |  Score: avg +6.0 [+1.5 a +8.0]  |  VIX avg: 19
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | G | A | G | G | G | G | A | A | A | A | A | A |
+        |  52 semanas: GOLDILOCKS:19  ALCISTA:23  NEUTRAL:10
+        |  Transiciones: 29/01: GOLDILOCKS->NEUTRAL   05/02: NEUTRAL->ALCISTA   16/07: ALCISTA->NEUTRAL   23/07: NEUTRAL->ALCISTA
+        |                20/08: ALCISTA->NEUTRAL   27/08: NEUTRAL->ALCISTA   10/09: ALCISTA->NEUTRAL   24/09: NEUTRAL->ALCISTA
+        |                01/10: ALCISTA->NEUTRAL   15/10: NEUTRAL->ALCISTA   26/11: ALCISTA->NEUTRAL   10/12: NEUTRAL->ALCISTA
+        |                17/12: ALCISTA->NEUTRAL   23/12: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +6.1%  VIX   23  | GOLDILOCKS:7, ALCISTA:4, NEUTRAL:1
+        |  Q2 (Abr-Jun): SPY  +8.1%  VIX   17  | GOLDILOCKS:12, ALCISTA:1
+        |  Q3 (Jul-Sep): SPY  +4.1%  VIX   18  | ALCISTA:9, NEUTRAL:4
+        |  Q4 (Oct-Dic): SPY  +2.4%  VIX   20  | ALCISTA:9, NEUTRAL:5
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2022  |  SPY: -19.5% (466 -> 382)  |  Score: avg -5.5 [-12.5 a +5.5]  |  VIX avg: 25
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | b | b | c | c | X | ! | ! | b | X | X | X | c |
+        |  52 semanas: ALCISTA:1  NEUTRAL:1  CAUTIOUS:8  BEARISH:15  CRISIS:18  PANICO:9
+        |  Transiciones: 14/01: ALCISTA->NEUTRAL   21/01: NEUTRAL->BEARISH   04/02: BEARISH->CAUTIOUS   11/02: CAUTIOUS->BEARISH
+        |                11/03: BEARISH->CRISIS   18/03: CRISIS->CAUTIOUS   14/04: CAUTIOUS->BEARISH   22/04: BEARISH->CRISIS
+        |                10/06: CRISIS->PANICO   29/07: PANICO->CRISIS   12/08: CRISIS->BEARISH   02/09: BEARISH->CRISIS
+        |                09/09: CRISIS->BEARISH   16/09: BEARISH->CRISIS   30/09: CRISIS->PANICO   07/10: PANICO->CRISIS
+        |                14/10: CRISIS->PANICO   21/10: PANICO->CRISIS   11/11: CRISIS->BEARISH   18/11: BEARISH->CRISIS
+        |                25/11: CRISIS->BEARISH   02/12: BEARISH->CAUTIOUS   09/12: CAUTIOUS->BEARISH   23/12: BEARISH->CAUTIOUS
+        |  Q1 (Ene-Mar): SPY  -4.3%  VIX   26  | ALCISTA:1, NEUTRAL:1, CAUTIOUS:3, BEARISH:6, CRISIS:1
+        |  Q2 (Abr-Jun): SPY -12.9%  VIX   27  | CAUTIOUS:2, BEARISH:1, CRISIS:7, PANICO:3
+        |  Q3 (Jul-Sep): SPY  -8.1%  VIX   24  | BEARISH:4, CRISIS:5, PANICO:5
+        |  Q4 (Oct-Dic): SPY  +7.4%  VIX   24  | CAUTIOUS:3, BEARISH:4, CRISIS:5, PANICO:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2023  |  SPY: +24.3% (388 -> 475)  |  Score: avg +1.4 [-7.0 a +6.5]  |  VIX avg: 17
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | N | N | b | N | c | A | A | A | A | b | b | A |
+        |  52 semanas: ALCISTA:17  NEUTRAL:17  CAUTIOUS:10  BEARISH:7  CRISIS:1
+        |  Transiciones: 13/01: CAUTIOUS->ALCISTA   20/01: ALCISTA->NEUTRAL   10/03: NEUTRAL->BEARISH   31/03: BEARISH->NEUTRAL
+        |                06/04: NEUTRAL->CAUTIOUS   14/04: CAUTIOUS->NEUTRAL   05/05: NEUTRAL->CAUTIOUS   02/06: CAUTIOUS->NEUTRAL
+        |                16/06: NEUTRAL->ALCISTA   25/08: ALCISTA->NEUTRAL   01/09: NEUTRAL->ALCISTA   15/09: ALCISTA->NEUTRAL
+        |                22/09: NEUTRAL->CAUTIOUS   06/10: CAUTIOUS->BEARISH   13/10: BEARISH->CAUTIOUS   20/10: CAUTIOUS->BEARISH
+        |                27/10: BEARISH->CRISIS   03/11: CRISIS->BEARISH   17/11: BEARISH->CAUTIOUS   24/11: CAUTIOUS->NEUTRAL
+        |                01/12: NEUTRAL->ALCISTA   08/12: ALCISTA->NEUTRAL   15/12: NEUTRAL->ALCISTA
+        |  Q1 (Ene-Mar): SPY  +7.1%  VIX   21  | ALCISTA:1, NEUTRAL:8, CAUTIOUS:1, BEARISH:3
+        |  Q2 (Abr-Jun): SPY +11.6%  VIX   16  | ALCISTA:3, NEUTRAL:5, CAUTIOUS:5
+        |  Q3 (Jul-Sep): SPY  -3.5%  VIX   15  | ALCISTA:9, NEUTRAL:2, CAUTIOUS:2
+        |  Q4 (Oct-Dic): SPY +10.9%  VIX   15  | ALCISTA:4, NEUTRAL:2, CAUTIOUS:2, BEARISH:4, CRISIS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2024  |  SPY: +25.2% (468 -> 595)  |  Score: avg +4.6 [-1.5 a +7.0]  |  VIX avg: 15
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | A | G | N | A | N | A | A | A | A | A | N |
+        |  52 semanas: GOLDILOCKS:5  ALCISTA:33  NEUTRAL:13  CAUTIOUS:1
+        |  Transiciones: 12/04: GOLDILOCKS->NEUTRAL   26/04: NEUTRAL->ALCISTA   07/06: ALCISTA->NEUTRAL   21/06: NEUTRAL->ALCISTA
+        |                05/07: ALCISTA->NEUTRAL   12/07: NEUTRAL->ALCISTA   02/08: ALCISTA->NEUTRAL   16/08: NEUTRAL->ALCISTA
+        |                06/09: ALCISTA->NEUTRAL   13/09: NEUTRAL->ALCISTA   25/10: ALCISTA->NEUTRAL   08/11: NEUTRAL->ALCISTA
+        |                13/12: ALCISTA->NEUTRAL   31/12: NEUTRAL->CAUTIOUS
+        |  Q1 (Ene-Mar): SPY +13.1%  VIX   14  | GOLDILOCKS:4, ALCISTA:8
+        |  Q2 (Abr-Jun): SPY  +4.1%  VIX   14  | GOLDILOCKS:1, ALCISTA:8, NEUTRAL:4
+        |  Q3 (Jul-Sep): SPY  +5.2%  VIX   17  | ALCISTA:9, NEUTRAL:4
+        |  Q4 (Oct-Dic): SPY  +4.9%  VIX   17  | ALCISTA:8, NEUTRAL:5, CAUTIOUS:1
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2025  |  SPY: +16.0% (592 -> 690)  |  Score: avg +0.2 [-11.5 a +5.0]  |  VIX avg: 19
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | N | c | X | X | X | c | A | A | A | N | N | N |
+        |  52 semanas: ALCISTA:12  NEUTRAL:20  CAUTIOUS:6  BEARISH:4  CRISIS:9  PANICO:1
+        |  Transiciones: 17/01: BEARISH->NEUTRAL   14/02: NEUTRAL->CAUTIOUS   21/02: CAUTIOUS->BEARISH   28/02: BEARISH->CAUTIOUS
+        |                07/03: CAUTIOUS->CRISIS   04/04: CRISIS->PANICO   11/04: PANICO->CRISIS   16/05: CRISIS->CAUTIOUS
+        |                23/05: CAUTIOUS->BEARISH   06/06: BEARISH->CAUTIOUS   27/06: CAUTIOUS->NEUTRAL   03/07: NEUTRAL->ALCISTA
+        |                01/08: ALCISTA->NEUTRAL   15/08: NEUTRAL->ALCISTA   12/09: ALCISTA->NEUTRAL   26/09: NEUTRAL->ALCISTA
+        |                10/10: ALCISTA->NEUTRAL   12/12: NEUTRAL->ALCISTA   19/12: ALCISTA->NEUTRAL   26/12: NEUTRAL->ALCISTA
+        |                31/12: ALCISTA->NEUTRAL
+        |  Q1 (Ene-Mar): SPY  -6.1%  VIX   19  | NEUTRAL:4, CAUTIOUS:2, BEARISH:2, CRISIS:4
+        |  Q2 (Abr-Jun): SPY +18.2%  VIX   24  | NEUTRAL:1, CAUTIOUS:4, BEARISH:2, CRISIS:5, PANICO:1
+        |  Q3 (Jul-Sep): SPY  +9.2%  VIX   16  | ALCISTA:9, NEUTRAL:4
+        |  Q4 (Oct-Dic): SPY  +5.8%  VIX   18  | ALCISTA:3, NEUTRAL:11
+
+----------------------------------------------------------------------------------------------------------------------------------
+  2026  |  SPY: -0.1% (683 -> 689)  |  Score: avg +5.4 [+4.5 a +6.5]  |  VIX avg: 17
+        |  Ene |Feb |Mar |Abr |May |Jun |Jul |Ago |Sep |Oct |Nov |Dic |
+        | A | A |   |   |   |   |   |   |   |   |   |   |
+        |  8 semanas: ALCISTA:8
+        |  Q1 (Ene-Mar): SPY  -0.1%  VIX   17  | ALCISTA:8
+
+==================================================================================================================================
+  TABLA RESUMEN: SEMANAS POR REGIMEN Y ANO
+==================================================================================================================================
+    Año    SPY%  BURB  GOLD  ALCI  NEUT  CAUT  BEAR  CRIS  PANI  TOTAL   Zona+  ZonaN  Zona-
+  --------------------------------------------------------------------------------------------------------------
+   2001  -11.6%     ·     ·     ·     1     6    19    20     6     52       0      1     51
+   2002  -24.7%     ·     ·     ·     5    12     3    17    15     52       0      5     47
+   2003  +25.5%     2    15    15     2     2     3     4     9     52      32      2     18
+   2004  +10.2%     ·    18     8    19     5     3     ·     ·     53      26     19      8
+   2005   +3.0%     ·     2    25    16     5     4     ·     ·     52      27     16      9
+   2006  +13.7%     ·     9    15    13     8     6     1     ·     52      24     13     15
+   2007   +4.0%     ·     5    22    10     7     7     1     ·     52      27     10     15
+   2008  -40.8%     ·     ·     ·     1     4     5    16    26     52       0      1     51
+   2009  +29.1%     ·     7     9     4     8     4     6    15     53      16      4     33
+   2010  +11.8%     1     9    15     8     4     9     5     1     52      25      8     19
+   2011   -0.2%     ·    11    10     5     9     4     9     4     52      21      5     26
+   2012  +11.6%     ·     5    19    17     3     7     1     ·     52      24     17     11
+   2013  +31.3%     4    27    17     4     ·     ·     ·     ·     52      48      4      0
+   2014  +13.4%     ·     9    31    10     ·     2     ·     ·     52      40     10      2
+   2015   -1.3%     ·     ·     6    25    11     8     3     ·     53       6     25     22
+   2016   +8.7%     ·     1    13    24     4     2     8     ·     52      14     24     14
+   2017  +19.4%     ·    17    25    10     ·     ·     ·     ·     52      42     10      0
+   2018   -7.2%     2     2    16    12     6     7     4     3     52      20     12     20
+   2019  +30.3%     ·     5    18    18     6     2     3     ·     52      23     18     11
+   2020  +14.3%     ·     3    18    13     3     3     6     7     53      21     13     19
+   2021  +28.7%     ·    19    23    10     ·     ·     ·     ·     52      42     10      0
+   2022  -19.5%     ·     ·     1     1     8    15    18     9     52       1      1     50
+   2023  +24.3%     ·     ·    17    17    10     7     1     ·     52      17     17     18
+   2024  +25.2%     ·     5    33    13     1     ·     ·     ·     52      38     13      1
+   2025  +16.0%     ·     ·    12    20     6     4     9     1     52      12     20     20
+   2026   -0.1%     ·     ·     8     ·     ·     ·     ·     ·      8       8      0      0
+  --------------------------------------------------------------------------------------------------------------
+  TOTAL             9   169   376   278   128   124   132    96   1312     554    278    480
+      %          0.7% 12.9% 28.7% 21.2%  9.8%  9.5% 10.1%  7.3%   100%   42.2%  21.2%  36.6%
