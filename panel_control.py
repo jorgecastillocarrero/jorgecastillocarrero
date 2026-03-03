@@ -105,21 +105,121 @@ for d in MIX_MONTHS:
 
 print(f"  MIX: {len(mix_trades)} trades, current: {len(mix_current_top)+len(mix_current_bot)} positions")
 
-# ── Load RELAX5 ──
+# ── Load RELAX5 (cache + scan FMP for open positions) ──
 print("Loading RELAX5...")
+import numpy as np
+from sqlalchemy import create_engine
+
 with open(BASE / 'data' / 'relax5_15d_trades.json', 'r') as f:
     r5_all = json.load(f)
 
-today = '2026-03-03'
-r5_open = [t for t in r5_all if t['exit'] >= today]
 r5_recent = [t for t in r5_all if t['sig'] >= '2025-01-01']
 
-# R5 trades for screener: [date, ticker, dir, ret, info, signal_value]
+# R5 trades for screener
 r5_trades = []
 for t in r5_all:
     r5_trades.append([t['sig'], t['sym'], 'S', t['ret'], f"{t['entry']}->{t['exit']}", 0])
 
-print(f"  RELAX5: {len(r5_all)} trades, open: {len(r5_open)}, recent: {len(r5_recent)}")
+# Scan FMP for currently OPEN R5 positions (entry done, 15d hold not completed)
+print("  Scanning FMP for open RELAX5 positions...")
+engine = create_engine('postgresql://fmp:fmp123@localhost:5433/fmp_data')
+
+with open(BASE / 'data' / 'sp500_constituents.json') as f:
+    sp_tickers = sorted(set(s['symbol'] for s in json.load(f)))
+
+ec = []
+for i in range(0, len(sp_tickers), 50):
+    b = sp_tickers[i:i+50]
+    ec.append(pd.read_sql("""SELECT symbol, date, eps_actual
+       FROM fmp_earnings WHERE symbol = ANY(%(t)s) AND eps_actual IS NOT NULL
+       ORDER BY symbol, date""", engine, params={'t': b}))
+earn = pd.concat(ec, ignore_index=True)
+earn['date'] = pd.to_datetime(earn['date'])
+earn['eps_actual'] = earn['eps_actual'].astype(float)
+
+def _compute_epsg(grp):
+    grp = grp.sort_values('date').reset_index(drop=True)
+    grp['eps_ttm'] = grp['eps_actual'].rolling(4, min_periods=4).sum()
+    grp['eps_ttm_prev'] = grp['eps_ttm'].shift(4)
+    grp['epsg'] = np.where(grp['eps_ttm_prev'].abs() > 0.01,
+        (grp['eps_ttm'] / grp['eps_ttm_prev'] - 1) * 100, np.nan)
+    return grp[['symbol', 'date', 'epsg']]
+
+ef = earn.groupby('symbol', group_keys=False).apply(_compute_epsg)
+earn_lk = {}
+for sym, grp in ef.groupby('symbol'):
+    grp = grp.sort_values('date')
+    earn_lk[sym] = list(zip(grp['date'].values, grp['epsg'].values))
+del earn, ef
+
+prc = []
+for i in range(0, len(sp_tickers), 25):
+    b = sp_tickers[i:i+25]
+    prc.append(pd.read_sql("""SELECT symbol, date, open, close
+       FROM fmp_price_history WHERE symbol = ANY(%(t)s) AND date >= '2024-06-01'
+       ORDER BY symbol, date""", engine, params={'t': b}))
+    if (i // 25) % 8 == 0:
+        print(f"    Prices batch {i//25+1}...")
+dfp = pd.concat(prc, ignore_index=True)
+dfp['date'] = pd.to_datetime(dfp['date'])
+del prc
+
+HOLD_R5 = 15
+r5_open = []
+for sym, g in dfp.groupby('symbol'):
+    g = g.sort_values('date').reset_index(drop=True)
+    n = len(g)
+    if n < 210:
+        continue
+    c = g['close'].values.astype(float)
+    o = g['open'].values.astype(float)
+    d = g['date'].values
+    s50 = pd.Series(c).rolling(50).mean().values
+    s100 = pd.Series(c).rolling(100).mean().values
+    s200 = pd.Series(c).rolling(200).mean().values
+    busy = -1
+    for i in range(200, n):
+        if np.isnan(s50[i]) or np.isnan(s100[i]) or np.isnan(s200[i]):
+            continue
+        if s50[i] <= 0 or s100[i] <= 0 or s200[i] <= 0:
+            continue
+        dd50 = (c[i] / s50[i] - 1) * 100
+        dd100 = (c[i] / s100[i] - 1) * 100
+        dd200 = (c[i] / s200[i] - 1) * 100
+        if dd50 < 8 or dd100 < 4 or dd200 < -5 or dd200 > 5:
+            continue
+        ell = earn_lk.get(sym, [])
+        eg = None
+        for dd_e, g_e in ell:
+            if dd_e < d[i]:
+                eg = g_e
+            else:
+                break
+        if eg is None or np.isnan(eg) or eg >= 0:
+            continue
+        bi = i + 1
+        if bi <= busy or bi >= n:
+            continue
+        bp = o[bi]
+        if bp <= 0:
+            continue
+        si = bi + HOLD_R5
+        if si < n:
+            busy = si
+        else:
+            # OPEN position
+            r5_open.append({
+                'sym': sym,
+                'sig': str(pd.Timestamp(d[i]))[:10],
+                'entry': str(pd.Timestamp(d[bi]))[:10],
+                'entry_p': round(float(bp), 2),
+                'days_in': n - 1 - bi,
+                'ret': 0, 'pnl': 0
+            })
+            busy = n + 100
+del dfp, earn_lk
+
+print(f"  RELAX5: {len(r5_all)} cached trades, {len(r5_open)} OPEN positions")
 
 # ── Compute live returns via yfinance ──
 print("\nComputing live returns...")
@@ -213,22 +313,17 @@ if all_open:
                 s['ret'] = round(ret, 2)
                 s['pnl'] = round(ret / 100 * 20000, 0)
 
-    # R5 open shorts
+    # R5 open shorts - entry_p already from FMP scan, just need current close
     for t in r5_open:
         sub = tk_data.get(t['sym'])
         if sub is None or len(sub) == 0:
             continue
-        entry_ts = pd.Timestamp(t['entry'])
-        entry_rows = sub[sub.index == entry_ts]
-        if len(entry_rows) == 0:
-            continue
-        ep = float(entry_rows.iloc[0]['Open'])
         cp = float(sub.iloc[-1]['Close'])
+        ep = t['entry_p']
         if ep > 0 and cp > 0:
             ret = (ep / cp - 1) * 100 - SLIP_PCT
             t['live_ret'] = round(ret, 2)
             t['live_pnl'] = round(ret / 100 * 25000, 0)
-            t['entry_p'] = round(ep, 2)
             t['curr_p'] = round(cp, 2)
 
 e2_total_pnl = sum(p.get('pnl', 0) for p in e2_current)
@@ -418,18 +513,19 @@ Entry: {mix_entry_date_str} open | EUR 20K/accion x 20 = EUR 400K
 
 if r5_open:
     html += """<table>
-<thead><tr><th>Ticker</th><th>Entry$</th><th>Actual$</th><th>Exit Date</th><th>Ret%</th><th>PnL</th></tr></thead>
+<thead><tr><th>Ticker</th><th>Entry</th><th>Entry$</th><th>Actual$</th><th>Days</th><th>Ret%</th><th>PnL</th></tr></thead>
 <tbody>"""
-    for t in sorted(r5_open, key=lambda x: x['exit']):
-        lr = t.get('live_ret', t['ret'])
-        lp = t.get('live_pnl', t['pnl'])
+    for t in sorted(r5_open, key=lambda x: x['entry']):
+        lr = t.get('live_ret', 0)
+        lp = t.get('live_pnl', 0)
         c = 'pos' if lr > 0 else 'neg'
+        cp_str = f"{t['curr_p']:,.2f}" if 'curr_p' in t else '-'
         html += f"<tr><td><strong>{t['sym']}</strong></td>"
-        html += f"<td>{t.get('entry_p', '-')}</td><td>{t.get('curr_p', '-')}</td>"
-        html += f"<td>{t['exit']}</td>"
+        html += f"<td>{t['entry']}</td><td>{t['entry_p']:,.2f}</td><td>{cp_str}</td>"
+        html += f"<td>{t.get('days_in', '?')}</td>"
         html += f"<td class='{c}'>{lr:+.2f}%</td><td class='{c}'>{lp:+,.0f}</td></tr>"
     r5c = 'pos' if r5_live_pnl >= 0 else 'neg'
-    html += f"<tr style='font-weight:700;border-top:2px solid #475569'><td colspan='4'>TOTAL</td>"
+    html += f"<tr style='font-weight:700;border-top:2px solid #475569'><td colspan='5'>TOTAL (EUR 25K/trade x {len(r5_open)})</td>"
     html += f"<td class='{r5c}'>{r5_live_pnl/200000*100:+.2f}%</td><td class='{r5c}'>{r5_live_pnl:+,.0f}</td></tr>"
     html += "</tbody></table>"
 else:
@@ -444,7 +540,7 @@ html += f"""<div style="margin-top:10px;font-size:0.78em;color:#94a3b8;font-weig
 
 for t in sorted(r5_recent, key=lambda x: x['sig'], reverse=True):
     c = 'pos' if t['ret'] > 0 else 'neg'
-    status = ' style="opacity:0.5"' if t['exit'] < today else ''
+    status = ' style="opacity:0.5"' if t['exit'] < latest_date_str else ''
     html += f"<tr{status}><td><strong>{t['sym']}</strong></td><td>{t['sig']}</td><td>{t['entry']}</td>"
     html += f"<td>{t['exit']}</td><td class='{c}'>{t['ret']:+.2f}%</td><td class='{c}'>€{t['pnl']:+,.0f}</td></tr>"
 
