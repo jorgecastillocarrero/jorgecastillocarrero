@@ -156,3 +156,10 @@ for idx, t in enumerate(recent, 1):
 
 print(f'\n  2025: {sum(1 for t in recent if t["year"]==2025)} trades, PnL: ${sum(t["pnl"] for t in recent if t["year"]==2025):+,.0f}')
 print(f'  2026: {sum(1 for t in recent if t["year"]==2026)} trades, PnL: ${sum(t["pnl"] for t in recent if t["year"]==2026):+,.0f}')
+
+# Save JSON cache for panel_control
+cache = [{'sym': t['symbol'], 'sig': t['signal'], 'entry': t['entry'],
+          'exit': t['exit'], 'ret': t['ret'], 'pnl': t['pnl']} for t in trades]
+with open('data/3dh_opt_4d_trades.json', 'w') as f:
+    json.dump(cache, f, separators=(',', ':'))
+print(f'\nSaved {len(cache)} trades to data/3dh_opt_4d_trades.json')

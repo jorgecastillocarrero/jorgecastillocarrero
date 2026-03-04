@@ -1,4 +1,4 @@
-"""3DH OPT: señales del ultimo dia disponible para entrar al dia siguiente."""
+"""3DH OPT: señales del ultimo cierre con regla no-overlap."""
 import json, pandas as pd, numpy as np, gc
 from sqlalchemy import create_engine
 import yfinance as yf
@@ -10,6 +10,7 @@ with open('data/sp500_constituents.json', 'r') as f:
 tickers = sorted(set(s['symbol'] for s in sp500))
 
 SLIP = 0.3
+HD = 4  # hold days
 
 def np_sma(arr, window):
     cs = np.cumsum(arr)
@@ -19,7 +20,7 @@ def np_sma(arr, window):
     result[window-1:] = sma
     return result
 
-# 1. Load FMP prices (history for SMAs)
+# 1. Load FMP prices
 print('Loading FMP prices...')
 prc = []
 for i in range(0, len(tickers), 25):
@@ -36,20 +37,15 @@ gc.collect()
 fmp_max = df_fmp['date'].max()
 print(f'  FMP data through: {fmp_max.strftime("%Y-%m-%d")}')
 
-# 2. Download recent from yfinance (last 10 days to fill gap)
+# 2. Download recent from yfinance
 print('\nDownloading recent prices from yfinance...')
 yf_data = yf.download(tickers, period='10d', group_by='ticker', progress=False, threads=True)
 print(f'  yfinance dates: {yf_data.index.min().strftime("%Y-%m-%d")} to {yf_data.index.max().strftime("%Y-%m-%d")}')
 
-# Build combined dataframe per symbol
-# Parse yfinance into rows
 yf_rows = []
 for sym in tickers:
     try:
-        if len(tickers) > 1:
-            sdf = yf_data[sym].dropna(subset=['Close'])
-        else:
-            sdf = yf_data.dropna(subset=['Close'])
+        sdf = yf_data[sym].dropna(subset=['Close'])
         for dt, row in sdf.iterrows():
             if pd.Timestamp(dt) > fmp_max:
                 yf_rows.append({
@@ -63,18 +59,22 @@ for sym in tickers:
 df_yf = pd.DataFrame(yf_rows)
 print(f'  New rows from yfinance: {len(df_yf):,}')
 
-# Combine
 df = pd.concat([df_fmp, df_yf], ignore_index=True)
 df = df.sort_values(['symbol', 'date']).reset_index(drop=True)
 del df_fmp, df_yf
 gc.collect()
 
-latest_date = df['date'].max()
-print(f'  Combined data through: {latest_date.strftime("%Y-%m-%d")}')
+# Target date: last complete close (yesterday, skip weekends)
+target = pd.Timestamp('today').normalize() - pd.Timedelta(days=1)
+while target.weekday() >= 5:
+    target -= pd.Timedelta(days=1)
+print(f'  Target signal date: {target.strftime("%Y-%m-%d")}')
 
-# 3. Scan for signals on the LAST available date
-print(f'\nScanning signals...')
+# 3. Scan with NO-OVERLAP rule
+print(f'\nScanning signals with no-overlap (HD={HD})...')
 signals = []
+blocked = []
+open_positions = []
 
 for sym, g in df.groupby('symbol'):
     g = g.sort_values('date').reset_index(drop=True)
@@ -90,71 +90,114 @@ for sym, g in df.groupby('symbol'):
     s50 = np_sma(c, 50)
     s200 = np_sma(c, 200)
 
-    # Last complete close: 2026-03-02 (Monday)
-    target = pd.Timestamp('2026-03-02')
-    valid_idx = [j for j in range(n) if pd.Timestamp(dates[j]) <= target]
-    if not valid_idx:
-        continue
-    i = valid_idx[-1]
-    if pd.Timestamp(dates[i]) != target:
-        continue
-    if np.isnan(s5[i]) or np.isnan(s50[i]) or np.isnan(s200[i]):
+    # Find target index
+    target_idx = None
+    for j in range(n-1, max(n-15, 0), -1):
+        if pd.Timestamp(dates[j]) == target:
+            target_idx = j
+            break
+    if target_idx is None:
         continue
 
-    sig_date = pd.Timestamp(dates[i])
+    # Scan from ~15 trading days before target to build no-overlap state
+    scan_start = max(203, target_idx - 15)
+    busy = -1
 
-    d5 = (c[i] / s5[i] - 1) * 100
-    d50 = (c[i] / s50[i] - 1) * 100
-    d200 = (c[i] / s200[i] - 1) * 100
+    for i in range(scan_start, target_idx + 1):
+        if np.isnan(s5[i]) or np.isnan(s50[i]) or np.isnan(s200[i]):
+            continue
+        d5 = (c[i] / s5[i] - 1) * 100
+        if d5 <= 2.0:
+            continue
+        d50 = (c[i] / s50[i] - 1) * 100
+        if d50 >= -5.0:
+            continue
+        if c[i] >= s200[i]:
+            continue
+        if i < 3:
+            continue
+        if h[i-2] <= h[i-3] or lo[i-2] <= lo[i-3]:
+            continue
+        if h[i-1] <= h[i-2] or lo[i-1] <= lo[i-2]:
+            continue
+        if h[i] <= h[i-1] or lo[i] <= lo[i-1]:
+            continue
 
-    # Filters
-    if d5 <= 2.0:
-        continue
-    if d50 >= -5.0:
-        continue
-    if c[i] >= s200[i]:
-        continue
+        # Entry = next day after signal
+        bi = i + 1
+        # Exit = entry + HD
+        si = bi + HD
 
-    # 3 consecutive higher highs AND higher lows
-    if i < 3:
-        continue
-    if h[i-2] <= h[i-3] or lo[i-2] <= lo[i-3]:
-        continue
-    if h[i-1] <= h[i-2] or lo[i-1] <= lo[i-2]:
-        continue
-    if h[i] <= h[i-1] or lo[i] <= lo[i-1]:
-        continue
+        # No-overlap check: entry must be AFTER previous exit
+        is_blocked = (bi <= busy)
 
-    signals.append({
-        'symbol': sym,
-        'signal_date': sig_date.strftime('%Y-%m-%d'),
-        'close': round(c[i], 2),
-        'sma5': round(s5[i], 2),
-        'sma50': round(s50[i], 2),
-        'sma200': round(s200[i], 2),
-        'd5': round(d5, 2),
-        'd50': round(d50, 2),
-        'd200': round(d200, 2),
-        'h_3': round(h[i-3], 2), 'l_3': round(lo[i-3], 2),
-        'h_2': round(h[i-2], 2), 'l_2': round(lo[i-2], 2),
-        'h_1': round(h[i-1], 2), 'l_1': round(lo[i-1], 2),
-        'h_0': round(h[i], 2),   'l_0': round(lo[i], 2),
-    })
+        sig_date = pd.Timestamp(dates[i])
+
+        if i == target_idx:
+            # Target date signal
+            info = {
+                'symbol': sym,
+                'signal_date': sig_date.strftime('%Y-%m-%d'),
+                'close': round(c[i], 2),
+                'sma5': round(s5[i], 2),
+                'sma50': round(s50[i], 2),
+                'sma200': round(s200[i], 2),
+                'd5': round(d5, 2),
+                'd50': round(d50, 2),
+                'd200': round(float(c[i] / s200[i] - 1) * 100, 2),
+            }
+            if is_blocked:
+                blocked.append(info)
+            else:
+                signals.append(info)
+
+        # Update busy (even if si >= n, position is still open)
+        if not is_blocked:
+            busy = si
+            # Track if position is still open (exit not yet reached)
+            if si >= target_idx:
+                entry_d = pd.Timestamp(dates[bi]).strftime('%Y-%m-%d') if bi < n else 'PENDING'
+                exit_d = pd.Timestamp(dates[si]).strftime('%Y-%m-%d') if si < n else 'PENDING'
+                entry_p = round(float(o[bi]), 2) if bi < n else 0
+                open_positions.append({
+                    'symbol': sym,
+                    'signal': sig_date.strftime('%Y-%m-%d'),
+                    'entry': entry_d,
+                    'exit': exit_d,
+                    'entry_p': entry_p,
+                    'is_today': (i == target_idx),
+                })
 
 signals.sort(key=lambda x: x['d50'])
 
-print(f'\n{"="*120}')
-print(f'  SENALES 3DH OPT - Fecha senal: 2026-03-02 - ENTRAR SHORT HOY 03/03 A LA APERTURA')
-print(f'{"="*120}')
-print(f'  Reglas: Close > SMA5 (+2%) | Close < SMA50 (-5%) | Close < SMA200 | 3 dias HH+HL consecutivos')
-print(f'  Accion: SHORT al open del dia siguiente, cubrir al open 4 dias despues')
-print(f'  Slippage: {SLIP}%')
-print(f'\n  Total senales: {len(signals)}')
+# Print results
+print(f'\n{"="*130}')
+print(f'  SENALES 3DH OPT - Senal: {target.strftime("%Y-%m-%d")} - ENTRAR SHORT HOY A LA APERTURA')
+print(f'{"="*130}')
+print(f'  Reglas: Close > SMA5 (+2%) | Close < SMA50 (-5%) | Close < SMA200 | 3 dias HH+HL | No-overlap')
+print(f'  Hold: {HD} dias | Slippage: {SLIP}%')
 
+# Open positions from recent signals (not today)
+prev_open = [p for p in open_positions if not p['is_today']]
+if prev_open:
+    print(f'\n  POSICIONES ABIERTAS de senales anteriores ({len(prev_open)}):')
+    print(f'  {"Symbol":>8s} {"Signal":>12s} {"Entry":>12s} {"Exit":>12s} {"Entry$":>9s}')
+    print(f'  {"-"*58}')
+    for p in sorted(prev_open, key=lambda x: x['signal']):
+        print(f'  {p["symbol"]:>8s} {p["signal"]:>12s} {p["entry"]:>12s} {p["exit"]:>12s} {p["entry_p"]:9.2f}')
+
+# Blocked signals
+if blocked:
+    print(f'\n  BLOQUEADAS por no-overlap ({len(blocked)}):')
+    for b in blocked:
+        print(f'    {b["symbol"]:>8s} - cumple reglas pero tiene posicion abierta')
+
+# New signals
+print(f'\n  SENALES NUEVAS: {len(signals)}')
 if signals:
-    print(f'\n  {"#":>3s} {"Symbol":>8s} {"Close":>8s} {"SMA5":>8s} {"SMA50":>8s} {"SMA200":>8s} {"d5%":>7s} {"d50%":>7s} {"d200%":>7s} | {"H-3":>7s} {"L-3":>7s} {"H-2":>7s} {"L-2":>7s} {"H-1":>7s} {"L-1":>7s} {"H-0":>7s} {"L-0":>7s}')
-    print(f'  {"-"*140}')
+    print(f'\n  {"#":>3s} {"Symbol":>8s} {"Close":>8s} {"SMA5":>8s} {"SMA50":>8s} {"SMA200":>8s} {"d5%":>7s} {"d50%":>7s} {"d200%":>7s}')
+    print(f'  {"-"*85}')
     for idx, s in enumerate(signals, 1):
-        print(f'  {idx:3d} {s["symbol"]:>8s} {s["close"]:8.2f} {s["sma5"]:8.2f} {s["sma50"]:8.2f} {s["sma200"]:8.2f} {s["d5"]:+6.1f}% {s["d50"]:+6.1f}% {s["d200"]:+6.1f}% | {s["h_3"]:7.2f} {s["l_3"]:7.2f} {s["h_2"]:7.2f} {s["l_2"]:7.2f} {s["h_1"]:7.2f} {s["l_1"]:7.2f} {s["h_0"]:7.2f} {s["l_0"]:7.2f}')
+        print(f'  {idx:3d} {s["symbol"]:>8s} {s["close"]:8.2f} {s["sma5"]:8.2f} {s["sma50"]:8.2f} {s["sma200"]:8.2f} {s["d5"]:+6.1f}% {s["d50"]:+6.1f}% {s["d200"]:+6.1f}%')
 else:
-    print('\n  >>> NO hay senales para hoy')
+    print('\n  >>> NO hay senales nuevas para hoy')

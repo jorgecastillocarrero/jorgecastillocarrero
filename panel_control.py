@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Panel de Control: posiciones abiertas + screener historico
-Triple: E2 Semanal + MIX Mensual + RELAX5 Short 15d
+E2 Semanal + MIX Mensual + 3DH OPT Short 4d
 """
 import re, json
 from pathlib import Path
@@ -105,121 +105,175 @@ for d in MIX_MONTHS:
 
 print(f"  MIX: {len(mix_trades)} trades, current: {len(mix_current_top)+len(mix_current_bot)} positions")
 
-# ── Load RELAX5 (cache + scan FMP for open positions) ──
-print("Loading RELAX5...")
+# ── Load 3DH OPT (cache + scan FMP for open positions) ──
+print("Loading 3DH OPT...")
 import numpy as np
 from sqlalchemy import create_engine
+import gc
 
-with open(BASE / 'data' / 'relax5_15d_trades.json', 'r') as f:
-    r5_all = json.load(f)
+with open(BASE / 'data' / '3dh_opt_4d_trades.json', 'r') as f:
+    h3_all = json.load(f)
 
-r5_recent = [t for t in r5_all if t['sig'] >= '2025-01-01']
+h3_recent = [t for t in h3_all if t['sig'] >= '2025-01-01']
 
-# R5 trades for screener
-r5_trades = []
-for t in r5_all:
-    r5_trades.append([t['sig'], t['sym'], 'S', t['ret'], f"{t['entry']}->{t['exit']}", 0])
+# 3DH trades for screener
+h3_trades = []
+for t in h3_all:
+    h3_trades.append([t['sig'], t['sym'], 'S', t['ret'], f"{t['entry']}->{t['exit']}", 0])
 
-# Scan FMP for currently OPEN R5 positions (entry done, 15d hold not completed)
-print("  Scanning FMP for open RELAX5 positions...")
+# Scan FMP for currently OPEN 3DH positions + new signals
+print("  Scanning FMP for open 3DH positions...")
 engine = create_engine('postgresql://fmp:fmp123@localhost:5433/fmp_data')
 
 with open(BASE / 'data' / 'sp500_constituents.json') as f:
     sp_tickers = sorted(set(s['symbol'] for s in json.load(f)))
 
-ec = []
-for i in range(0, len(sp_tickers), 50):
-    b = sp_tickers[i:i+50]
-    ec.append(pd.read_sql("""SELECT symbol, date, eps_actual
-       FROM fmp_earnings WHERE symbol = ANY(%(t)s) AND eps_actual IS NOT NULL
-       ORDER BY symbol, date""", engine, params={'t': b}))
-earn = pd.concat(ec, ignore_index=True)
-earn['date'] = pd.to_datetime(earn['date'])
-earn['eps_actual'] = earn['eps_actual'].astype(float)
-
-def _compute_epsg(grp):
-    grp = grp.sort_values('date').reset_index(drop=True)
-    grp['eps_ttm'] = grp['eps_actual'].rolling(4, min_periods=4).sum()
-    grp['eps_ttm_prev'] = grp['eps_ttm'].shift(4)
-    grp['epsg'] = np.where(grp['eps_ttm_prev'].abs() > 0.01,
-        (grp['eps_ttm'] / grp['eps_ttm_prev'] - 1) * 100, np.nan)
-    return grp[['symbol', 'date', 'epsg']]
-
-ef = earn.groupby('symbol', group_keys=False).apply(_compute_epsg)
-earn_lk = {}
-for sym, grp in ef.groupby('symbol'):
-    grp = grp.sort_values('date')
-    earn_lk[sym] = list(zip(grp['date'].values, grp['epsg'].values))
-del earn, ef
+def np_sma(arr, window):
+    cs = np.cumsum(arr)
+    cs = np.insert(cs, 0, 0)
+    sma = (cs[window:] - cs[:-window]) / window
+    result = np.full(len(arr), np.nan)
+    result[window-1:] = sma
+    return result
 
 prc = []
 for i in range(0, len(sp_tickers), 25):
     b = sp_tickers[i:i+25]
-    prc.append(pd.read_sql("""SELECT symbol, date, open, close
+    prc.append(pd.read_sql("""SELECT symbol, date, open, high, low, close
        FROM fmp_price_history WHERE symbol = ANY(%(t)s) AND date >= '2024-06-01'
        ORDER BY symbol, date""", engine, params={'t': b}))
     if (i // 25) % 8 == 0:
         print(f"    Prices batch {i//25+1}...")
 dfp = pd.concat(prc, ignore_index=True)
 dfp['date'] = pd.to_datetime(dfp['date'])
+fmp_max = dfp['date'].max()
 del prc
+gc.collect()
 
-HOLD_R5 = 15
-r5_open = []
+# Download recent from yfinance to fill gap after FMP
+print(f"  FMP data through: {fmp_max.strftime('%Y-%m-%d')}, downloading recent...")
+yf_data = yf.download(sp_tickers, period='10d', group_by='ticker', progress=False, threads=True)
+yf_rows = []
+for sym in sp_tickers:
+    try:
+        sdf = yf_data[sym].dropna(subset=['Close'])
+        for dt, row in sdf.iterrows():
+            if pd.Timestamp(dt) > fmp_max:
+                yf_rows.append({
+                    'symbol': sym, 'date': pd.Timestamp(dt),
+                    'open': row['Open'], 'high': row['High'],
+                    'low': row['Low'], 'close': row['Close']
+                })
+    except Exception:
+        pass
+df_yf = pd.DataFrame(yf_rows)
+print(f"  New rows from yfinance: {len(df_yf):,}")
+dfp = pd.concat([dfp, df_yf], ignore_index=True)
+dfp = dfp.sort_values(['symbol', 'date']).reset_index(drop=True)
+del df_yf, yf_rows
+gc.collect()
+
+# Target date: last complete close
+target = pd.Timestamp('today').normalize() - pd.Timedelta(days=1)
+while target.weekday() >= 5:
+    target -= pd.Timedelta(days=1)
+print(f"  Target signal date: {target.strftime('%Y-%m-%d')}")
+
+HOLD_H3 = 4
+h3_open = []
+h3_signals = []
+h3_blocked = []
+
 for sym, g in dfp.groupby('symbol'):
     g = g.sort_values('date').reset_index(drop=True)
     n = len(g)
     if n < 210:
         continue
-    c = g['close'].values.astype(float)
-    o = g['open'].values.astype(float)
-    d = g['date'].values
-    s50 = pd.Series(c).rolling(50).mean().values
-    s100 = pd.Series(c).rolling(100).mean().values
-    s200 = pd.Series(c).rolling(200).mean().values
-    busy = -1
-    for i in range(200, n):
-        if np.isnan(s50[i]) or np.isnan(s100[i]) or np.isnan(s200[i]):
-            continue
-        if s50[i] <= 0 or s100[i] <= 0 or s200[i] <= 0:
-            continue
-        dd50 = (c[i] / s50[i] - 1) * 100
-        dd100 = (c[i] / s100[i] - 1) * 100
-        dd200 = (c[i] / s200[i] - 1) * 100
-        if dd50 < 8 or dd100 < 4 or dd200 < -5 or dd200 > 5:
-            continue
-        ell = earn_lk.get(sym, [])
-        eg = None
-        for dd_e, g_e in ell:
-            if dd_e < d[i]:
-                eg = g_e
-            else:
-                break
-        if eg is None or np.isnan(eg) or eg >= 0:
-            continue
-        bi = i + 1
-        if bi <= busy or bi >= n:
-            continue
-        bp = o[bi]
-        if bp <= 0:
-            continue
-        si = bi + HOLD_R5
-        if si < n:
-            busy = si
-        else:
-            # OPEN position
-            r5_open.append({
-                'sym': sym,
-                'sig': str(pd.Timestamp(d[i]))[:10],
-                'entry': str(pd.Timestamp(d[bi]))[:10],
-                'entry_p': round(float(bp), 2),
-                'days_in': n - 1 - bi,
-                'ret': 0, 'pnl': 0
-            })
-            busy = n + 100
-del dfp, earn_lk
+    c = g['close'].values.astype(np.float32)
+    o = g['open'].values.astype(np.float32)
+    h = g['high'].values.astype(np.float32)
+    lo = g['low'].values.astype(np.float32)
+    dates = g['date'].values
+    s5 = np_sma(c, 5)
+    s50 = np_sma(c, 50)
+    s200 = np_sma(c, 200)
 
-print(f"  RELAX5: {len(r5_all)} cached trades, {len(r5_open)} OPEN positions")
+    # Find target index
+    target_idx = None
+    for j in range(n-1, max(n-15, 0), -1):
+        if pd.Timestamp(dates[j]) == target:
+            target_idx = j
+            break
+    if target_idx is None:
+        continue
+
+    # Scan from ~15 trading days before target to build no-overlap state
+    scan_start = max(203, target_idx - 15)
+    busy = -1
+
+    for i in range(scan_start, target_idx + 1):
+        if np.isnan(s5[i]) or np.isnan(s50[i]) or np.isnan(s200[i]):
+            continue
+        d5 = (c[i] / s5[i] - 1) * 100
+        if d5 <= 2.0:
+            continue
+        d50 = (c[i] / s50[i] - 1) * 100
+        if d50 >= -5.0:
+            continue
+        if c[i] >= s200[i]:
+            continue
+        if i < 3:
+            continue
+        if h[i-2] <= h[i-3] or lo[i-2] <= lo[i-3]:
+            continue
+        if h[i-1] <= h[i-2] or lo[i-1] <= lo[i-2]:
+            continue
+        if h[i] <= h[i-1] or lo[i] <= lo[i-1]:
+            continue
+
+        bi = i + 1
+        si = bi + HOLD_H3
+        is_blocked = (bi <= busy)
+        sig_date = pd.Timestamp(dates[i])
+
+        if i == target_idx:
+            info = {
+                'sym': sym, 'sig': sig_date.strftime('%Y-%m-%d'),
+                'close': round(float(c[i]), 2),
+                'd5': round(float(d5), 2), 'd50': round(float(d50), 2),
+            }
+            if is_blocked:
+                h3_blocked.append(info)
+            else:
+                h3_signals.append(info)
+
+        if not is_blocked:
+            busy = si
+            # Track open positions (exit not yet reached)
+            if si >= n:
+                entry_d = pd.Timestamp(dates[bi]).strftime('%Y-%m-%d') if bi < n else 'PENDING'
+                entry_p = round(float(o[bi]), 2) if bi < n else 0
+                h3_open.append({
+                    'sym': sym, 'sig': sig_date.strftime('%Y-%m-%d'),
+                    'entry': entry_d, 'entry_p': entry_p,
+                    'days_in': (n - 1 - bi) if bi < n else 0,
+                    'is_new': (i == target_idx),
+                })
+            elif si >= target_idx:
+                exit_d = pd.Timestamp(dates[si]).strftime('%Y-%m-%d')
+                entry_d = pd.Timestamp(dates[bi]).strftime('%Y-%m-%d')
+                entry_p = round(float(o[bi]), 2)
+                h3_open.append({
+                    'sym': sym, 'sig': sig_date.strftime('%Y-%m-%d'),
+                    'entry': entry_d, 'exit': exit_d, 'entry_p': entry_p,
+                    'days_in': target_idx - bi,
+                    'is_new': (i == target_idx),
+                })
+
+del dfp
+gc.collect()
+
+print(f"  3DH: {len(h3_all)} cached trades, {len(h3_open)} OPEN, {len(h3_signals)} NEW signals, {len(h3_blocked)} blocked")
 
 # ── Compute live returns via yfinance ──
 print("\nComputing live returns...")
@@ -227,15 +281,15 @@ SLIP_PCT = 0.30
 
 e2_tickers = [p['t'] for p in e2_current]
 mix_tickers_all = [s['t'] for s in mix_current_top + mix_current_bot]
-r5_tickers = [t['sym'] for t in r5_open]
-all_open = sorted(set(e2_tickers + mix_tickers_all + r5_tickers))
+h3_tickers = [t['sym'] for t in h3_open]
+all_open = sorted(set(e2_tickers + mix_tickers_all + h3_tickers))
 
 e2_entry_date_str = ''
 mix_entry_date_str = ''
 latest_date_str = ''
 e2_total_pnl = 0
 mix_total_pnl = 0
-r5_live_pnl = 0
+h3_live_pnl = 0
 
 if all_open:
     e2_signal = last_w['d']
@@ -313,8 +367,8 @@ if all_open:
                 s['ret'] = round(ret, 2)
                 s['pnl'] = round(ret / 100 * 20000, 0)
 
-    # R5 open shorts - entry_p already from FMP scan, just need current close
-    for t in r5_open:
+    # 3DH open shorts - entry_p already from FMP scan, just need current close
+    for t in h3_open:
         sub = tk_data.get(t['sym'])
         if sub is None or len(sub) == 0:
             continue
@@ -328,12 +382,12 @@ if all_open:
 
 e2_total_pnl = sum(p.get('pnl', 0) for p in e2_current)
 mix_total_pnl = sum(s.get('pnl', 0) for s in mix_current_top + mix_current_bot)
-r5_live_pnl = sum(t.get('live_pnl', 0) for t in r5_open)
-total_unrealized = e2_total_pnl + mix_total_pnl + r5_live_pnl
+h3_live_pnl = sum(t.get('live_pnl', 0) for t in h3_open)
+total_unrealized = e2_total_pnl + mix_total_pnl + h3_live_pnl
 
 print(f"  E2 unrealized: EUR {e2_total_pnl:+,.0f} (entry: {e2_entry_date_str})")
 print(f"  MIX unrealized: EUR {mix_total_pnl:+,.0f} (entry: {mix_entry_date_str})")
-print(f"  R5 unrealized: EUR {r5_live_pnl:+,.0f}")
+print(f"  3DH unrealized: EUR {h3_live_pnl:+,.0f}")
 print(f"  TOTAL unrealized: EUR {total_unrealized:+,.0f} (prices: {latest_date_str})")
 
 # ── Generate HTML ──
@@ -344,7 +398,7 @@ print("\nGenerating panel HTML...")
 all_trades_json = json.dumps({
     'e2': e2_trades,
     'mix': mix_trades,
-    'r5': r5_trades
+    'h3': h3_trades
 }, separators=(',', ':'))
 
 html = f"""<!DOCTYPE html>
@@ -377,7 +431,7 @@ tr:hover td{{background:rgba(100,116,139,0.15)}}
 .short{{background:#991b1b;color:#fca5a5;padding:1px 6px;border-radius:4px;font-size:0.75em;font-weight:600}}
 .badge{{display:inline-block;padding:2px 7px;border-radius:9px;font-size:0.7em;font-weight:600}}
 .strat-badge{{padding:2px 6px;border-radius:4px;font-size:0.7em;font-weight:600}}
-.e2b{{background:#1e3a5f;color:#60a5fa}}.mixb{{background:#3b1f6e;color:#a78bfa}}.r5b{{background:#7c2d12;color:#fb923c}}
+.e2b{{background:#1e3a5f;color:#60a5fa}}.mixb{{background:#3b1f6e;color:#a78bfa}}.h3b{{background:#7c2d12;color:#fb923c}}
 .grid3{{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}}
 .grid2{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 @media(max-width:900px){{.grid3,.grid2{{grid-template-columns:1fr}}}}
@@ -390,20 +444,20 @@ input:focus,select:focus{{outline:none;border-color:#60a5fa}}
 .filters label{{font-size:0.75em;color:#94a3b8}}
 .cnt{{font-size:0.75em;color:#94a3b8;margin-left:8px}}
 #screener-table{{max-height:600px;overflow-y:auto;display:block}}
-.no-r5{{color:#64748b;font-style:italic;text-align:center;padding:20px}}
+.no-pos{{color:#64748b;font-style:italic;text-align:center;padding:20px}}
 </style>
 </head>
 <body>
 <h1>Panel de Control - Triple Strategy</h1>
-<div class="sub">E2 Semanal + MIX Mensual + RELAX5 Short 15d | Capital: EUR 1,000,000 | Precios al: {latest_date_str} | 0.30% slippage</div>
+<div class="sub">E2 Semanal + MIX Mensual + 3DH OPT Short 4d | Capital: EUR 1,000,000 | Precios al: {latest_date_str} | 0.30% slippage</div>
 
 <div class="summary-row">
 <div class="stat-box"><div class="val" style="color:#60a5fa">{len(e2_current)}</div><div class="lbl">E2 Pos (S{last_w['w']})</div></div>
 <div class="stat-box"><div class="val {'pos' if e2_total_pnl >= 0 else 'neg'}">EUR {e2_total_pnl:+,.0f}</div><div class="lbl">E2 PnL</div></div>
 <div class="stat-box"><div class="val" style="color:#a78bfa">{len(mix_current_top)+len(mix_current_bot)}</div><div class="lbl">MIX Pos ({last_m['m']})</div></div>
 <div class="stat-box"><div class="val {'pos' if mix_total_pnl >= 0 else 'neg'}">EUR {mix_total_pnl:+,.0f}</div><div class="lbl">MIX PnL</div></div>
-<div class="stat-box"><div class="val" style="color:#fb923c">{len(r5_open)}</div><div class="lbl">R5 Abiertas</div></div>
-<div class="stat-box"><div class="val {'pos' if r5_live_pnl >= 0 else 'neg'}">EUR {r5_live_pnl:+,.0f}</div><div class="lbl">R5 PnL</div></div>
+<div class="stat-box"><div class="val" style="color:#fb923c">{len(h3_open)}</div><div class="lbl">3DH Abiertas</div></div>
+<div class="stat-box"><div class="val {'pos' if h3_live_pnl >= 0 else 'neg'}">EUR {h3_live_pnl:+,.0f}</div><div class="lbl">3DH PnL</div></div>
 <div class="stat-box" style="border:1px solid #475569"><div class="val {'pos' if total_unrealized >= 0 else 'neg'}" style="font-size:1.3em">EUR {total_unrealized:+,.0f}</div><div class="lbl">TOTAL PnL</div></div>
 <div class="stat-box"><div class="val">{last_w['r']}</div><div class="lbl">Regimen S{last_w['w']}</div></div>
 </div>
@@ -509,44 +563,62 @@ Entry: {mix_entry_date_str} open | EUR 20K/accion x 20 = EUR 400K
 </div>
 
 <div class="card">
-<h3 style="color:#fb923c">RELAX5 Short 15d <span class="badge" style="background:#f97316;color:#000">{len(r5_open)} OPEN</span></h3>"""
+<h3 style="color:#fb923c">3DH OPT Short 4d <span class="badge" style="background:#f97316;color:#000">{len(h3_open)} OPEN</span>
+{f' <span class="badge" style="background:#22c55e;color:#000">{len(h3_signals)} NEW</span>' if h3_signals else ''}
+</h3>"""
 
-if r5_open:
-    html += """<table>
+# New signals for today
+if h3_signals:
+    html += f"""<div style="font-size:0.78em;color:#22c55e;margin-bottom:4px;font-weight:600">Senales nuevas - ENTRAR SHORT HOY ({target.strftime('%Y-%m-%d')})</div>
+<table><thead><tr><th>Ticker</th><th>Close</th><th>d5%</th><th>d50%</th></tr></thead><tbody>"""
+    for s in sorted(h3_signals, key=lambda x: x['d50']):
+        html += f"<tr><td><strong>{s['sym']}</strong></td><td>{s['close']:,.2f}</td>"
+        html += f"<td class='neg'>{s['d5']:+.1f}%</td><td class='pos'>{s['d50']:+.1f}%</td></tr>"
+    html += "</tbody></table>"
+
+# Blocked signals
+if h3_blocked:
+    html += f"""<div style="font-size:0.72em;color:#64748b;margin:6px 0 2px">Bloqueadas (no-overlap): {', '.join(b['sym'] for b in h3_blocked)}</div>"""
+
+# Open positions
+if h3_open:
+    html += """<div style="font-size:0.78em;color:#fb923c;margin:8px 0 4px;font-weight:600">Posiciones abiertas</div>
+<table>
 <thead><tr><th>Ticker</th><th>Entry</th><th>Entry$</th><th>Actual$</th><th>Days</th><th>Ret%</th><th>PnL</th></tr></thead>
 <tbody>"""
-    for t in sorted(r5_open, key=lambda x: x['entry']):
+    for t in sorted(h3_open, key=lambda x: x['entry']):
         lr = t.get('live_ret', 0)
         lp = t.get('live_pnl', 0)
         c = 'pos' if lr > 0 else 'neg'
         cp_str = f"{t['curr_p']:,.2f}" if 'curr_p' in t else '-'
-        html += f"<tr><td><strong>{t['sym']}</strong></td>"
+        new_tag = ' style="background:rgba(34,197,94,0.1)"' if t.get('is_new') else ''
+        html += f"<tr{new_tag}><td><strong>{t['sym']}</strong></td>"
         html += f"<td>{t['entry']}</td><td>{t['entry_p']:,.2f}</td><td>{cp_str}</td>"
         html += f"<td>{t.get('days_in', '?')}</td>"
         html += f"<td class='{c}'>{lr:+.2f}%</td><td class='{c}'>{lp:+,.0f}</td></tr>"
-    r5c = 'pos' if r5_live_pnl >= 0 else 'neg'
-    html += f"<tr style='font-weight:700;border-top:2px solid #475569'><td colspan='5'>TOTAL (EUR 25K/trade x {len(r5_open)})</td>"
-    html += f"<td class='{r5c}'>{r5_live_pnl/200000*100:+.2f}%</td><td class='{r5c}'>{r5_live_pnl:+,.0f}</td></tr>"
+    h3c = 'pos' if h3_live_pnl >= 0 else 'neg'
+    html += f"<tr style='font-weight:700;border-top:2px solid #475569'><td colspan='5'>TOTAL (EUR 25K/trade x {len(h3_open)})</td>"
+    html += f"<td class='{h3c}'>{h3_live_pnl/200000*100:+.2f}%</td><td class='{h3c}'>{h3_live_pnl:+,.0f}</td></tr>"
     html += "</tbody></table>"
-else:
-    html += '<div class="no-r5">Sin posiciones abiertas actualmente</div>'
+elif not h3_signals:
+    html += '<div class="no-pos">Sin posiciones abiertas ni senales nuevas</div>'
 
-# Show recent R5 trades
+# Recent 3DH trades
 html += f"""<div style="margin-top:10px;font-size:0.78em;color:#94a3b8;font-weight:600">Ultimos trades 2025-2026</div>
 <div style="max-height:300px;overflow-y:auto">
 <table>
 <thead><tr><th>Ticker</th><th>Senal</th><th>Entry</th><th>Exit</th><th>Ret%</th><th>PnL</th></tr></thead>
 <tbody>"""
 
-for t in sorted(r5_recent, key=lambda x: x['sig'], reverse=True):
+for t in sorted(h3_recent, key=lambda x: x['sig'], reverse=True):
     c = 'pos' if t['ret'] > 0 else 'neg'
     status = ' style="opacity:0.5"' if t['exit'] < latest_date_str else ''
     html += f"<tr{status}><td><strong>{t['sym']}</strong></td><td>{t['sig']}</td><td>{t['entry']}</td>"
-    html += f"<td>{t['exit']}</td><td class='{c}'>{t['ret']:+.2f}%</td><td class='{c}'>€{t['pnl']:+,.0f}</td></tr>"
+    html += f"<td>{t['exit']}</td><td class='{c}'>{t['ret']:+.2f}%</td><td class='{c}'>${t['pnl']:+,.0f}</td></tr>"
 
 html += f"""</tbody></table></div>
 <div style="margin-top:6px;font-size:0.72em;color:#94a3b8">
-Filtros: d50>8% d100>4% d200+-5% epsg&lt;0 | EUR 25K/trade | 15d hold
+Filtros: 3DH + d5&gt;2% + d50&lt;-5% + close&lt;SMA200 | EUR 25K/trade | 4d hold
 </div>
 </div>
 
@@ -559,7 +631,7 @@ Filtros: d50>8% d100>4% d200+-5% epsg&lt;0 | EUR 25K/trade | 15d hold
 <label>Ticker: <input type="text" id="fTk" placeholder="AAPL, TSLA..." oninput="applyF()"></label>
 <label>Estrategia: <select id="fSt" onchange="applyF()">
 <option value="">Todas</option><option value="e2">E2 Semanal</option>
-<option value="mix">MIX Mensual</option><option value="r5">RELAX5 Short</option>
+<option value="mix">MIX Mensual</option><option value="h3">3DH OPT Short</option>
 </select></label>
 <label>Direccion: <select id="fDr" onchange="applyF()">
 <option value="">Todas</option><option value="L">Long</option><option value="S">Short</option>
@@ -601,10 +673,10 @@ const AT={all_trades_json};
 let FL=[];
 AT.e2.forEach(t=>FL.push([t[0],t[1],t[2],t[3],'E2',t[4]+'|'+t[5]]));
 AT.mix.forEach(t=>FL.push([t[0],t[1],t[2],t[3],'MIX',t[4]+'|'+t[5]]));
-AT.r5.forEach(t=>FL.push([t[0],t[1],t[2],t[3],'R5',t[4]]));
+AT.h3.forEach(t=>FL.push([t[0],t[1],t[2],t[3],'3DH',t[4]]));
 FL.sort((a,b)=>b[0].localeCompare(a[0]));
 
-const CAP={{'E2':20000,'MIX':20000,'R5':25000}};
+const CAP={{'E2':20000,'MIX':20000,'3DH':25000}};
 let filteredFL=FL;
 let sortCol=-1,sortAsc=true;
 
@@ -628,7 +700,7 @@ function applyF(){{
     if(tks.length&&!tks.some(s=>t[1].includes(s)))return false;
     if(st==='e2'&&t[4]!=='E2')return false;
     if(st==='mix'&&t[4]!=='MIX')return false;
-    if(st==='r5'&&t[4]!=='R5')return false;
+    if(st==='h3'&&t[4]!=='3DH')return false;
     if(dr&&t[2]!==dr)return false;
     if(fr&&t[0]<fr)return false;
     if(to&&t[0]>to+'~')return false;
@@ -662,7 +734,7 @@ function renderSc(){{
   show.forEach(t=>{{
     let c=t[3]>=0?'pos':'neg';
     let dc=t[2]==='L'?'long':'short';
-    let sc=t[4]==='E2'?'e2b':t[4]==='MIX'?'mixb':'r5b';
+    let sc=t[4]==='E2'?'e2b':t[4]==='MIX'?'mixb':'h3b';
     let pnl=t[3]/100*CAP[t[4]];
     h+=`<tr><td>${{t[0]}}</td><td><strong>${{t[1]}}</strong></td>
     <td><span class="${{dc}}">${{t[2]==='L'?'LONG':'SHORT'}}</span></td>
@@ -680,34 +752,34 @@ function searchTk(){{
   if(q.length<1){{document.getElementById('tk-detail').innerHTML='';document.getElementById('tkCnt').innerHTML='';return}}
   let trades=FL.filter(t=>t[1]===q);
   if(!trades.length){{
-    document.getElementById('tk-detail').innerHTML=`<div class="no-r5">No trades para ${{q}}</div>`;
+    document.getElementById('tk-detail').innerHTML=`<div class="no-pos">No trades para ${{q}}</div>`;
     document.getElementById('tkCnt').innerHTML='0 trades';
     return;
   }}
   trades.sort((a,b)=>b[0].localeCompare(a[0]));
-  let e2t=trades.filter(t=>t[4]==='E2'),mixt=trades.filter(t=>t[4]==='MIX'),r5t=trades.filter(t=>t[4]==='R5');
+  let e2t=trades.filter(t=>t[4]==='E2'),mixt=trades.filter(t=>t[4]==='MIX'),h3t=trades.filter(t=>t[4]==='3DH');
   let stats=(arr,cap)=>{{
     if(!arr.length)return{{n:0,wr:0,avg:0,sum:0,pnl:0}};
     let w=arr.filter(t=>t[3]>0).length;
     let s=arr.reduce((a,t)=>a+t[3],0);
     return{{n:arr.length,wr:(w/arr.length*100).toFixed(1),avg:(s/arr.length).toFixed(2),sum:s.toFixed(1),pnl:Math.round(s/100*cap)}};
   }};
-  let se2=stats(e2t,20000),smix=stats(mixt,20000),sr5=stats(r5t,25000);
-  let stot={{n:trades.length,pnl:se2.pnl+smix.pnl+sr5.pnl}};
+  let se2=stats(e2t,20000),smix=stats(mixt,20000),sh3=stats(h3t,25000);
+  let stot={{n:trades.length,pnl:se2.pnl+smix.pnl+sh3.pnl}};
   document.getElementById('tkCnt').innerHTML=`${{trades.length}} trades para ${{q}}`;
   let h=`<div class="summary-row">
   <div class="stat-box"><div class="val">${{stot.n}}</div><div class="lbl">Total trades</div></div>
   <div class="stat-box"><div class="val ${{stot.pnl>=0?'pos':'neg'}}">€${{stot.pnl.toLocaleString()}}</div><div class="lbl">PnL Total</div></div>
   <div class="stat-box"><div class="val" style="color:#60a5fa">${{se2.n}}</div><div class="lbl">E2 (${{se2.wr}}% WR)</div></div>
   <div class="stat-box"><div class="val" style="color:#a78bfa">${{smix.n}}</div><div class="lbl">MIX (${{smix.wr}}% WR)</div></div>
-  <div class="stat-box"><div class="val" style="color:#fb923c">${{sr5.n}}</div><div class="lbl">R5 (${{sr5.wr}}% WR)</div></div>
+  <div class="stat-box"><div class="val" style="color:#fb923c">${{sh3.n}}</div><div class="lbl">3DH (${{sh3.wr}}% WR)</div></div>
   </div>`;
   h+=`<div style="max-height:400px;overflow-y:auto"><table>
   <thead><tr><th>Fecha</th><th>Dir</th><th>Ret%</th><th>PnL</th><th>Estrategia</th><th>Info</th></tr></thead><tbody>`;
   trades.forEach(t=>{{
     let c=t[3]>=0?'pos':'neg';
     let dc=t[2]==='L'?'long':'short';
-    let sc=t[4]==='E2'?'e2b':t[4]==='MIX'?'mixb':'r5b';
+    let sc=t[4]==='E2'?'e2b':t[4]==='MIX'?'mixb':'h3b';
     let pnl=t[3]/100*CAP[t[4]];
     h+=`<tr><td>${{t[0]}}</td><td><span class="${{dc}}">${{t[2]==='L'?'LONG':'SHORT'}}</span></td>
     <td class="${{c}}">${{t[3]>=0?'+':''}}${{t[3].toFixed(2)}}%</td>
@@ -724,22 +796,22 @@ function initTkTop(){{
   if(tkTopDone)return;tkTopDone=true;
   let byTk={{}};
   FL.forEach(t=>{{
-    if(!byTk[t[1]])byTk[t[1]]={{n:0,pnl:0,wins:0,e2:0,mix:0,r5:0}};
+    if(!byTk[t[1]])byTk[t[1]]={{n:0,pnl:0,wins:0,e2:0,mix:0,h3:0}};
     byTk[t[1]].n++;
     byTk[t[1]].pnl+=t[3]/100*CAP[t[4]];
     if(t[3]>0)byTk[t[1]].wins++;
-    byTk[t[1]][t[4].toLowerCase()]++;
+    if(t[4]==='E2')byTk[t[1]].e2++;else if(t[4]==='MIX')byTk[t[1]].mix++;else byTk[t[1]].h3++;
   }});
   let arr=Object.entries(byTk).map(([k,v])=>({{tk:k,...v,wr:(v.wins/v.n*100).toFixed(1)}}));
   arr.sort((a,b)=>b.n-a.n);
   let top=arr.slice(0,30);
-  let h=`<table><thead><tr><th>Ticker</th><th>Trades</th><th>WR</th><th>PnL</th><th>E2</th><th>MIX</th><th>R5</th></tr></thead><tbody>`;
+  let h=`<table><thead><tr><th>Ticker</th><th>Trades</th><th>WR</th><th>PnL</th><th>E2</th><th>MIX</th><th>3DH</th></tr></thead><tbody>`;
   top.forEach(t=>{{
     let c=t.pnl>=0?'pos':'neg';
     h+=`<tr style="cursor:pointer" onclick="document.getElementById('tkSearch').value='${{t.tk}}';searchTk();showTab(2)">
     <td><strong>${{t.tk}}</strong></td><td>${{t.n}}</td><td>${{t.wr}}%</td>
     <td class="${{c}}">€${{Math.round(t.pnl).toLocaleString()}}</td>
-    <td>${{t.e2||''}}</td><td>${{t.mix||''}}</td><td>${{t.r5||''}}</td></tr>`;
+    <td>${{t.e2||''}}</td><td>${{t.mix||''}}</td><td>${{t.h3||''}}</td></tr>`;
   }});
   h+='</tbody></table>';
   // Also most profitable
