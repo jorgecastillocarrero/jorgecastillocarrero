@@ -11,6 +11,7 @@ tickers = sorted(set(s['symbol'] for s in sp500))
 
 SLIP = 0.3
 HD = 4  # hold days
+CAP = 25  # max signals per day (cap by contrast score d5-d50)
 
 def np_sma(arr, window):
     cs = np.cumsum(arr)
@@ -168,14 +169,23 @@ for sym, g in df.groupby('symbol'):
                     'is_today': (i == target_idx),
                 })
 
-signals.sort(key=lambda x: x['d50'])
+# Ranking by contrast score (d5 - d50): higher = better dead cat bounce
+for s in signals:
+    s['contrast'] = round(s['d5'] - s['d50'], 2)
+signals.sort(key=lambda x: -x['contrast'])
+
+# Apply CAP: if too many signals, keep top N by contrast
+descartadas = []
+if len(signals) > CAP:
+    descartadas = signals[CAP:]
+    signals = signals[:CAP]
 
 # Print results
 print(f'\n{"="*130}')
 print(f'  SENALES 3DH OPT - Senal: {target.strftime("%Y-%m-%d")} - ENTRAR SHORT HOY A LA APERTURA')
 print(f'{"="*130}')
 print(f'  Reglas: Close > SMA5 (+2%) | Close < SMA50 (-5%) | Close < SMA200 | 3 dias HH+HL | No-overlap')
-print(f'  Hold: {HD} dias | Slippage: {SLIP}%')
+print(f'  Hold: {HD} dias | Slippage: {SLIP}% | Cap: {CAP}/dia (ranking por contraste d5-d50)')
 
 # Open positions from recent signals (not today)
 prev_open = [p for p in open_positions if not p['is_today']]
@@ -192,12 +202,22 @@ if blocked:
     for b in blocked:
         print(f'    {b["symbol"]:>8s} - cumple reglas pero tiene posicion abierta')
 
-# New signals
-print(f'\n  SENALES NUEVAS: {len(signals)}')
+# New signals (selected after cap)
+print(f'\n  SENALES SELECCIONADAS: {len(signals)}{f" (de {len(signals)+len(descartadas)} totales, cap {CAP})" if descartadas else ""}')
 if signals:
-    print(f'\n  {"#":>3s} {"Symbol":>8s} {"Close":>8s} {"SMA5":>8s} {"SMA50":>8s} {"SMA200":>8s} {"d5%":>7s} {"d50%":>7s} {"d200%":>7s}')
-    print(f'  {"-"*85}')
+    print(f'\n  {"#":>3s} {"Symbol":>8s} {"Close":>8s} {"SMA5":>8s} {"SMA50":>8s} {"SMA200":>8s} {"d5%":>7s} {"d50%":>7s} {"d200%":>7s} {"Contr":>7s}')
+    print(f'  {"-"*95}')
     for idx, s in enumerate(signals, 1):
-        print(f'  {idx:3d} {s["symbol"]:>8s} {s["close"]:8.2f} {s["sma5"]:8.2f} {s["sma50"]:8.2f} {s["sma200"]:8.2f} {s["d5"]:+6.1f}% {s["d50"]:+6.1f}% {s["d200"]:+6.1f}%')
+        print(f'  {idx:3d} {s["symbol"]:>8s} {s["close"]:8.2f} {s["sma5"]:8.2f} {s["sma50"]:8.2f} {s["sma200"]:8.2f} {s["d5"]:+6.1f}% {s["d50"]:+6.1f}% {s["d200"]:+6.1f}% {s["contrast"]:6.1f}')
 else:
     print('\n  >>> NO hay senales nuevas para hoy')
+
+# Discarded signals (below cap)
+if descartadas:
+    print(f'\n  DESCARTADAS por cap ({len(descartadas)} senales con menor contraste):')
+    print(f'  {"Symbol":>8s} {"d5%":>7s} {"d50%":>7s} {"Contr":>7s}')
+    print(f'  {"-"*35}')
+    for s in descartadas[:10]:
+        print(f'  {s["symbol"]:>8s} {s["d5"]:+6.1f}% {s["d50"]:+6.1f}% {s["contrast"]:6.1f}')
+    if len(descartadas) > 10:
+        print(f'  ... y {len(descartadas)-10} mas')
